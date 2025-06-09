@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  PanResponder,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
@@ -18,12 +21,19 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const { width: screenWidth } = Dimensions.get('window');
+
 export default function CalendarTab() {
   const { theme } = useTheme();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
   const [nextPeriod, setNextPeriod] = useState<Date | null>(null);
+  const [futurePeriods, setFuturePeriods] = useState<Date[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const nextMonthAnim = useRef(new Animated.Value(screenWidth)).current;
 
   useEffect(() => {
     loadData();
@@ -46,7 +56,7 @@ export default function CalendarTab() {
       .map(([date, _]) => date);
     setNoPeriodDates(noPeriodDates);
     
-    // Calculate next predicted period considering all tracked data
+    // Calculate multiple predicted periods considering all tracked data
     if (data.periods.length >= 1) {
       const sortedPeriods = data.periods.sort();
       
@@ -66,16 +76,34 @@ export default function CalendarTab() {
       
       if (periodStarts.length >= 2) {
         const avgCycle = calculateAverageCycleFromStarts(periodStarts);
+        const cycleVariability = calculateCycleVariability(periodStarts);
         const lastPeriodStart = new Date(periodStarts[periodStarts.length - 1]);
-        const predicted = new Date(lastPeriodStart);
-        predicted.setDate(predicted.getDate() + avgCycle);
-        setNextPeriod(predicted);
+        
+        // Calculate multiple future periods (next 6 periods)
+        const predictions: Date[] = [];
+        for (let i = 1; i <= 6; i++) {
+          const predicted = new Date(lastPeriodStart);
+          // Add some variability to predictions beyond the first one
+          const adjustment = i > 1 ? Math.round((Math.random() - 0.5) * cycleVariability * 0.5) : 0;
+          predicted.setDate(predicted.getDate() + (avgCycle * i) + adjustment);
+          predictions.push(predicted);
+        }
+        
+        setNextPeriod(predictions[0]);
+        setFuturePeriods(predictions);
       } else if (periodStarts.length === 1) {
-        // Use default cycle length for first prediction
+        // Use default cycle length for predictions
         const lastPeriodStart = new Date(periodStarts[0]);
-        const predicted = new Date(lastPeriodStart);
-        predicted.setDate(predicted.getDate() + 28); // Default cycle
-        setNextPeriod(predicted);
+        const predictions: Date[] = [];
+        
+        for (let i = 1; i <= 6; i++) {
+          const predicted = new Date(lastPeriodStart);
+          predicted.setDate(predicted.getDate() + (28 * i)); // Default cycle
+          predictions.push(predicted);
+        }
+        
+        setNextPeriod(predictions[0]);
+        setFuturePeriods(predictions);
       }
     }
   };
@@ -112,6 +140,24 @@ export default function CalendarTab() {
     return Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length);
   };
 
+  const calculateCycleVariability = (periodStarts: string[]): number => {
+    if (periodStarts.length < 3) return 2; // Default variability
+    
+    const cycles: number[] = [];
+    const sortedStarts = periodStarts.sort();
+    
+    for (let i = 1; i < sortedStarts.length; i++) {
+      const prev = new Date(sortedStarts[i - 1]);
+      const curr = new Date(sortedStarts[i]);
+      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+      cycles.push(diff);
+    }
+    
+    const mean = cycles.reduce((a, b) => a + b, 0) / cycles.length;
+    const variance = cycles.reduce((acc, cycle) => acc + Math.pow(cycle - mean, 2), 0) / cycles.length;
+    return Math.sqrt(variance);
+  };
+
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   };
@@ -133,33 +179,37 @@ export default function CalendarTab() {
   };
 
   const isPredictedPeriod = (date: Date) => {
-    if (!nextPeriod) return false;
-    const daysDiff = (date.getTime() - nextPeriod.getTime()) / (1000 * 60 * 60 * 24);
-    // Show predicted period from start date to start date + typical period length (5-7 days)
-    return daysDiff >= 0 && daysDiff <= 6;
+    if (futurePeriods.length === 0) return false;
+    
+    // Check if date falls within any predicted period (6-7 days each)
+    return futurePeriods.some(periodStart => {
+      const daysDiff = (date.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24);
+      return daysDiff >= 0 && daysDiff <= 6;
+    });
   };
 
-  // Helper function to determine period day position for pill styling
-  const getPeriodDayPosition = (date: Date): 'single' | 'start' | 'middle' | 'end' => {
-    const dateKey = formatDateKey(date);
-    if (!periodDates.includes(dateKey)) return 'single';
+
+
+  // Generic helper function to determine day position for pill styling
+  const getDayPosition = (date: Date, checkFunction: (d: Date) => boolean): 'single' | 'start' | 'middle' | 'end' => {
+    if (!checkFunction(date)) return 'single';
 
     const prevDay = new Date(date);
     prevDay.setDate(prevDay.getDate() - 1);
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    const isPrevPeriod = periodDates.includes(formatDateKey(prevDay));
-    const isNextPeriod = periodDates.includes(formatDateKey(nextDay));
+    const isPrevSameType = checkFunction(prevDay);
+    const isNextSameType = checkFunction(nextDay);
 
-    if (!isPrevPeriod && !isNextPeriod) return 'single';
-    if (!isPrevPeriod && isNextPeriod) return 'start';
-    if (isPrevPeriod && !isNextPeriod) return 'end';
+    if (!isPrevSameType && !isNextSameType) return 'single';
+    if (!isPrevSameType && isNextSameType) return 'start';
+    if (isPrevSameType && !isNextSameType) return 'end';
     return 'middle';
   };
 
-  // Helper function to get period day border radius based on position
-  const getPeriodDayBorderRadius = (position: 'single' | 'start' | 'middle' | 'end') => {
+  // Generic helper function to get day border radius based on position
+  const getDayBorderRadius = (position: 'single' | 'start' | 'middle' | 'end') => {
     switch (position) {
       case 'single':
         return { borderRadius: 20 };
@@ -174,19 +224,85 @@ export default function CalendarTab() {
     }
   };
 
+  const [animationDirection, setAnimationDirection] = useState<'prev' | 'next'>('next');
+  const [nextMonthDate, setNextMonthDate] = useState<Date | null>(null);
+
   const navigateMonth = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
+    if (isAnimating) return;
+    
+    // Calculate the target date before starting animation
+    const targetDate = new Date(currentDate);
     if (direction === 'prev') {
-      newDate.setMonth(newDate.getMonth() - 1);
+      targetDate.setMonth(targetDate.getMonth() - 1);
     } else {
-      newDate.setMonth(newDate.getMonth() + 1);
+      targetDate.setMonth(targetDate.getMonth() + 1);
     }
-    setCurrentDate(newDate);
+    
+    setIsAnimating(true);
+    setAnimationDirection(direction);
+    setNextMonthDate(targetDate);
+    
+    const slideOutDistance = direction === 'next' ? -screenWidth : screenWidth;
+    const slideInStartDistance = direction === 'next' ? screenWidth : -screenWidth;
+    
+    // Reset next month position
+    nextMonthAnim.setValue(slideInStartDistance);
+    
+    // Animate current month out and next month in
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: slideOutDistance,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(nextMonthAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      // Update the current date to the target date
+      setCurrentDate(targetDate);
+      
+      // Reset animation values smoothly
+      requestAnimationFrame(() => {
+        slideAnim.setValue(0);
+        nextMonthAnim.setValue(screenWidth);
+        setIsAnimating(false);
+        setNextMonthDate(null);
+      });
+    });
   };
 
-  const renderCalendarDays = () => {
-    const daysInMonth = getDaysInMonth(currentDate);
-    const firstDay = getFirstDayOfMonth(currentDate);
+  const panResponder = PanResponder.create({
+    onMoveShouldSetPanResponder: (evt, gestureState) => {
+      return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 20;
+    },
+    onPanResponderGrant: () => {
+      // Gesture started
+    },
+    onPanResponderMove: () => {
+      // Handle move if needed for visual feedback
+    },
+    onPanResponderRelease: (evt, gestureState) => {
+      const swipeThreshold = 50;
+      
+      if (Math.abs(gestureState.dx) > swipeThreshold) {
+        if (gestureState.dx > 0) {
+          // Swipe right - go to previous month
+          navigateMonth('prev');
+        } else {
+          // Swipe left - go to next month
+          navigateMonth('next');
+        }
+      }
+    },
+    onPanResponderTerminationRequest: () => true,
+  });
+
+  const renderCalendarDays = (date: Date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDay = getFirstDayOfMonth(date);
     const days = [];
 
     // Empty cells for days before month starts
@@ -196,15 +312,21 @@ export default function CalendarTab() {
 
     // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-      const isToday = formatDateKey(date) === formatDateKey(new Date());
-      const isPeriod = isPeriodDay(date);
-      const isNoPeriod = isNoPeriodDay(date);
-      const isPredicted = isPredictedPeriod(date);
+      const dayDate = new Date(date.getFullYear(), date.getMonth(), day);
+      const isToday = formatDateKey(dayDate) === formatDateKey(new Date());
+      const isPeriod = isPeriodDay(dayDate);
+      const isNoPeriod = isNoPeriodDay(dayDate);
+      const isPredicted = isPredictedPeriod(dayDate);
       
-      // Get period day position for pill styling
-      const periodPosition = isPeriod ? getPeriodDayPosition(date) : 'single';
-      const periodBorderRadius = isPeriod ? getPeriodDayBorderRadius(periodPosition) : {};
+      // Get day positions for pill styling
+      const periodPosition = isPeriod ? getDayPosition(dayDate, isPeriodDay) : 'single';
+      const noPeriodPosition = isNoPeriod ? getDayPosition(dayDate, isNoPeriodDay) : 'single';
+      const predictedPosition = isPredicted ? getDayPosition(dayDate, isPredictedPeriod) : 'single';
+      
+      // Get border radius styles
+      const periodBorderRadius = isPeriod ? getDayBorderRadius(periodPosition) : {};
+      const noPeriodBorderRadius = isNoPeriod ? getDayBorderRadius(noPeriodPosition) : {};
+      const predictedBorderRadius = isPredicted ? getDayBorderRadius(predictedPosition) : {};
 
       days.push(
         <View
@@ -213,8 +335,8 @@ export default function CalendarTab() {
             styles.dayCell,
             isToday && styles.today,
             isPeriod && [styles.periodDay, periodBorderRadius],
-            isNoPeriod && styles.noPeriodDay,
-            isPredicted && styles.predictedDay,
+            isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
+            isPredicted && [styles.predictedDay, predictedBorderRadius],
           ]}>
           <Text
             style={[
@@ -232,6 +354,26 @@ export default function CalendarTab() {
 
     return days;
   };
+
+  const renderCalendarContent = (date: Date) => (
+    <>
+      {/* Day headers */}
+      <View style={styles.dayHeaders}>
+        {DAYS.map(day => (
+          <Text key={day} style={styles.dayHeader}>
+            {day}
+          </Text>
+        ))}
+      </View>
+
+      {/* Calendar grid */}
+      <View style={styles.calendarGrid}>
+        {renderCalendarDays(date)}
+      </View>
+    </>
+  );
+
+
 
   const styles = createStyles(theme);
 
@@ -258,20 +400,29 @@ export default function CalendarTab() {
         </View>
 
         {/* Calendar */}
-        <View style={styles.calendar}>
-          {/* Day headers */}
-          <View style={styles.dayHeaders}>
-            {DAYS.map(day => (
-              <Text key={day} style={styles.dayHeader}>
-                {day}
-              </Text>
-            ))}
-          </View>
+        <View style={styles.calendarContainer} {...panResponder.panHandlers}>
+          {/* Current Month */}
+          <Animated.View style={[
+            styles.calendar,
+            {
+              transform: [{ translateX: slideAnim }],
+            },
+          ]}>
+            {renderCalendarContent(currentDate)}
+          </Animated.View>
 
-          {/* Calendar grid */}
-          <View style={styles.calendarGrid}>
-            {renderCalendarDays()}
-          </View>
+                    {/* Next Month (for animation) */}
+          {isAnimating && nextMonthDate && (
+            <Animated.View style={[
+              styles.calendar,
+              styles.nextMonthCalendar,
+              {
+                transform: [{ translateX: nextMonthAnim }],
+              },
+            ]}>
+              {renderCalendarContent(nextMonthDate)}
+            </Animated.View>
+          )}
         </View>
 
         {/* Legend */}
@@ -294,18 +445,37 @@ export default function CalendarTab() {
           </View>
         </View>
 
-        {/* Next Period Prediction */}
-        {nextPeriod && (
-          <View style={styles.predictionCard}>
-            <Text style={styles.predictionTitle}>Next Period</Text>
-            <Text style={styles.predictionDate}>
-              {nextPeriod.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </Text>
+        {/* Future Period Predictions */}
+        {futurePeriods.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Upcoming Periods</Text>
+            <View style={styles.card}>
+              <View style={styles.predictionInfo}>
+                {futurePeriods.slice(0, 3).map((period, index) => {
+                  const today = new Date();
+                  const daysUntil = Math.ceil((period.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const isLast = index === futurePeriods.slice(0, 3).length - 1;
+                  
+                  return (
+                    <View key={index} style={[
+                      styles.predictionInfoItem,
+                      isLast && styles.predictionInfoItemLast
+                    ]}>
+                      <Text style={styles.predictionInfoLabel}>
+                        {period.toLocaleDateString('en-US', { 
+                          weekday: 'short', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </Text>
+                      <Text style={styles.predictionInfoValue}>
+                        {daysUntil > 0 ? `${daysUntil} days` : 'Today'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -346,9 +516,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.text,
   },
+  calendarContainer: {
+    marginHorizontal: 20,
+    height: 320,
+    overflow: 'hidden',
+  },
   calendar: {
     backgroundColor: theme.colors.surface,
-    marginHorizontal: 20,
     borderRadius: 12,
     padding: 15,
     elevation: 2,
@@ -356,6 +530,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    height: 320,
+  },
+  nextMonthCalendar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
   dayHeaders: {
     flexDirection: 'row',
@@ -456,14 +637,48 @@ const createStyles = (theme: any) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  predictionTitle: {
+  section: {
+    marginVertical: 10,
+  },
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: theme.colors.primary,
-    marginBottom: 5,
-  },
-  predictionDate: {
-    fontSize: 16,
     color: theme.colors.text,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  card: {
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: 20,
+    padding: 20,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: theme.colors.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  predictionInfo: {
+    gap: 0,
+  },
+  predictionInfoItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  predictionInfoItemLast: {
+    borderBottomWidth: 0,
+  },
+  predictionInfoLabel: {
+    fontSize: 16,
+    color: theme.colors.textSecondary,
+  },
+  predictionInfoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.primary,
   },
 });

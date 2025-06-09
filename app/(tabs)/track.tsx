@@ -350,7 +350,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.colors.text,
   },
   todayBadge: {
-    backgroundColor: theme.colors.success,
+    backgroundColor: theme.colors.today,
     color: theme.colors.white,
     fontSize: 12,
     paddingHorizontal: 8,

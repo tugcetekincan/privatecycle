@@ -381,37 +381,6 @@ export default function SettingsTab() {
             </TouchableOpacity>
           )}
 
-          {/* Backup Stats */}
-          <View style={styles.backupStatsContainer}>
-            <View style={styles.backupStatsHeader}>
-              <Text style={styles.backupStatsTitle}>Backup Information</Text>
-            </View>
-            <View style={styles.backupInfoItem}>
-              <Text style={styles.backupInfoLabel}>Local Backups</Text>
-              <Text style={styles.backupInfoValue}>{backupStats.totalBackups}</Text>
-            </View>
-            <View style={styles.backupInfoItem}>
-              <Text style={styles.backupInfoLabel}>Total Size</Text>
-              <Text style={styles.backupInfoValue}>
-                {BackupService.formatFileSize(backupStats.totalSize)}
-              </Text>
-            </View>
-            <View style={styles.backupInfoItem}>
-              <Text style={styles.backupInfoLabel}>Last Backup</Text>
-              <Text style={styles.backupInfoValue}>
-                {backupStats.lastBackup ? backupStats.lastBackup.toLocaleDateString() : 'Never'}
-              </Text>
-            </View>
-            {backupSettings.autoBackupEnabled && backupStats.nextAutoBackup && (
-              <View style={styles.backupInfoItem}>
-                <Text style={styles.backupInfoLabel}>Next Auto Backup</Text>
-                <Text style={styles.backupInfoValue}>
-                  {backupStats.nextAutoBackup.toLocaleDateString()}
-                </Text>
-              </View>
-            )}
-          </View>
-
           {/* Backup Actions */}
           <TouchableOpacity 
             style={styles.button} 
@@ -450,6 +419,40 @@ export default function SettingsTab() {
             <HardDrive size={20} color={theme.colors.textSecondary} />
             <Text style={styles.buttonText}>Manage Local Backups</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Backup Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Backup Information</Text>
+          
+          <View style={styles.card}>
+            <View style={styles.backupInfo}>
+              <View style={styles.backupInfoItem}>
+                <Text style={styles.backupInfoLabel}>Local Backups</Text>
+                <Text style={styles.backupInfoValue}>{backupStats.totalBackups}</Text>
+              </View>
+              <View style={styles.backupInfoItem}>
+                <Text style={styles.backupInfoLabel}>Total Size</Text>
+                <Text style={styles.backupInfoValue}>
+                  {BackupService.formatFileSize(backupStats.totalSize)}
+                </Text>
+              </View>
+              <View style={styles.backupInfoItem}>
+                <Text style={styles.backupInfoLabel}>Last Backup</Text>
+                <Text style={styles.backupInfoValue}>
+                  {backupStats.lastBackup ? backupStats.lastBackup.toLocaleDateString() : 'Never'}
+                </Text>
+              </View>
+              {backupSettings.autoBackupEnabled && backupStats.nextAutoBackup && (
+                <View style={styles.backupInfoItem}>
+                  <Text style={styles.backupInfoLabel}>Next Auto Backup</Text>
+                  <Text style={styles.backupInfoValue}>
+                    {backupStats.nextAutoBackup.toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
         </View>
 
         {/* Data Management */}
@@ -608,20 +611,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.isDark ? '#a5d6a7' : '#388e3c',
     lineHeight: 20,
   },
-  backupStatsContainer: {
-    backgroundColor: theme.colors.surface,
-  },
-  backupStatsHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  backupStatsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
   backupInfo: {
     gap: 12,
   },
@@ -629,11 +618,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   backupInfoLabel: {
     fontSize: 16,
