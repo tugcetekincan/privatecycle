@@ -1,9 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const KEYS = {
-  PERIOD_DATA: 'period_data',
-  DAILY_DATA: 'daily_data',
-};
+import * as SQLite from 'expo-sqlite';
 
 // Utility function to format date without timezone issues
 const formatDateKey = (date: Date): string => {
@@ -27,111 +22,258 @@ export interface PeriodData {
   moods: { [date: string]: string };
 }
 
-export class DataService {
-  // Utility function to format date without timezone issues
-  static formatDateKey = formatDateKey;
+class SQLiteDataService {
+  private db: SQLite.SQLiteDatabase | null = null;
+  private initializationPromise: Promise<void> | null = null;
 
-  // Get all period dates
-  static async getPeriodData(): Promise<PeriodData> {
+  constructor() {
+    // Start initialization immediately when service is created
+    this.initializeDatabase().catch(error => {
+      console.error('Failed to initialize database during construction:', error);
+    });
+  }
+
+  private async initializeDatabase(): Promise<void> {
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this.performInitialization();
+    return this.initializationPromise;
+  }
+
+  private async performInitialization(): Promise<void> {
     try {
-      const data = await AsyncStorage.getItem(KEYS.PERIOD_DATA);
-      return data ? JSON.parse(data) : { periods: [], symptoms: {}, moods: {} };
+      if (this.db) {
+        return; // Already initialized
+      }
+
+      console.log('Initializing SQLite database...');
+      this.db = await SQLite.openDatabaseAsync('cycle_tracker.db');
+      
+      if (!this.db) {
+        throw new Error('Failed to open database');
+      }
+
+      await this.db.execAsync(`
+        PRAGMA journal_mode = WAL;
+        PRAGMA foreign_keys = ON;
+        
+        CREATE TABLE IF NOT EXISTS daily_data (
+          date TEXT PRIMARY KEY,
+          is_period INTEGER NOT NULL DEFAULT 0,
+          flow_level TEXT NOT NULL DEFAULT '',
+          symptoms TEXT NOT NULL DEFAULT '[]',
+          mood TEXT NOT NULL DEFAULT ''
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
+        CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
+      `);
+
+      console.log('SQLite database initialized successfully');
+    } catch (error) {
+      console.error('Error initializing database:', error);
+      this.db = null;
+      this.initializationPromise = null;
+      throw error;
+    }
+  }
+
+  private async ensureInitialized(): Promise<SQLite.SQLiteDatabase> {
+    await this.initializeDatabase();
+    
+    if (!this.db) {
+      throw new Error('Database initialization failed');
+    }
+    
+    return this.db;
+  }
+
+  async getPeriodData(): Promise<PeriodData> {
+    try {
+      const db = await this.ensureInitialized();
+      
+      const periodsResult = await db.getAllAsync(
+        'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
+      ) as { date: string }[];
+      
+      const symptomsResult = await db.getAllAsync(
+        'SELECT date, symptoms FROM daily_data WHERE symptoms != "[]" ORDER BY date'
+      ) as { date: string; symptoms: string }[];
+      
+      const moodsResult = await db.getAllAsync(
+        'SELECT date, mood FROM daily_data WHERE mood != "" ORDER BY date'
+      ) as { date: string; mood: string }[];
+
+      const periods = periodsResult.map(row => row.date);
+      
+      const symptoms: { [date: string]: string[] } = {};
+      symptomsResult.forEach(row => {
+        try {
+          const parsedSymptoms = JSON.parse(row.symptoms);
+          if (parsedSymptoms.length > 0) {
+            symptoms[row.date] = parsedSymptoms;
+          }
+        } catch (e) {
+          console.error('Error parsing symptoms for date', row.date, e);
+        }
+      });
+
+      const moods: { [date: string]: string } = {};
+      moodsResult.forEach(row => {
+        if (row.mood) {
+          moods[row.date] = row.mood;
+        }
+      });
+
+      return { periods, symptoms, moods };
     } catch (error) {
       console.error('Error loading period data:', error);
       return { periods: [], symptoms: {}, moods: {} };
     }
   }
 
-  // Save daily tracking data
-  static async saveTodayData(dateKey: string, data: DailyData): Promise<void> {
+  async saveTodayData(dateKey: string, data: DailyData): Promise<void> {
     try {
-      // Save daily data
-      const dailyData = await this.getAllDailyData();
-      dailyData[dateKey] = data;
-      await AsyncStorage.setItem(KEYS.DAILY_DATA, JSON.stringify(dailyData));
-
-      // Update period data
-      const periodData = await this.getPeriodData();
+      console.log('Attempting to save data for date:', dateKey);
+      const db = await this.ensureInitialized();
       
-      if (data.isPeriod && !periodData.periods.includes(dateKey)) {
-        periodData.periods.push(dateKey);
-      } else if (!data.isPeriod && periodData.periods.includes(dateKey)) {
-        periodData.periods = periodData.periods.filter(date => date !== dateKey);
+      if (!db) {
+        throw new Error('Database connection is null');
       }
 
-      if (data.symptoms.length > 0) {
-        periodData.symptoms[dateKey] = data.symptoms;
-      } else {
-        delete periodData.symptoms[dateKey];
-      }
+      const symptoms = JSON.stringify(data.symptoms || []);
+      const flowLevel = data.flowLevel || '';
+      const mood = data.mood || '';
 
-      if (data.mood) {
-        periodData.moods[dateKey] = data.mood;
-      } else {
-        delete periodData.moods[dateKey];
-      }
+      console.log('Saving data:', {
+        dateKey,
+        isPeriod: data.isPeriod,
+        flowLevel,
+        symptoms,
+        mood
+      });
 
-      await AsyncStorage.setItem(KEYS.PERIOD_DATA, JSON.stringify(periodData));
+      await db.runAsync(
+        `INSERT OR REPLACE INTO daily_data 
+         (date, is_period, flow_level, symptoms, mood) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          dateKey,
+          data.isPeriod ? 1 : 0,
+          flowLevel,
+          symptoms,
+          mood
+        ]
+      );
+
+      console.log('Data saved successfully for date:', dateKey);
     } catch (error) {
-      console.error('Error saving data:', error);
+      console.error('Error saving data for date', dateKey, ':', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        data: data
+      });
+      throw error;
     }
   }
 
-  // Get today's data
-  static async getTodayData(dateKey: string): Promise<DailyData | null> {
+  async getTodayData(dateKey: string): Promise<DailyData | null> {
     try {
-      const dailyData = await this.getAllDailyData();
-      return dailyData[dateKey] || null;
+      const db = await this.ensureInitialized();
+      
+      const result = await db.getFirstAsync(
+        'SELECT * FROM daily_data WHERE date = ?',
+        [dateKey]
+      ) as {
+        date: string;
+        is_period: number;
+        flow_level: string;
+        symptoms: string;
+        mood: string;
+      } | null;
+
+      if (!result) return null;
+
+      return {
+        date: result.date,
+        isPeriod: result.is_period === 1,
+        flowLevel: result.flow_level,
+        symptoms: JSON.parse(result.symptoms),
+        mood: result.mood
+      };
     } catch (error) {
       console.error('Error loading today data:', error);
       return null;
     }
   }
 
-  // Get all daily data
-  static async getAllDailyData(): Promise<{ [date: string]: DailyData }> {
+  async getAllDailyData(): Promise<{ [date: string]: DailyData }> {
     try {
-      const data = await AsyncStorage.getItem(KEYS.DAILY_DATA);
-      return data ? JSON.parse(data) : {};
+      const db = await this.ensureInitialized();
+      
+      const results = await db.getAllAsync(
+        'SELECT * FROM daily_data ORDER BY date'
+      ) as {
+        date: string;
+        is_period: number;
+        flow_level: string;
+        symptoms: string;
+        mood: string;
+      }[];
+
+      const dailyData: { [date: string]: DailyData } = {};
+      
+      results.forEach(row => {
+        dailyData[row.date] = {
+          date: row.date,
+          isPeriod: row.is_period === 1,
+          flowLevel: row.flow_level,
+          symptoms: JSON.parse(row.symptoms),
+          mood: row.mood
+        };
+      });
+
+      return dailyData;
     } catch (error) {
       console.error('Error loading daily data:', error);
       return {};
     }
   }
 
-  // Calculate insights
-  static async getInsights() {
+  async getInsights() {
     try {
-      const periodData = await this.getPeriodData();
-      const dailyData = await this.getAllDailyData();
+      const db = await this.ensureInitialized();
       
-      // Find period start dates (first day of each consecutive period group)
-      const periodStarts: string[] = [];
-      if (periodData.periods.length > 0) {
-        const sortedPeriods = periodData.periods.sort();
-        const periodSet = new Set(sortedPeriods);
-        
-        for (const periodDate of sortedPeriods) {
-          const prevDay = new Date(periodDate);
-          prevDay.setDate(prevDay.getDate() - 1);
-          const prevDayStr = formatDateKey(prevDay);
-          
-          // If previous day is not a period day, this is a period start
-          if (!periodSet.has(prevDayStr)) {
-            periodStarts.push(periodDate);
-          }
-        }
-      }
+      // Get period start dates using SQL for better performance
+      const periodStartsQuery = `
+        WITH period_days AS (
+          SELECT date, 
+                 DATE(date, '-1 day') as prev_day
+          FROM daily_data 
+          WHERE is_period = 1
+          ORDER BY date
+        )
+        SELECT pd.date
+        FROM period_days pd
+        LEFT JOIN daily_data prev ON prev.date = pd.prev_day AND prev.is_period = 1
+        WHERE prev.date IS NULL
+        ORDER BY pd.date
+      `;
       
-      // Calculate average cycle length based on period start dates
+      const periodStartsResult = await db.getAllAsync(periodStartsQuery) as { date: string }[];
+      const periodStarts = periodStartsResult.map(row => row.date);
+      
+      // Calculate average cycle length
       let averageCycle = 28;
       if (periodStarts.length >= 2) {
-        const sortedStarts = periodStarts.sort();
         const cycles: number[] = [];
         
-        for (let i = 1; i < sortedStarts.length; i++) {
-          const prev = new Date(sortedStarts[i - 1]);
-          const curr = new Date(sortedStarts[i]);
+        for (let i = 1; i < periodStarts.length; i++) {
+          const prev = new Date(periodStarts[i - 1]);
+          const curr = new Date(periodStarts[i]);
           const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
           cycles.push(diff);
         }
@@ -141,43 +283,73 @@ export class DataService {
         }
       }
 
-      // Calculate last period length
+      // Calculate last period length using SQL
       let lastPeriodLength = 0;
       if (periodStarts.length > 0) {
-        const sortedStarts = periodStarts.sort();
-        const lastPeriodStart = sortedStarts[sortedStarts.length - 1];
-        const periodSet = new Set(periodData.periods);
+        const lastPeriodStart = periodStarts[periodStarts.length - 1];
         
-        // Count consecutive period days from the last period start
-        let currentDate = new Date(lastPeriodStart);
-        while (periodSet.has(formatDateKey(currentDate))) {
-          lastPeriodLength++;
-          currentDate.setDate(currentDate.getDate() + 1);
+        // Get all period days starting from the last period start
+        const periodDaysResult = await db.getAllAsync(
+          `SELECT date FROM daily_data 
+           WHERE date >= ? AND is_period = 1 
+           ORDER BY date`,
+          [lastPeriodStart]
+        ) as { date: string }[];
+        
+        // Count consecutive days from the start
+        if (periodDaysResult.length > 0) {
+          let consecutiveDays = 1;
+          let currentDate = new Date(periodDaysResult[0].date);
+          
+          for (let i = 1; i < periodDaysResult.length; i++) {
+            const nextExpectedDate = new Date(currentDate);
+            nextExpectedDate.setDate(nextExpectedDate.getDate() + 1);
+            const nextActualDate = new Date(periodDaysResult[i].date);
+            
+            if (nextExpectedDate.getTime() === nextActualDate.getTime()) {
+              consecutiveDays++;
+              currentDate = nextActualDate;
+            } else {
+              break;
+            }
+          }
+          
+          lastPeriodLength = consecutiveDays;
         }
       }
 
       // Calculate next period prediction
       let nextPeriodIn = 0;
       if (periodStarts.length > 0) {
-        const sortedStarts = periodStarts.sort();
-        const lastPeriodStart = new Date(sortedStarts[sortedStarts.length - 1]);
+        const lastPeriodStart = new Date(periodStarts[periodStarts.length - 1]);
         const nextPredicted = new Date(lastPeriodStart);
         nextPredicted.setDate(nextPredicted.getDate() + averageCycle);
         
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset time to start of day
-        nextPredicted.setHours(0, 0, 0, 0); // Reset time to start of day
+        today.setHours(0, 0, 0, 0);
+        nextPredicted.setHours(0, 0, 0, 0);
         
         const diffTime = nextPredicted.getTime() - today.getTime();
         nextPeriodIn = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
-      // Count symptoms
+      // Get symptom counts using SQL
+      const symptomCountsResult = await db.getAllAsync(`
+        SELECT symptoms
+        FROM daily_data 
+        WHERE symptoms != "[]"
+      `) as { symptoms: string }[];
+
       const symptomCounts: { [key: string]: number } = {};
-      Object.values(dailyData).forEach(day => {
-        day.symptoms.forEach(symptom => {
-          symptomCounts[symptom] = (symptomCounts[symptom] || 0) + 1;
-        });
+      symptomCountsResult.forEach(row => {
+        try {
+          const symptoms = JSON.parse(row.symptoms);
+          symptoms.forEach((symptom: string) => {
+            symptomCounts[symptom] = (symptomCounts[symptom] || 0) + 1;
+          });
+        } catch (e) {
+          console.error('Error parsing symptoms:', e);
+        }
       });
 
       const commonSymptoms = Object.entries(symptomCounts)
@@ -185,24 +357,26 @@ export class DataService {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      // Count moods
-      const moodCounts: { [key: string]: number } = {};
-      Object.values(dailyData).forEach(day => {
-        if (day.mood) {
-          moodCounts[day.mood] = (moodCounts[day.mood] || 0) + 1;
-        }
-      });
+      // Get mood counts using SQL
+      const moodCountsResult = await db.getAllAsync(`
+        SELECT mood, COUNT(*) as count
+        FROM daily_data 
+        WHERE mood != ""
+        GROUP BY mood
+        ORDER BY count DESC
+        LIMIT 5
+      `) as { mood: string; count: number }[];
 
-      const moodTrends = Object.entries(moodCounts)
-        .map(([mood, count]) => ({ mood, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+      const moodTrends = moodCountsResult.map(row => ({
+        mood: row.mood,
+        count: row.count
+      }));
 
       return {
         averageCycle,
         lastPeriodLength,
         nextPeriodIn,
-        totalPeriods: periodStarts.length, // Use period cycles count instead of total period days
+        totalPeriods: periodStarts.length,
         commonSymptoms,
         moodTrends,
       };
@@ -219,13 +393,83 @@ export class DataService {
     }
   }
 
-  // Clear all data
-  static async clearAllData(): Promise<void> {
+  async clearAllData(): Promise<void> {
     try {
-      await AsyncStorage.removeItem(KEYS.PERIOD_DATA);
-      await AsyncStorage.removeItem(KEYS.DAILY_DATA);
+      const db = await this.ensureInitialized();
+      await db.runAsync('DELETE FROM daily_data');
     } catch (error) {
       console.error('Error clearing data:', error);
+      throw error;
     }
+  }
+
+  async migrateFromAsyncStorage(): Promise<void> {
+    try {
+      // This method can be called to migrate existing AsyncStorage data to SQLite
+      const AsyncStorage = await import('@react-native-async-storage/async-storage');
+      
+      const periodDataStr = await AsyncStorage.default.getItem('period_data');
+      const dailyDataStr = await AsyncStorage.default.getItem('daily_data');
+      
+      if (dailyDataStr) {
+        const dailyData = JSON.parse(dailyDataStr);
+        const db = await this.ensureInitialized();
+        
+        for (const [date, data] of Object.entries(dailyData) as [string, any][]) {
+          await db.runAsync(
+            `INSERT OR REPLACE INTO daily_data 
+             (date, is_period, flow_level, symptoms, mood) 
+             VALUES (?, ?, ?, ?, ?)`,
+            [
+              date,
+              data.isPeriod ? 1 : 0,
+              data.flowLevel || '',
+              JSON.stringify(data.symptoms || []),
+              data.mood || ''
+            ]
+          );
+        }
+        
+        // Clean up old AsyncStorage data
+        await AsyncStorage.default.removeItem('period_data');
+        await AsyncStorage.default.removeItem('daily_data');
+      }
+    } catch (error) {
+      console.error('Error migrating from AsyncStorage:', error);
+    }
+  }
+}
+
+const sqliteDataService = new SQLiteDataService();
+
+export class DataService {
+  static formatDateKey = formatDateKey;
+
+  static async getPeriodData(): Promise<PeriodData> {
+    return sqliteDataService.getPeriodData();
+  }
+
+  static async saveTodayData(dateKey: string, data: DailyData): Promise<void> {
+    return sqliteDataService.saveTodayData(dateKey, data);
+  }
+
+  static async getTodayData(dateKey: string): Promise<DailyData | null> {
+    return sqliteDataService.getTodayData(dateKey);
+  }
+
+  static async getAllDailyData(): Promise<{ [date: string]: DailyData }> {
+    return sqliteDataService.getAllDailyData();
+  }
+
+  static async getInsights() {
+    return sqliteDataService.getInsights();
+  }
+
+  static async clearAllData(): Promise<void> {
+    return sqliteDataService.clearAllData();
+  }
+
+  static async migrateFromAsyncStorage(): Promise<void> {
+    return sqliteDataService.migrateFromAsyncStorage();
   }
 }

@@ -139,6 +139,41 @@ export default function CalendarTab() {
     return daysDiff >= 0 && daysDiff <= 6;
   };
 
+  // Helper function to determine period day position for pill styling
+  const getPeriodDayPosition = (date: Date): 'single' | 'start' | 'middle' | 'end' => {
+    const dateKey = formatDateKey(date);
+    if (!periodDates.includes(dateKey)) return 'single';
+
+    const prevDay = new Date(date);
+    prevDay.setDate(prevDay.getDate() - 1);
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    const isPrevPeriod = periodDates.includes(formatDateKey(prevDay));
+    const isNextPeriod = periodDates.includes(formatDateKey(nextDay));
+
+    if (!isPrevPeriod && !isNextPeriod) return 'single';
+    if (!isPrevPeriod && isNextPeriod) return 'start';
+    if (isPrevPeriod && !isNextPeriod) return 'end';
+    return 'middle';
+  };
+
+  // Helper function to get period day border radius based on position
+  const getPeriodDayBorderRadius = (position: 'single' | 'start' | 'middle' | 'end') => {
+    switch (position) {
+      case 'single':
+        return { borderRadius: 20 };
+      case 'start':
+        return { borderTopLeftRadius: 20, borderBottomLeftRadius: 20, borderTopRightRadius: 0, borderBottomRightRadius: 0 };
+      case 'middle':
+        return { borderRadius: 0 };
+      case 'end':
+        return { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 20, borderBottomRightRadius: 20 };
+      default:
+        return { borderRadius: 20 };
+    }
+  };
+
   const navigateMonth = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     if (direction === 'prev') {
@@ -166,6 +201,10 @@ export default function CalendarTab() {
       const isPeriod = isPeriodDay(date);
       const isNoPeriod = isNoPeriodDay(date);
       const isPredicted = isPredictedPeriod(date);
+      
+      // Get period day position for pill styling
+      const periodPosition = isPeriod ? getPeriodDayPosition(date) : 'single';
+      const periodBorderRadius = isPeriod ? getPeriodDayBorderRadius(periodPosition) : {};
 
       days.push(
         <View
@@ -173,7 +212,7 @@ export default function CalendarTab() {
           style={[
             styles.dayCell,
             isToday && styles.today,
-            isPeriod && styles.periodDay,
+            isPeriod && [styles.periodDay, periodBorderRadius],
             isNoPeriod && styles.noPeriodDay,
             isPredicted && styles.predictedDay,
           ]}>
@@ -346,7 +385,6 @@ const createStyles = (theme: any) => StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20,
   },
   dayText: {
     fontSize: 16,
@@ -354,6 +392,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   today: {
     backgroundColor: theme.colors.accent,
+    borderRadius: 20,
   },
   todayText: {
     color: theme.colors.white,
@@ -370,6 +409,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     backgroundColor: theme.colors.secondary,
     borderWidth: 1,
     borderColor: theme.colors.border,
+    borderRadius: 20,
   },
   noPeriodText: {
     color: theme.colors.textSecondary,
@@ -377,6 +417,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   predictedDay: {
     backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1',
+    borderRadius: 20,
   },
   predictedText: {
     color: theme.isDark ? theme.colors.white : theme.colors.text,

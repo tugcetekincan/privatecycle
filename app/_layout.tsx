@@ -4,9 +4,15 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
+import { useMigration } from '@/hooks/useMigration';
 
 function RootLayoutContent() {
   const { theme } = useTheme();
+  const { isCompleted } = useMigration();
+  
+  if (!isCompleted) {
+    return null;
+  }
   
   return (
     <SafeAreaProvider>

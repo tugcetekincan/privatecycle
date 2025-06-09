@@ -15,8 +15,7 @@
     "android": {
       "package": "com.ncan.privatecycle",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       }
     },
     "web": {
@@ -30,8 +29,7 @@
       "expo-web-browser"
     ],
     "androidStatusBar": {
-      "barStyle": "default",
-      "backgroundColor": "#ffffff"
+      "barStyle": "default"
     },
     "androidNavigationBar": {
       "visible": "leanback"

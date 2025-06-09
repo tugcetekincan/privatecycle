@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -21,14 +22,16 @@ export default function InsightsTab() {
     moodTrends: [] as Array<{mood: string, count: number}>,
   });
 
-  useEffect(() => {
-    loadInsights();
-  }, []);
-
-  const loadInsights = async () => {
+  const loadInsights = useCallback(async () => {
     const data = await DataService.getInsights();
     setStats(data);
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadInsights();
+    }, [loadInsights])
+  );
 
   const getSymptomEmoji = (symptom: string) => {
     const emojiMap: { [key: string]: string } = {
