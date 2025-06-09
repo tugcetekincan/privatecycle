@@ -13,6 +13,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Heart, Droplets, Smile, Calendar, ChevronDown } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
+import { useTheme } from '@/hooks/useTheme';
 
 const FLOW_LEVELS = [
   { id: 'light', label: 'Light', color: '#ffcccb' },
@@ -27,6 +28,7 @@ const SYMPTOMS = [
   { id: 'mood', label: 'Mood Changes', icon: '😢' },
   { id: 'fatigue', label: 'Fatigue', icon: '😴' },
   { id: 'backache', label: 'Back Pain', icon: '😖' },
+  { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
 ];
 
 const MOODS = [
@@ -38,6 +40,7 @@ const MOODS = [
 ];
 
 export default function TrackTab() {
+  const { theme } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isPeriodDay, setIsPeriodDay] = useState(false);
@@ -121,18 +124,20 @@ export default function TrackTab() {
     return date.toDateString() === today.toDateString();
   };
 
+  const styles = createStyles(theme);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Track Your Day</Text>
-          <Heart size={24} color="#e91e63" />
+          <Heart size={24} color={theme.colors.primary} />
         </View>
 
         {/* Date Selection */}
         <TouchableOpacity style={styles.dateCard} onPress={showDatePickerModal}>
-          <Calendar size={20} color="#666" />
+          <Calendar size={20} color={theme.colors.textSecondary} />
           <View style={styles.dateContent}>
             <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
             {isToday(selectedDate) && (
@@ -142,7 +147,7 @@ export default function TrackTab() {
               <Text style={styles.hasDataBadge}>Has Data</Text>
             )}
           </View>
-          <ChevronDown size={20} color="#666" />
+          <ChevronDown size={20} color={theme.colors.textSecondary} />
         </TouchableOpacity>
 
         {Platform.OS === 'web' ? (
@@ -204,7 +209,7 @@ export default function TrackTab() {
           <TouchableOpacity 
             style={[styles.periodButton, isPeriodDay && styles.periodButtonActive]}
             onPress={() => setIsPeriodDay(!isPeriodDay)}>
-            <Droplets size={20} color={isPeriodDay ? '#fff' : '#e91e63'} />
+            <Droplets size={20} color={isPeriodDay ? theme.colors.white : theme.colors.primary} />
             <Text style={[styles.periodButtonText, isPeriodDay && styles.periodButtonTextActive]}>
               {isPeriodDay ? 'Period Day' : 'No Period'}
             </Text>
@@ -297,10 +302,10 @@ export default function TrackTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   scrollView: {
     flex: 1,
@@ -316,18 +321,18 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.colors.text,
   },
   dateCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     marginVertical: 10,
     padding: 15,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -341,11 +346,11 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
+    color: theme.colors.text,
   },
   todayBadge: {
-    backgroundColor: '#4caf50',
-    color: '#fff',
+    backgroundColor: theme.colors.success,
+    color: theme.colors.white,
     fontSize: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -354,8 +359,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   hasDataBadge: {
-    backgroundColor: '#2196f3',
-    color: '#fff',
+    backgroundColor: theme.colors.accent,
+    color: theme.colors.white,
     fontSize: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,

@@ -12,6 +12,13 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ncan.privatecycle"
     },
+    "android": {
+      "package": "com.ncan.privatecycle",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
     "web": {
       "bundler": "metro",
       "output": "single",
@@ -22,11 +29,15 @@
       "expo-font",
       "expo-web-browser"
     ],
+    "androidStatusBar": {
+      "barStyle": "default",
+      "backgroundColor": "#ffffff"
+    },
+    "androidNavigationBar": {
+      "visible": "leanback"
+    },
     "experiments": {
       "typedRoutes": true
-    },
-    "android": {
-      "package": "com.ncan.privatecycle"
     },
     "extra": {
       "router": {},

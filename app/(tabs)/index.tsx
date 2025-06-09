@@ -10,6 +10,7 @@ import {
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '@/hooks/useTheme';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -18,6 +19,7 @@ const MONTHS = [
 ];
 
 export default function CalendarTab() {
+  const { theme } = useTheme();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
@@ -192,25 +194,27 @@ export default function CalendarTab() {
     return days;
   };
 
+  const styles = createStyles(theme);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Period Calendar</Text>
-          <CalendarIcon size={24} color="#e91e63" />
+          <CalendarIcon size={24} color={theme.colors.primary} />
         </View>
 
         {/* Calendar Navigation */}
         <View style={styles.calendarHeader}>
           <TouchableOpacity onPress={() => navigateMonth('prev')}>
-            <ChevronLeft size={24} color="#e91e63" />
+            <ChevronLeft size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.monthYear}>
             {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
           </Text>
           <TouchableOpacity onPress={() => navigateMonth('next')}>
-            <ChevronRight size={24} color="#e91e63" />
+            <ChevronRight size={24} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -234,19 +238,19 @@ export default function CalendarTab() {
         {/* Legend */}
         <View style={styles.legend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#e91e63' }]} />
+            <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
             <Text style={styles.legendText}>Period</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ccc' }]} />
+            <View style={[styles.legendDot, { backgroundColor: theme.colors.secondary, borderWidth: 1, borderColor: theme.colors.border }]} />
             <Text style={styles.legendText}>No Period</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#ffb3d1' }]} />
+            <View style={[styles.legendDot, { backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1' }]} />
             <Text style={styles.legendText}>Predicted</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#4caf50' }]} />
+            <View style={[styles.legendDot, { backgroundColor: theme.colors.accent }]} />
             <Text style={styles.legendText}>Today</Text>
           </View>
         </View>
@@ -270,10 +274,10 @@ export default function CalendarTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   scrollView: {
     flex: 1,
@@ -289,7 +293,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.colors.text,
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -301,15 +305,15 @@ const styles = StyleSheet.create({
   monthYear: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.colors.text,
   },
   calendar: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     borderRadius: 12,
     padding: 15,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -319,12 +323,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.border,
   },
   dayHeader: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     width: 40,
   },
@@ -346,36 +350,36 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.colors.text,
   },
   today: {
-    backgroundColor: '#4caf50',
+    backgroundColor: theme.colors.accent,
   },
   todayText: {
-    color: '#fff',
+    color: theme.colors.white,
     fontWeight: 'bold',
   },
   periodDay: {
-    backgroundColor: '#e91e63',
+    backgroundColor: theme.colors.primary,
   },
   periodText: {
-    color: '#fff',
+    color: theme.colors.white,
     fontWeight: 'bold',
   },
   noPeriodDay: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.secondary,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: theme.colors.border,
   },
   noPeriodText: {
-    color: '#666',
+    color: theme.colors.textSecondary,
     fontWeight: '500',
   },
   predictedDay: {
-    backgroundColor: '#ffb3d1',
+    backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1',
   },
   predictedText: {
-    color: '#333',
+    color: theme.isDark ? theme.colors.white : theme.colors.text,
     fontWeight: '500',
   },
   legend: {
@@ -397,16 +401,16 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 14,
-    color: '#666',
+    color: theme.colors.textSecondary,
   },
   predictionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 12,
     padding: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -414,11 +418,11 @@ const styles = StyleSheet.create({
   predictionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#e91e63',
+    color: theme.colors.primary,
     marginBottom: 5,
   },
   predictionDate: {
     fontSize: 16,
-    color: '#333',
+    color: theme.colors.text,
   },
 });

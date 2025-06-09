@@ -8,8 +8,10 @@ import {
 } from 'react-native';
 import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function InsightsTab() {
+  const { theme } = useTheme();
   const [stats, setStats] = useState({
     averageCycle: 28,
     lastPeriodLength: 0,
@@ -33,6 +35,7 @@ export default function InsightsTab() {
       cramps: '😣',
       headache: '🤕',
       bloating: '😵',
+      breastache: '🤱',
       mood: '😢',
       fatigue: '😴',
       backache: '😖',
@@ -51,40 +54,42 @@ export default function InsightsTab() {
     return emojiMap[mood] || '😐';
   };
 
+  const styles = createStyles(theme);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Insights</Text>
-          <BarChart2 size={24} color="#e91e63" />
+          <BarChart2 size={24} color={theme.colors.primary} />
         </View>
 
         {/* Cycle Stats */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <Calendar size={32} color="#e91e63" />
+            <Calendar size={32} color={theme.colors.primary} />
             <Text style={styles.statNumber}>{stats.averageCycle}</Text>
             <Text style={styles.statLabel}>Avg Cycle Length</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
-            <Heart size={32} color="#ff6b6b" />
+            <Heart size={32} color={theme.colors.error} />
             <Text style={styles.statNumber}>{stats.lastPeriodLength}</Text>
             <Text style={styles.statLabel}>Last Period</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
-            <TrendingUp size={32} color="#4caf50" />
+            <TrendingUp size={32} color={theme.colors.success} />
             <Text style={styles.statNumber}>{stats.nextPeriodIn}</Text>
             <Text style={styles.statLabel}>Next Period</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
-            <BarChart2 size={32} color="#9c27b0" />
+            <BarChart2 size={32} color={theme.colors.warning} />
             <Text style={styles.statNumber}>{stats.totalPeriods}</Text>
             <Text style={styles.statLabel}>Total Tracked</Text>
             <Text style={styles.statUnit}>periods</Text>
@@ -182,10 +187,10 @@ export default function InsightsTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   scrollView: {
     flex: 1,
@@ -201,7 +206,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.colors.text,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -212,13 +217,13 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginBottom: 15,
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -226,28 +231,28 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: theme.colors.text,
     marginTop: 10,
   },
   statLabel: {
     fontSize: 14,
-    color: '#666',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     marginTop: 5,
   },
   statUnit: {
     fontSize: 12,
-    color: '#999',
+    color: theme.colors.textSecondary,
     marginTop: 2,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     marginVertical: 10,
     padding: 20,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -255,12 +260,12 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.colors.text,
     marginBottom: 15,
   },
   noDataText: {
     fontSize: 16,
-    color: '#999',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: 20,
@@ -284,7 +289,7 @@ const styles = StyleSheet.create({
   },
   symptomName: {
     fontSize: 16,
-    color: '#333',
+    color: theme.colors.text,
     flex: 1,
   },
   symptomBar: {
@@ -295,13 +300,13 @@ const styles = StyleSheet.create({
   },
   symptomBarFill: {
     height: 8,
-    backgroundColor: '#e91e63',
+    backgroundColor: theme.colors.primary,
     borderRadius: 4,
     minWidth: 20,
   },
   symptomCount: {
     fontSize: 14,
-    color: '#666',
+    color: theme.colors.textSecondary,
     marginLeft: 8,
     minWidth: 20,
   },
@@ -321,24 +326,24 @@ const styles = StyleSheet.create({
   },
   moodName: {
     fontSize: 16,
-    color: '#333',
+    color: theme.colors.text,
     marginBottom: 5,
   },
   moodBar: {
     height: 6,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: theme.colors.border,
     borderRadius: 3,
     marginBottom: 5,
   },
   moodBarFill: {
     height: '100%',
-    backgroundColor: '#9c27b0',
+    backgroundColor: theme.colors.warning,
     borderRadius: 3,
     minWidth: 10,
   },
   moodCount: {
     fontSize: 12,
-    color: '#666',
+    color: theme.colors.textSecondary,
   },
   tipsList: {
     gap: 15,
@@ -353,7 +358,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 16,
-    color: '#333',
+    color: theme.colors.text,
     flex: 1,
     lineHeight: 22,
   },
