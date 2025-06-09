@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
   Switch,
   ActivityIndicator,
 } from 'react-native';
@@ -27,10 +26,19 @@ import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
+import { useDialog } from '@/hooks/useDialog';
 
 export default function SettingsTab() {
   const { theme, toggleTheme, isDark } = useTheme();
   const { triggerAutoBackup } = useAutoBackup();
+  const { 
+    showSuccess, 
+    showError, 
+    showInfo, 
+    showConfirm, 
+    showChoice, 
+    DialogComponent 
+  } = useDialog();
   const [notifications, setNotifications] = useState(true);
   const [privateMode, setPrivateMode] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -70,7 +78,7 @@ export default function SettingsTab() {
       await loadBackupData();
     } catch (error) {
       console.error('Error updating backup settings:', error);
-      Alert.alert('Error', 'Failed to update backup settings');
+      showError('Error', 'Failed to update backup settings');
     }
   };
 
@@ -79,10 +87,10 @@ export default function SettingsTab() {
     try {
       const filePath = await BackupService.exportBackup({ saveToDevice: true, shareFile: true });
       await loadBackupData();
-      Alert.alert('Success', 'Backup created and saved successfully!');
+      showSuccess('Success', 'Backup created and saved successfully!');
     } catch (error) {
       console.error('Error creating backup:', error);
-      Alert.alert('Error', 'Failed to create backup');
+      showError('Error', 'Failed to create backup');
     } finally {
       setLoading(false);
     }
@@ -94,140 +102,112 @@ export default function SettingsTab() {
       await BackupService.exportBackup({ shareFile: true });
     } catch (error) {
       console.error('Error exporting backup:', error);
-      Alert.alert('Error', 'Failed to export backup');
+      showError('Error', 'Failed to export backup');
     } finally {
       setLoading(false);
     }
   };
 
   const importBackup = async () => {
-    Alert.alert(
+    showConfirm(
       'Import Backup',
       'This will replace all your current data with the backup data. Are you sure you want to continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Import',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              const result = await BackupService.importBackup();
-              if (result.success) {
-                await loadBackupData();
-                Alert.alert(
-                  'Import Successful',
-                  result.message + (result.stats ? `\n\nBackup Details:\n• Version: ${result.stats.version}\n• Date: ${result.stats.timestamp}\n• Days: ${result.stats.totalDays}` : ''),
-                  [{ text: 'OK' }]
-                );
-              } else {
-                Alert.alert('Import Failed', result.message);
-              }
-            } catch (error) {
-              console.error('Error importing backup:', error);
-              Alert.alert('Error', 'Failed to import backup');
-            } finally {
-              setLoading(false);
-            }
+      async () => {
+        setLoading(true);
+        try {
+          const result = await BackupService.importBackup();
+          if (result.success) {
+            await loadBackupData();
+            showSuccess(
+              'Import Successful',
+              result.message + (result.stats ? `\n\nBackup Details:\n• Version: ${result.stats.version}\n• Date: ${result.stats.timestamp}\n• Days: ${result.stats.totalDays}` : '')
+            );
+          } else {
+            showError('Import Failed', result.message);
           }
+        } catch (error) {
+          console.error('Error importing backup:', error);
+          showError('Error', 'Failed to import backup');
+        } finally {
+          setLoading(false);
         }
-      ]
+      },
+      undefined,
+      'Import',
+      'Cancel',
+      true
     );
   };
 
-  const manageLocalBackups = async () => {
+  const deleteBackup = async () => {
     try {
       const backups = await BackupService.getLocalBackups();
       if (backups.length === 0) {
-        Alert.alert('No Backups', 'No local backups found.');
+        showInfo('No Backup', 'No local backup found to delete.');
         return;
       }
 
-      const backupList = backups.map((backup, index) => 
-        `${index + 1}. ${backup.name}\n   Size: ${BackupService.formatFileSize(backup.size)}\n   Date: ${backup.date.toLocaleDateString()}`
-      ).join('\n\n');
-
-      Alert.alert(
-        'Local Backups',
-        `Found ${backups.length} local backup(s):\n\n${backupList}`,
-        [
-          { text: 'Close', style: 'cancel' },
-          {
-            text: 'Delete All',
-            style: 'destructive',
-            onPress: () => {
-              Alert.alert(
-                'Delete All Backups',
-                'Are you sure you want to delete all local backups?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                      try {
-                        for (const backup of backups) {
-                          await BackupService.deleteBackup(backup.path);
-                        }
-                        await loadBackupData();
-                        Alert.alert('Success', 'All local backups deleted.');
-                      } catch (error) {
-                        Alert.alert('Error', 'Failed to delete backups');
-                      }
-                    }
-                  }
-                ]
-              );
-            }
+      const backup = backups[0];
+      showConfirm(
+        'Delete Backup',
+        `Are you sure you want to delete the local backup?\n\nFile: ${backup.name}\nSize: ${BackupService.formatFileSize(backup.size)}\nDate: ${backup.date.toLocaleDateString()}`,
+        async () => {
+          try {
+            await BackupService.deleteBackup(backup.path);
+            await loadBackupData();
+            showSuccess('Success', 'Backup deleted successfully.');
+          } catch (error) {
+            showError('Error', 'Failed to delete backup');
           }
-        ]
+        },
+        undefined,
+        'Delete',
+        'Cancel',
+        true
       );
     } catch (error) {
-      console.error('Error managing backups:', error);
-      Alert.alert('Error', 'Failed to load backup list');
+      console.error('Error deleting backup:', error);
+      showError('Error', 'Failed to delete backup');
     }
   };
 
   const clearAllData = () => {
-    Alert.alert(
+    showChoice(
       'Clear All Data',
       'Are you sure you want to delete all your tracking data AND all backups? This action cannot be undone.\n\nConsider exporting a backup first!',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Export Backup First',
           onPress: exportBackup
         },
         { 
-          text: 'Delete Everything', 
-          style: 'destructive',
+          text: 'Delete Everything',
           onPress: async () => {
             try {
               await BackupService.clearAllData();
               await loadBackupData();
-              Alert.alert('Success', 'All data and backups have been cleared.');
+              showSuccess('Success', 'All data and backups have been cleared.');
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear all data');
+              showError('Error', 'Failed to clear all data');
             }
           }
         },
-      ]
+      ],
+      true
     );
   };
 
   const showAbout = () => {
-    Alert.alert(
+    showInfo(
       'About Period Tracker',
-      'A simple and private period tracking app to help you monitor your menstrual cycle, symptoms, and overall health patterns.\n\nVersion 1.0.0',
-      [{ text: 'OK' }]
+      'A simple and private period tracking app to help you monitor your menstrual cycle, symptoms, and overall health patterns.\n\nVersion 1.0.0'
     );
   };
 
   const showHelp = () => {
-    Alert.alert(
+    showInfo(
       'Help',
-      '• Use the Calendar tab to view your cycle\n• Track your period, symptoms, and mood daily\n• View insights and patterns in the Insights tab\n• All data is stored locally on your device',
-      [{ text: 'OK' }]
+      '• Use the Calendar tab to view your cycle\n• Track your period, symptoms, and mood daily\n• View insights and patterns in the Insights tab\n• All data is stored locally on your device'
     );
   };
 
@@ -359,15 +339,15 @@ export default function SettingsTab() {
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => {
-                Alert.alert(
+                showChoice(
                   'Backup Frequency',
                   'Choose how often to create automatic backups',
                   [
-                    { text: 'Cancel', style: 'cancel' },
                     { text: 'Daily', onPress: () => updateBackupSettings({ autoBackupFrequency: 'daily' }) },
                     { text: 'Weekly', onPress: () => updateBackupSettings({ autoBackupFrequency: 'weekly' }) },
                     { text: 'Monthly', onPress: () => updateBackupSettings({ autoBackupFrequency: 'monthly' }) },
-                  ]
+                  ],
+                  true
                 );
               }}
             >
@@ -414,10 +394,10 @@ export default function SettingsTab() {
 
           <TouchableOpacity 
             style={styles.button} 
-            onPress={manageLocalBackups}
+            onPress={deleteBackup}
           >
-            <HardDrive size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.buttonText}>Manage Local Backups</Text>
+            <HardDrive size={20} color={theme.colors.error} />
+            <Text style={styles.buttonText}>Delete Backup</Text>
           </TouchableOpacity>
         </View>
 
@@ -428,8 +408,8 @@ export default function SettingsTab() {
           <View style={styles.card}>
             <View style={styles.backupInfo}>
               <View style={styles.backupInfoItem}>
-                <Text style={styles.backupInfoLabel}>Local Backups</Text>
-                <Text style={styles.backupInfoValue}>{backupStats.totalBackups}</Text>
+                <Text style={styles.backupInfoLabel}>Local Backup</Text>
+                <Text style={styles.backupInfoValue}>{backupStats.totalBackups > 0 ? 'Available' : 'None'}</Text>
               </View>
               <View style={styles.backupInfoItem}>
                 <Text style={styles.backupInfoLabel}>Total Size</Text>
@@ -473,6 +453,7 @@ export default function SettingsTab() {
           </Text>
         </View>
       </ScrollView>
+      <DialogComponent />
     </SafeAreaView>
   );
 }

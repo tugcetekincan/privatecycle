@@ -9,35 +9,79 @@ import {
   PanResponder,
   Animated,
   Dimensions,
+  Modal,
 } from 'react-native';
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { DataService } from '@/services/DataService';
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets } from 'lucide-react-native';
+import { DataService, DailyData } from '@/services/DataService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import { useDialog } from '@/hooks/useDialog';
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const FLOW_LEVELS = [
+  { id: 'light', label: 'Light', color: '#ffcccb' },
+  { id: 'medium', label: 'Medium', color: '#ff6b6b' },
+  { id: 'heavy', label: 'Heavy', color: '#dc143c' },
+];
+
+const SYMPTOMS = [
+  { id: 'cramps', label: 'Cramps', icon: '😣' },
+  { id: 'headache', label: 'Headache', icon: '🤕' },
+  { id: 'bloating', label: 'Bloating', icon: '😵' },
+  { id: 'mood', label: 'Mood Changes', icon: '😢' },
+  { id: 'fatigue', label: 'Fatigue', icon: '😴' },
+  { id: 'backache', label: 'Back Pain', icon: '😖' },
+  { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
+];
+
+const MOODS = [
+  { id: 'happy', label: 'Happy', icon: '😊', color: '#4caf50' },
+  { id: 'sad', label: 'Sad', icon: '😢', color: '#2196f3' },
+  { id: 'anxious', label: 'Anxious', icon: '😰', color: '#ff9800' },
+  { id: 'calm', label: 'Calm', icon: '😌', color: '#9c27b0' },
+  { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function CalendarTab() {
   const { theme } = useTheme();
+  const { showSuccess, showError, DialogComponent } = useDialog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
   const [nextPeriod, setNextPeriod] = useState<Date | null>(null);
   const [futurePeriods, setFuturePeriods] = useState<Date[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
+  const [calendarHeight, setCalendarHeight] = useState(220);
+  
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedDateData, setSelectedDateData] = useState<{
+    date: Date;
+    data: DailyData | null;
+  } | null>(null);
+  const [editingData, setEditingData] = useState<DailyData | null>(null);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const nextMonthAnim = useRef(new Animated.Value(screenWidth)).current;
+  const heightAnim = useRef(new Animated.Value(220)).current;
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const newHeight = getCalendarHeight(currentDate);
+    setCalendarHeight(newHeight);
+    heightAnim.setValue(newHeight);
+  }, [currentDate]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -48,6 +92,7 @@ export default function CalendarTab() {
   const loadData = async () => {
     const data = await DataService.getPeriodData();
     const dailyData = await DataService.getAllDailyData();
+    setAllDailyData(dailyData);
     setPeriodDates(data.periods);
     
     // Get dates where user explicitly marked "no period"
@@ -83,8 +128,14 @@ export default function CalendarTab() {
         const predictions: Date[] = [];
         for (let i = 1; i <= 6; i++) {
           const predicted = new Date(lastPeriodStart);
-          // Add some variability to predictions beyond the first one
-          const adjustment = i > 1 ? Math.round((Math.random() - 0.5) * cycleVariability * 0.5) : 0;
+          // Add deterministic variability to predictions beyond the first one
+          // Use a seeded approach based on the last period date and prediction index
+          let adjustment = 0;
+          if (i > 1) {
+            const seed = lastPeriodStart.getTime() + i;
+            const pseudoRandom = (Math.sin(seed) + 1) / 2; // Normalize to 0-1
+            adjustment = Math.round((pseudoRandom - 0.5) * cycleVariability * 0.5);
+          }
           predicted.setDate(predicted.getDate() + (avgCycle * i) + adjustment);
           predictions.push(predicted);
         }
@@ -106,6 +157,64 @@ export default function CalendarTab() {
         setFuturePeriods(predictions);
       }
     }
+  };
+
+  const hasDataForDate = (date: Date): boolean => {
+    const dateKey = formatDateKey(date);
+    const data = allDailyData[dateKey];
+    // Only consider it as having data if it has meaningful content
+    return data && (
+      data.isPeriod || 
+      data.symptoms.length > 0 || 
+      data.mood !== '' || 
+      data.flowLevel !== ''
+    );
+  };
+
+  const handleDayPress = async (date: Date) => {
+    const dateKey = formatDateKey(date);
+    const existingData = allDailyData[dateKey] || null;
+    
+    setSelectedDateData({ date, data: existingData });
+    setEditingData(existingData || {
+      date: dateKey,
+      isPeriod: false,
+      flowLevel: '',
+      symptoms: [],
+      mood: '',
+    });
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setSelectedDateData(null);
+    setEditingData(null);
+  };
+
+  const saveModalData = async () => {
+    if (!editingData || !selectedDateData) return;
+
+    try {
+      await DataService.saveTodayData(editingData.date, editingData);
+      await loadData(); // Reload all data to update the calendar
+      closeModal();
+      showSuccess('Success', 'Data saved successfully!');
+    } catch (error) {
+      showError('Error', 'Failed to save data. Please try again.');
+      console.error('Error saving data:', error);
+    }
+  };
+
+  const toggleModalSymptom = (symptomId: string) => {
+    if (!editingData) return;
+    
+    setEditingData({
+      ...editingData,
+      symptoms: editingData.symptoms.includes(symptomId)
+        ? editingData.symptoms.filter(id => id !== symptomId)
+        : [...editingData.symptoms, symptomId]
+    });
   };
 
   const calculateAverageCycle = (periods: string[], noPeriodDates?: string[]): number => {
@@ -163,7 +272,23 @@ export default function CalendarTab() {
   };
 
   const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+    return firstDay === 0 ? 6 : firstDay - 1;
+  };
+
+  const getCalendarRows = (date: Date) => {
+    const daysInMonth = getDaysInMonth(date);
+    const firstDay = getFirstDayOfMonth(date);
+    const totalCells = firstDay + daysInMonth;
+    return Math.ceil(totalCells / 7);
+  };
+
+  const getCalendarHeight = (date: Date) => {
+    const rows = getCalendarRows(date);
+    const dayRowHeight = 36;
+    const headerHeight = 30;
+    const padding = 20;
+    return headerHeight + (rows * dayRowHeight) + padding;
   };
 
   const formatDateKey = (date: Date) => {
@@ -188,8 +313,6 @@ export default function CalendarTab() {
     });
   };
 
-
-
   // Generic helper function to determine day position for pill styling
   const getDayPosition = (date: Date, checkFunction: (d: Date) => boolean): 'single' | 'start' | 'middle' | 'end' => {
     if (!checkFunction(date)) return 'single';
@@ -212,15 +335,15 @@ export default function CalendarTab() {
   const getDayBorderRadius = (position: 'single' | 'start' | 'middle' | 'end') => {
     switch (position) {
       case 'single':
-        return { borderRadius: 20 };
+        return { borderRadius: 18 };
       case 'start':
-        return { borderTopLeftRadius: 20, borderBottomLeftRadius: 20, borderTopRightRadius: 0, borderBottomRightRadius: 0 };
+        return { borderTopLeftRadius: 18, borderBottomLeftRadius: 18, borderTopRightRadius: 0, borderBottomRightRadius: 0 };
       case 'middle':
         return { borderRadius: 0 };
       case 'end':
-        return { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 20, borderBottomRightRadius: 20 };
+        return { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 18, borderBottomRightRadius: 18 };
       default:
-        return { borderRadius: 20 };
+        return { borderRadius: 18 };
     }
   };
 
@@ -238,6 +361,8 @@ export default function CalendarTab() {
       targetDate.setMonth(targetDate.getMonth() + 1);
     }
     
+    const targetHeight = getCalendarHeight(targetDate);
+    
     setIsAnimating(true);
     setAnimationDirection(direction);
     setNextMonthDate(targetDate);
@@ -248,7 +373,7 @@ export default function CalendarTab() {
     // Reset next month position
     nextMonthAnim.setValue(slideInStartDistance);
     
-    // Animate current month out and next month in
+    // Animate current month out, next month in, and height change
     Animated.parallel([
       Animated.timing(slideAnim, {
         toValue: slideOutDistance,
@@ -260,9 +385,15 @@ export default function CalendarTab() {
         duration: 300,
         useNativeDriver: true,
       }),
+      Animated.timing(heightAnim, {
+        toValue: targetHeight,
+        duration: 300,
+        useNativeDriver: false,
+      }),
     ]).start(() => {
       // Update the current date to the target date
       setCurrentDate(targetDate);
+      setCalendarHeight(targetHeight);
       
       // Reset animation values smoothly
       requestAnimationFrame(() => {
@@ -328,8 +459,13 @@ export default function CalendarTab() {
       const noPeriodBorderRadius = isNoPeriod ? getDayBorderRadius(noPeriodPosition) : {};
       const predictedBorderRadius = isPredicted ? getDayBorderRadius(predictedPosition) : {};
 
+      const hasData = hasDataForDate(dayDate);
+      
+      // Allow clicking on any day, not just ones with data
+      const DayComponent = TouchableOpacity;
+      
       days.push(
-        <View
+        <DayComponent
           key={day}
           style={[
             styles.dayCell,
@@ -337,7 +473,10 @@ export default function CalendarTab() {
             isPeriod && [styles.periodDay, periodBorderRadius],
             isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
             isPredicted && [styles.predictedDay, predictedBorderRadius],
-          ]}>
+            hasData && styles.clickableDay,
+          ]}
+          onPress={() => handleDayPress(dayDate)}
+          activeOpacity={0.7}>
           <Text
             style={[
               styles.dayText,
@@ -348,7 +487,10 @@ export default function CalendarTab() {
             ]}>
             {day}
           </Text>
-        </View>
+          {isToday && (
+            <View style={styles.todayIndicator} />
+          )}
+        </DayComponent>
       );
     }
 
@@ -372,8 +514,6 @@ export default function CalendarTab() {
       </View>
     </>
   );
-
-
 
   const styles = createStyles(theme);
 
@@ -400,10 +540,11 @@ export default function CalendarTab() {
         </View>
 
         {/* Calendar */}
-        <View style={styles.calendarContainer} {...panResponder.panHandlers}>
+        <Animated.View style={[styles.calendarContainer, { height: heightAnim }]} {...panResponder.panHandlers}>
           {/* Current Month */}
           <Animated.View style={[
             styles.calendar,
+            { height: calendarHeight },
             {
               transform: [{ translateX: slideAnim }],
             },
@@ -411,11 +552,12 @@ export default function CalendarTab() {
             {renderCalendarContent(currentDate)}
           </Animated.View>
 
-                    {/* Next Month (for animation) */}
+          {/* Next Month (for animation) */}
           {isAnimating && nextMonthDate && (
             <Animated.View style={[
               styles.calendar,
               styles.nextMonthCalendar,
+              { height: getCalendarHeight(nextMonthDate) },
               {
                 transform: [{ translateX: nextMonthAnim }],
               },
@@ -423,7 +565,7 @@ export default function CalendarTab() {
               {renderCalendarContent(nextMonthDate)}
             </Animated.View>
           )}
-        </View>
+        </Animated.View>
 
         {/* Legend */}
         <View style={styles.legend}>
@@ -479,6 +621,143 @@ export default function CalendarTab() {
           </View>
         )}
       </ScrollView>
+
+      {/* Day Details Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={closeModal}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedDateData?.date.toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </Text>
+              <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+                <X size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              {/* Period Tracking */}
+              <View style={styles.modalCard}>
+                <Text style={styles.modalCardTitle}>Period</Text>
+                <TouchableOpacity 
+                  style={[styles.periodButton, editingData?.isPeriod && styles.periodButtonActive]}
+                  onPress={() => editingData && setEditingData({
+                    ...editingData,
+                    isPeriod: !editingData.isPeriod,
+                    flowLevel: !editingData.isPeriod ? editingData.flowLevel : '',
+                  })}>
+                  <Droplets size={20} color={editingData?.isPeriod ? theme.colors.white : '#e91e63'} />
+                  <Text style={[styles.periodButtonText, editingData?.isPeriod && styles.periodButtonTextActive]}>
+                    {editingData?.isPeriod ? 'Period Day' : 'No Period'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Flow Level */}
+                {editingData?.isPeriod && (
+                  <View style={styles.flowSection}>
+                    <Text style={styles.flowSectionTitle}>Flow Level</Text>
+                    <View style={styles.flowButtons}>
+                      {FLOW_LEVELS.map(level => (
+                        <TouchableOpacity
+                          key={level.id}
+                          style={[
+                            styles.flowButton,
+                            { backgroundColor: level.color },
+                            editingData.flowLevel === level.id && styles.flowButtonActive
+                          ]}
+                          onPress={() => setEditingData({
+                            ...editingData,
+                            flowLevel: level.id,
+                          })}>
+                          <Text style={[
+                            styles.flowButtonText,
+                            editingData.flowLevel === level.id && styles.flowButtonTextActive
+                          ]}>
+                            {level.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Symptoms */}
+              <View style={styles.modalCard}>
+                <Text style={styles.modalCardTitle}>Symptoms</Text>
+                <View style={styles.symptomsGrid}>
+                  {SYMPTOMS.map(symptom => (
+                    <TouchableOpacity
+                      key={symptom.id}
+                      style={[
+                        styles.symptomChip,
+                        editingData?.symptoms.includes(symptom.id) && styles.symptomChipSelected,
+                      ]}
+                      onPress={() => toggleModalSymptom(symptom.id)}>
+                      <Text style={styles.symptomEmoji}>{symptom.icon}</Text>
+                      <Text style={[
+                        styles.symptomText,
+                        editingData?.symptoms.includes(symptom.id) && styles.symptomTextSelected,
+                      ]}>
+                        {symptom.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Mood */}
+              <View style={styles.modalCard}>
+                <Text style={styles.modalCardTitle}>Mood</Text>
+                <View style={styles.moodGrid}>
+                  {MOODS.map(mood => (
+                    <TouchableOpacity
+                      key={mood.id}
+                      style={[
+                        styles.moodChip,
+                        editingData?.mood === mood.id && [
+                          styles.moodChipSelected,
+                          { backgroundColor: mood.color },
+                        ],
+                      ]}
+                      onPress={() => editingData && setEditingData({
+                        ...editingData,
+                        mood: editingData.mood === mood.id ? '' : mood.id,
+                      })}>
+                      <Text style={styles.moodEmoji}>{mood.icon}</Text>
+                      <Text style={[
+                        styles.moodText,
+                        editingData?.mood === mood.id && styles.moodTextSelected,
+                      ]}>
+                        {mood.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveModalData}>
+                <Check size={20} color="#fff" />
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      <DialogComponent />
     </SafeAreaView>
   );
 }
@@ -509,7 +788,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 10,
   },
   monthYear: {
     fontSize: 20,
@@ -517,20 +796,18 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.colors.text,
   },
   calendarContainer: {
-    marginHorizontal: 20,
-    height: 320,
+    marginHorizontal: 15,
     overflow: 'hidden',
   },
   calendar: {
     backgroundColor: theme.colors.surface,
     borderRadius: 12,
-    padding: 15,
+    padding: 10,
     elevation: 2,
     shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    height: 320,
   },
   nextMonthCalendar: {
     position: 'absolute',
@@ -541,7 +818,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   dayHeaders: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingBottom: 10,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -555,15 +832,15 @@ const createStyles = (theme: any) => StyleSheet.create({
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingTop: 10,
+    paddingTop: 8,
   },
   emptyDay: {
     width: '14.28%',
-    height: 40,
+    height: 36,
   },
   dayCell: {
     width: '14.28%',
-    height: 40,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -573,7 +850,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   today: {
     backgroundColor: theme.colors.accent,
-    borderRadius: 20,
+    borderRadius: 18,
   },
   todayText: {
     color: theme.colors.white,
@@ -588,9 +865,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   noPeriodDay: {
     backgroundColor: theme.colors.secondary,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 20,
   },
   noPeriodText: {
     color: theme.colors.textSecondary,
@@ -598,7 +872,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   predictedDay: {
     backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1',
-    borderRadius: 20,
   },
   predictedText: {
     color: theme.isDark ? theme.colors.white : theme.colors.text,
@@ -609,7 +882,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-around',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 15,
   },
   legendItem: {
     flexDirection: 'row',
@@ -680,5 +953,200 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.primary,
+  },
+  clickableDay: {
+    opacity: 0.9,
+  },
+  todayIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    left: '50%',
+    marginLeft: -3,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.accent,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  closeButton: {
+    padding: 5,
+  },
+  modalScrollView: {
+    flex: 1,
+    paddingBottom: 20,
+  },
+  modalCard: {
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: 20,
+    marginVertical: 10,
+    padding: 20,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: theme.colors.shadowColor,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  modalCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 15,
+  },
+  periodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e91e63',
+  },
+  periodButtonActive: {
+    backgroundColor: '#e91e63',
+  },
+  periodButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#e91e63',
+    marginLeft: 8,
+  },
+  periodButtonTextActive: {
+    color: '#fff',
+  },
+  flowSection: {
+    marginTop: 20,
+  },
+  flowSectionTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 10,
+  },
+  flowButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  flowButton: {
+    flex: 1,
+    padding: 12,
+    marginHorizontal: 5,
+    borderRadius: 8,
+    alignItems: 'center',
+    opacity: 0.7,
+  },
+  flowButtonActive: {
+    opacity: 1,
+    borderWidth: 2,
+    borderColor: theme.colors.text,
+  },
+  flowButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  flowButtonTextActive: {
+    fontWeight: '600',
+  },
+  symptomsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  symptomChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.secondary,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  symptomChipSelected: {
+    backgroundColor: theme.colors.primary,
+  },
+  symptomEmoji: {
+    fontSize: 16,
+    marginRight: 6,
+  },
+  symptomText: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  symptomTextSelected: {
+    color: theme.colors.white,
+    fontWeight: '500',
+  },
+  moodGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+  },
+  moodChip: {
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: theme.colors.secondary,
+    margin: 5,
+    minWidth: 70,
+  },
+  moodChipSelected: {
+    backgroundColor: theme.colors.primary,
+  },
+  moodEmoji: {
+    fontSize: 24,
+    marginBottom: 5,
+  },
+  moodText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  moodTextSelected: {
+    color: theme.colors.white,
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  saveButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.white,
   },
 });
