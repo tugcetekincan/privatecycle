@@ -30,7 +30,7 @@
       "expo-web-browser"
     ],
     "androidStatusBar": {
-      "barStyle": "default",
+      "barStyle": "dark-content",
       "backgroundColor": "#ffffff"
     },
     "androidNavigationBar": {
