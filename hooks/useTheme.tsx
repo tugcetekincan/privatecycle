@@ -16,6 +16,7 @@ interface ThemeColors {
   error: string;
   white: string;
   black: string;
+  today: string;
 }
 
 interface Theme {
@@ -44,6 +45,7 @@ const lightColors: ThemeColors = {
   error: '#f44336',
   white: '#ffffff',
   black: '#000000',
+  today: '#0077b6',
 };
 
 const darkColors: ThemeColors = {
@@ -61,6 +63,7 @@ const darkColors: ThemeColors = {
   error: '#f44336',
   white: '#ffffff',
   black: '#000000',
+  today: '#0077b6',
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
