@@ -85,7 +85,7 @@ export default function SettingsTab() {
   const createManualBackup = async () => {
     setLoading(true);
     try {
-      const filePath = await BackupService.exportBackup({ saveToDevice: true, shareFile: true });
+      const filePath = await BackupService.exportBackup({ saveToDevice: true, shareFile: false });
       await loadBackupData();
       showSuccess('Success', 'Backup created and saved successfully!');
     } catch (error) {
@@ -255,22 +255,6 @@ export default function SettingsTab() {
               onValueChange={toggleTheme}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor={isDark ? theme.colors.white : theme.colors.white}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Shield size={20} color={theme.colors.textSecondary} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Private Mode</Text>
-                <Text style={styles.settingSubtitle}>Hide sensitive information</Text>
-              </View>
-            </View>
-            <Switch
-              value={privateMode}
-              onValueChange={setPrivateMode}
-              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-              thumbColor={privateMode ? theme.colors.white : theme.colors.white}
             />
           </View>
         </View>
@@ -471,7 +455,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 15,
     paddingBottom: 10,
   },
   title: {
