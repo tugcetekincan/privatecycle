@@ -2,7 +2,6 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 import { DataService, DailyData } from './DataService';
 
 export interface BackupData {
@@ -244,11 +243,26 @@ export class BackupService {
           .map(async (filename) => {
             const filePath = `${this.BACKUP_FOLDER}${filename}`;
             const fileInfo = await FileSystem.getInfoAsync(filePath);
+            
+            let backupDate: Date;
+            if (fileInfo.exists && 'modificationTime' in fileInfo && fileInfo.modificationTime > 0) {
+              backupDate = new Date(fileInfo.modificationTime);
+            } else {
+              const timestampMatch = filename.match(/cycle_backup_(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
+              if (timestampMatch) {
+                const timestamp = timestampMatch[1];
+                const dateTime = timestamp.replace(/(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/, '$1-$2-$3T$4:$5:$6');
+                backupDate = new Date(dateTime);
+              } else {
+                backupDate = new Date();
+              }
+            }
+            
             return {
               name: filename,
               path: filePath,
               size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
-              date: new Date(fileInfo.exists && 'modificationTime' in fileInfo ? fileInfo.modificationTime : 0),
+              date: backupDate,
             };
           })
       );
@@ -271,11 +285,10 @@ export class BackupService {
 
   static async cleanupOldBackups(): Promise<void> {
     try {
-      const settings = await this.getBackupSettings();
       const backups = await this.getLocalBackups();
       
-      if (backups.length > settings.keepLocalBackups) {
-        const backupsToDelete = backups.slice(settings.keepLocalBackups);
+      if (backups.length > 1) {
+        const backupsToDelete = backups.slice(1);
         
         for (const backup of backupsToDelete) {
           await this.deleteBackup(backup.path);
@@ -360,7 +373,19 @@ export class BackupService {
       const settings = await this.getBackupSettings();
       
       const totalSize = backups.reduce((sum, backup) => sum + backup.size, 0);
-      const lastBackup = backups.length > 0 ? backups[0].date : null;
+      
+      let lastBackup: Date | null = null;
+      if (backups.length > 0) {
+        const latestBackup = backups[0];
+        const epochTime = new Date(0).getTime();
+        if (latestBackup.date.getTime() > epochTime) {
+          lastBackup = latestBackup.date;
+        }
+      }
+      
+      if (!lastBackup && settings.lastBackupTime && settings.lastBackupTime > 0) {
+        lastBackup = new Date(settings.lastBackupTime);
+      }
       
       let nextAutoBackup: Date | null = null;
       if (settings.autoBackupEnabled && settings.lastBackupTime) {

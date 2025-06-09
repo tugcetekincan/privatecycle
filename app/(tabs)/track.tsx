@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Alert,
   Platform,
   TextInput,
 } from 'react-native';
@@ -14,6 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Heart, Droplets, Smile, Calendar, ChevronDown } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { useTheme } from '@/hooks/useTheme';
+import { useDialog } from '@/hooks/useDialog';
 
 const FLOW_LEVELS = [
   { id: 'light', label: 'Light', color: '#ffcccb' },
@@ -41,6 +41,7 @@ const MOODS = [
 
 export default function TrackTab() {
   const { theme } = useTheme();
+  const { showSuccess, DialogComponent } = useDialog();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isPeriodDay, setIsPeriodDay] = useState(false);
@@ -84,7 +85,7 @@ export default function TrackTab() {
     };
 
     await DataService.saveTodayData(dateKey, data);
-    Alert.alert('Success', 'Your data has been saved!');
+    showSuccess('Success', 'Your data has been saved!');
     loadTodayData();
   };
 
@@ -299,6 +300,7 @@ export default function TrackTab() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <DialogComponent />
     </SafeAreaView>
   );
 }
