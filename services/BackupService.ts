@@ -1,0 +1,389 @@
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
+import { DataService, DailyData } from './DataService';
+
+export interface BackupData {
+  version: string;
+  timestamp: number;
+  data: {
+    dailyData: { [date: string]: DailyData };
+  };
+  metadata: {
+    totalDays: number;
+    dateRange: {
+      start: string | null;
+      end: string | null;
+    };
+  };
+}
+
+export interface BackupSettings {
+  autoBackupEnabled: boolean;
+  autoBackupFrequency: 'daily' | 'weekly' | 'monthly';
+  keepLocalBackups: number;
+  lastBackupTime: number | null;
+}
+
+export class BackupService {
+  private static readonly BACKUP_FOLDER = `${FileSystem.documentDirectory}backups/`;
+  private static readonly BACKUP_SETTINGS_KEY = 'backup_settings';
+  private static readonly BACKUP_VERSION = '1.0.0';
+
+  static async initializeBackupFolder(): Promise<void> {
+    try {
+      const folderInfo = await FileSystem.getInfoAsync(this.BACKUP_FOLDER);
+      if (!folderInfo.exists) {
+        await FileSystem.makeDirectoryAsync(this.BACKUP_FOLDER, { intermediates: true });
+      }
+    } catch (error) {
+      console.error('Error initializing backup folder:', error);
+      throw error;
+    }
+  }
+
+  static async getBackupSettings(): Promise<BackupSettings> {
+    try {
+      const settingsStr = await AsyncStorage.getItem(this.BACKUP_SETTINGS_KEY);
+      if (settingsStr) {
+        return JSON.parse(settingsStr);
+      }
+      return {
+        autoBackupEnabled: false,
+        autoBackupFrequency: 'weekly',
+        keepLocalBackups: 5,
+        lastBackupTime: null,
+      };
+    } catch (error) {
+      console.error('Error loading backup settings:', error);
+      return {
+        autoBackupEnabled: false,
+        autoBackupFrequency: 'weekly',
+        keepLocalBackups: 5,
+        lastBackupTime: null,
+      };
+    }
+  }
+
+  static async saveBackupSettings(settings: BackupSettings): Promise<void> {
+    try {
+      await AsyncStorage.setItem(this.BACKUP_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (error) {
+      console.error('Error saving backup settings:', error);
+      throw error;
+    }
+  }
+
+  static async createBackup(): Promise<BackupData> {
+    try {
+      const dailyData = await DataService.getAllDailyData();
+      const dates = Object.keys(dailyData).sort();
+      
+      const backupData: BackupData = {
+        version: this.BACKUP_VERSION,
+        timestamp: Date.now(),
+        data: {
+          dailyData,
+        },
+        metadata: {
+          totalDays: dates.length,
+          dateRange: {
+            start: dates.length > 0 ? dates[0] : null,
+            end: dates.length > 0 ? dates[dates.length - 1] : null,
+          },
+        },
+      };
+
+      return backupData;
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw error;
+    }
+  }
+
+  static async saveBackupToFile(backupData: BackupData, filename?: string): Promise<string> {
+    try {
+      await this.initializeBackupFolder();
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFilename = filename || `cycle_backup_${timestamp}.json`;
+      const filePath = `${this.BACKUP_FOLDER}${backupFilename}`;
+
+      await FileSystem.writeAsStringAsync(filePath, JSON.stringify(backupData, null, 2));
+      
+      const settings = await this.getBackupSettings();
+      settings.lastBackupTime = Date.now();
+      await this.saveBackupSettings(settings);
+
+      await this.cleanupOldBackups();
+
+      return filePath;
+    } catch (error) {
+      console.error('Error saving backup to file:', error);
+      throw error;
+    }
+  }
+
+  static async exportBackup(shareOptions: { saveToDevice?: boolean; shareFile?: boolean } = { shareFile: true }): Promise<string> {
+    try {
+      const backupData = await this.createBackup();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `cycle_backup_${timestamp}.json`;
+      
+      let filePath: string;
+      
+      if (shareOptions.saveToDevice) {
+        filePath = await this.saveBackupToFile(backupData, filename);
+      } else {
+        const tempPath = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(tempPath, JSON.stringify(backupData, null, 2));
+        filePath = tempPath;
+      }
+
+      if (shareOptions.shareFile && await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Cycle Tracker Backup',
+        });
+      }
+
+      return filePath;
+    } catch (error) {
+      console.error('Error exporting backup:', error);
+      throw error;
+    }
+  }
+
+  static async importBackup(filePath?: string): Promise<{ success: boolean; message: string; stats?: any }> {
+    try {
+      let backupFilePath = filePath;
+      
+      if (!backupFilePath) {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: 'application/json',
+          copyToCacheDirectory: true,
+        });
+
+        if (result.canceled) {
+          return { success: false, message: 'Import cancelled' };
+        }
+
+        if (!result.assets[0]?.uri) {
+          return { success: false, message: 'No file selected' };
+        }
+
+        backupFilePath = result.assets[0].uri;
+      }
+
+      if (!backupFilePath) {
+        return { success: false, message: 'No backup file path provided' };
+      }
+
+      const backupContent = await FileSystem.readAsStringAsync(backupFilePath);
+      const backupData: BackupData = JSON.parse(backupContent);
+
+      if (!this.validateBackupData(backupData)) {
+        return { success: false, message: 'Invalid backup file format' };
+      }
+
+      await this.restoreFromBackup(backupData);
+
+      const stats = {
+        version: backupData.version,
+        timestamp: new Date(backupData.timestamp).toLocaleString(),
+        totalDays: backupData.metadata.totalDays,
+        dateRange: backupData.metadata.dateRange,
+      };
+
+      return { 
+        success: true, 
+        message: `Successfully imported backup with ${backupData.metadata.totalDays} days of data`,
+        stats
+      };
+    } catch (error) {
+      console.error('Error importing backup:', error);
+      return { success: false, message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
+    }
+  }
+
+  static async restoreFromBackup(backupData: BackupData): Promise<void> {
+    try {
+      await DataService.clearAllData();
+
+      for (const [dateKey, dayData] of Object.entries(backupData.data.dailyData)) {
+        await DataService.saveTodayData(dateKey, dayData);
+      }
+    } catch (error) {
+      console.error('Error restoring from backup:', error);
+      throw error;
+    }
+  }
+
+  static validateBackupData(data: any): data is BackupData {
+    return (
+      data &&
+      typeof data.version === 'string' &&
+      typeof data.timestamp === 'number' &&
+      data.data &&
+      typeof data.data.dailyData === 'object' &&
+      data.metadata &&
+      typeof data.metadata.totalDays === 'number'
+    );
+  }
+
+  static async getLocalBackups(): Promise<Array<{ name: string; path: string; size: number; date: Date }>> {
+    try {
+      await this.initializeBackupFolder();
+      const backupFiles = await FileSystem.readDirectoryAsync(this.BACKUP_FOLDER);
+      
+      const backups = await Promise.all(
+        backupFiles
+          .filter(filename => filename.endsWith('.json'))
+          .map(async (filename) => {
+            const filePath = `${this.BACKUP_FOLDER}${filename}`;
+            const fileInfo = await FileSystem.getInfoAsync(filePath);
+            return {
+              name: filename,
+              path: filePath,
+              size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : 0,
+              date: new Date(fileInfo.exists && 'modificationTime' in fileInfo ? fileInfo.modificationTime : 0),
+            };
+          })
+      );
+
+      return backups.sort((a, b) => b.date.getTime() - a.date.getTime());
+    } catch (error) {
+      console.error('Error getting local backups:', error);
+      return [];
+    }
+  }
+
+  static async deleteBackup(filePath: string): Promise<void> {
+    try {
+      await FileSystem.deleteAsync(filePath);
+    } catch (error) {
+      console.error('Error deleting backup:', error);
+      throw error;
+    }
+  }
+
+  static async cleanupOldBackups(): Promise<void> {
+    try {
+      const settings = await this.getBackupSettings();
+      const backups = await this.getLocalBackups();
+      
+      if (backups.length > settings.keepLocalBackups) {
+        const backupsToDelete = backups.slice(settings.keepLocalBackups);
+        
+        for (const backup of backupsToDelete) {
+          await this.deleteBackup(backup.path);
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up old backups:', error);
+    }
+  }
+
+  static async performAutoBackup(): Promise<boolean> {
+    try {
+      const settings = await this.getBackupSettings();
+      
+      if (!settings.autoBackupEnabled) {
+        return false;
+      }
+
+      const now = Date.now();
+      const lastBackup = settings.lastBackupTime || 0;
+      const frequencyMs = this.getFrequencyInMs(settings.autoBackupFrequency);
+
+      if (now - lastBackup >= frequencyMs) {
+        const backupData = await this.createBackup();
+        await this.saveBackupToFile(backupData);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error performing auto backup:', error);
+      return false;
+    }
+  }
+
+  static getFrequencyInMs(frequency: 'daily' | 'weekly' | 'monthly'): number {
+    const day = 24 * 60 * 60 * 1000;
+    switch (frequency) {
+      case 'daily':
+        return day;
+      case 'weekly':
+        return day * 7;
+      case 'monthly':
+        return day * 30;
+      default:
+        return day * 7;
+    }
+  }
+
+  static async clearAllData(): Promise<void> {
+    try {
+      await DataService.clearAllData();
+      
+      const backups = await this.getLocalBackups();
+      for (const backup of backups) {
+        await this.deleteBackup(backup.path);
+      }
+      
+      await AsyncStorage.removeItem(this.BACKUP_SETTINGS_KEY);
+    } catch (error) {
+      console.error('Error clearing all data:', error);
+      throw error;
+    }
+  }
+
+  static formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  static async getBackupStats(): Promise<{
+    totalBackups: number;
+    totalSize: number;
+    lastBackup: Date | null;
+    nextAutoBackup: Date | null;
+  }> {
+    try {
+      const backups = await this.getLocalBackups();
+      const settings = await this.getBackupSettings();
+      
+      const totalSize = backups.reduce((sum, backup) => sum + backup.size, 0);
+      const lastBackup = backups.length > 0 ? backups[0].date : null;
+      
+      let nextAutoBackup: Date | null = null;
+      if (settings.autoBackupEnabled && settings.lastBackupTime) {
+        const frequencyMs = this.getFrequencyInMs(settings.autoBackupFrequency);
+        nextAutoBackup = new Date(settings.lastBackupTime + frequencyMs);
+      }
+
+      return {
+        totalBackups: backups.length,
+        totalSize,
+        lastBackup,
+        nextAutoBackup,
+      };
+    } catch (error) {
+      console.error('Error getting backup stats:', error);
+      return {
+        totalBackups: 0,
+        totalSize: 0,
+        lastBackup: null,
+        nextAutoBackup: null,
+      };
+    }
+  }
+
+
+} 
