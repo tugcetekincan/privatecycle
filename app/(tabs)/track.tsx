@@ -159,9 +159,10 @@ export default function TrackTab() {
                   width: '100%',
                   padding: 12,
                   borderRadius: 8,
-                  border: '1px solid #e0e0e0',
+                  border: `1px solid ${theme.colors.border}`,
                   fontSize: 16,
-                  backgroundColor: '#fff',
+                  backgroundColor: theme.colors.surface,
+                  color: theme.colors.text,
                   marginBottom: 10,
                 }}
                 value={DataService.formatDateKey(selectedDate)}
@@ -369,13 +370,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: '500',
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     marginVertical: 10,
     padding: 20,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -383,7 +384,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: theme.colors.text,
     marginBottom: 15,
   },
   periodButton: {
@@ -413,7 +414,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#666',
+    color: theme.colors.textSecondary,
     marginBottom: 10,
   },
   flowButtons: {
@@ -431,12 +432,12 @@ const createStyles = (theme: any) => StyleSheet.create({
   flowButtonActive: {
     opacity: 1,
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: theme.colors.text,
   },
   flowButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: theme.colors.text,
   },
   flowButtonTextActive: {
     fontWeight: '600',
@@ -453,7 +454,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     padding: 12,
     marginVertical: 5,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: theme.colors.border,
     borderRadius: 8,
   },
   symptomButtonActive: {
@@ -466,7 +467,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   symptomText: {
     fontSize: 14,
-    color: '#333',
+    color: theme.colors.text,
     flex: 1,
   },
   symptomTextActive: {
@@ -493,7 +494,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   moodText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#333',
+    color: theme.colors.text,
   },
   moodTextActive: {
     color: '#fff',
@@ -527,13 +528,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: '#fff',
   },
   webDatePickerContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
     marginVertical: 10,
     padding: 15,
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: theme.colors.shadowColor,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,

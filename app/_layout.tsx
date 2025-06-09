@@ -5,10 +5,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { useMigration } from '@/hooks/useMigration';
+import { useAutoBackup } from '@/hooks/useAutoBackup';
 
 function RootLayoutContent() {
   const { theme } = useTheme();
   const { isCompleted } = useMigration();
+  useAutoBackup();
   
   if (!isCompleted) {
     return null;
