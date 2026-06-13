@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so we can diff against the previous tag
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -65,8 +67,29 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk \
             "dist/PrivateCycle-${GITHUB_REF_NAME}.apk"
 
+      - name: Generate changelog
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || true)"
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log --pretty=format:'- %h %s — %an' "${PREV_TAG}..${CURRENT_TAG}"
+            else
+              git log --pretty=format:'- %h %s — %an' "${CURRENT_TAG}"
+            fi
+            echo
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            fi
+          } > changelog.md
+          echo "----- changelog preview -----"
+          cat changelog.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/PrivateCycle-${{ github.ref_name }}.apk
-          generate_release_notes: true
+          body_path: changelog.md
