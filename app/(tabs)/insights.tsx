@@ -6,7 +6,7 @@ import {
   ScrollView,
   SafeAreaView,
 } from 'react-native';
-import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
+import { ChartBar as BarChart2, TrendingUp, Calendar, Heart, Egg } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
 import { useTheme } from '@/hooks/useTheme';
@@ -17,10 +17,22 @@ export default function InsightsTab() {
     averageCycle: 28,
     lastPeriodLength: 0,
     nextPeriodIn: 0,
+    nextOvulationIn: 0,
+    fertileWindowStart: null as string | null,
+    fertileWindowEnd: null as string | null,
     totalPeriods: 0,
     commonSymptoms: [] as Array<{symptom: string, count: number}>,
     moodTrends: [] as Array<{mood: string, count: number}>,
   });
+
+  const formatRangeDate = (dateKey: string) => {
+    // Parse as local date to avoid timezone shifts
+    const [year, month, day] = dateKey.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  };
 
   const loadInsights = useCallback(async () => {
     const data = await DataService.getInsights();
@@ -92,12 +104,36 @@ export default function InsightsTab() {
           </View>
 
           <View style={styles.statCard}>
+            <Egg size={32} color="#00a896" />
+            <Text style={styles.statNumber}>{stats.nextOvulationIn}</Text>
+            <Text style={styles.statLabel}>Next Ovulation</Text>
+            <Text style={styles.statUnit}>days</Text>
+          </View>
+
+          <View style={styles.statCard}>
             <BarChart2 size={32} color={theme.colors.warning} />
             <Text style={styles.statNumber}>{stats.totalPeriods}</Text>
             <Text style={styles.statLabel}>Total Tracked</Text>
             <Text style={styles.statUnit}>periods</Text>
           </View>
         </View>
+
+        {/* Fertile Window */}
+        {stats.fertileWindowStart && stats.fertileWindowEnd && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Upcoming Fertile Window</Text>
+            <View style={styles.fertileRow}>
+              <Egg size={24} color="#00a896" />
+              <Text style={styles.fertileRangeText}>
+                {formatRangeDate(stats.fertileWindowStart)} – {formatRangeDate(stats.fertileWindowEnd)}
+              </Text>
+            </View>
+            <Text style={styles.fertileNote}>
+              Estimated ovulation around {formatRangeDate(stats.fertileWindowEnd)}. Your chance of conception is
+              highest during this window.
+            </Text>
+          </View>
+        )}
 
         {/* Common Symptoms */}
         <View style={styles.card}>
@@ -272,6 +308,22 @@ const createStyles = (theme: any) => StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     paddingVertical: 20,
+  },
+  fertileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  fertileRangeText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#00a896',
+    marginLeft: 12,
+  },
+  fertileNote: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
   },
   symptomsList: {
     gap: 15,
