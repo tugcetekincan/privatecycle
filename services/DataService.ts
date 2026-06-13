@@ -31,6 +31,78 @@ export interface PeriodData {
   moods: { [date: string]: string };
 }
 
+/* ---------------------------------------------------------------------------
+ * Schema migrations
+ *
+ * The database schema is versioned via SQLite's `PRAGMA user_version`. To evolve
+ * the schema, append a new entry to MIGRATIONS with the next version number and
+ * an `up` function. On startup, every migration whose version is greater than the
+ * database's current `user_version` runs in order, each inside a transaction, and
+ * the version is advanced as each one succeeds.
+ *
+ * Rules:
+ *  - Never edit or reorder a migration that has shipped; only append new ones.
+ *  - Keep migrations idempotent where practical (CREATE ... IF NOT EXISTS,
+ *    addColumnIfMissing) so a partially-applied migration can safely re-run.
+ * ------------------------------------------------------------------------- */
+
+interface Migration {
+  version: number;
+  name: string;
+  up: (db: SQLite.SQLiteDatabase) => Promise<void>;
+}
+
+const columnExists = async (
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string
+): Promise<boolean> => {
+  const cols = (await db.getAllAsync(`PRAGMA table_info(${table})`)) as { name: string }[];
+  return cols.some(col => col.name === column);
+};
+
+const addColumnIfMissing = async (
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+  definition: string
+): Promise<void> => {
+  if (!(await columnExists(db, table, column))) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+};
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: 'initial_schema',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS daily_data (
+          date TEXT PRIMARY KEY,
+          is_period INTEGER NOT NULL DEFAULT 0,
+          flow_level TEXT NOT NULL DEFAULT '',
+          symptoms TEXT NOT NULL DEFAULT '[]',
+          mood TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
+        CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
+      `);
+    },
+  },
+  {
+    version: 2,
+    name: 'add_ovulation_fields',
+    up: async (db) => {
+      await addColumnIfMissing(db, 'daily_data', 'ovulation_test', "TEXT NOT NULL DEFAULT ''");
+      await addColumnIfMissing(db, 'daily_data', 'cervical_mucus', "TEXT NOT NULL DEFAULT ''");
+      await addColumnIfMissing(db, 'daily_data', 'bbt', 'REAL');
+    },
+  },
+];
+
+export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
 class SQLiteDataService {
   private db: SQLite.SQLiteDatabase | null = null;
   private initializationPromise: Promise<void> | null = null;
@@ -67,24 +139,10 @@ class SQLiteDataService {
       await this.db.execAsync(`
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = ON;
-
-        CREATE TABLE IF NOT EXISTS daily_data (
-          date TEXT PRIMARY KEY,
-          is_period INTEGER NOT NULL DEFAULT 0,
-          flow_level TEXT NOT NULL DEFAULT '',
-          symptoms TEXT NOT NULL DEFAULT '[]',
-          mood TEXT NOT NULL DEFAULT '',
-          ovulation_test TEXT NOT NULL DEFAULT '',
-          cervical_mucus TEXT NOT NULL DEFAULT '',
-          bbt REAL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
-        CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
       `);
 
-      // Add ovulation columns to databases created before this feature existed
-      await this.ensureColumns(this.db);
+      // Bring the schema up to date via versioned migrations
+      await this.runMigrations(this.db);
 
       console.log('SQLite database initialized successfully');
     } catch (error) {
@@ -95,21 +153,35 @@ class SQLiteDataService {
     }
   }
 
-  private async ensureColumns(db: SQLite.SQLiteDatabase): Promise<void> {
-    const existing = await db.getAllAsync('PRAGMA table_info(daily_data)') as { name: string }[];
-    const names = new Set(existing.map(col => col.name));
+  private async runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
+    const versionRow = (await db.getFirstAsync('PRAGMA user_version')) as
+      | { user_version: number }
+      | null;
+    let currentVersion = versionRow?.user_version ?? 0;
 
-    const columnsToAdd: [string, string][] = [
-      ['ovulation_test', "TEXT NOT NULL DEFAULT ''"],
-      ['cervical_mucus', "TEXT NOT NULL DEFAULT ''"],
-      ['bbt', 'REAL'],
-    ];
-
-    for (const [name, definition] of columnsToAdd) {
-      if (!names.has(name)) {
-        await db.execAsync(`ALTER TABLE daily_data ADD COLUMN ${name} ${definition}`);
-      }
+    if (currentVersion >= LATEST_SCHEMA_VERSION) {
+      return;
     }
+
+    for (const migration of MIGRATIONS) {
+      if (migration.version <= currentVersion) {
+        continue;
+      }
+
+      console.log(`Running DB migration v${migration.version} (${migration.name})`);
+
+      // Each migration is atomic: the schema change and the version bump commit
+      // together, so a failed migration leaves user_version untouched and re-runs.
+      await db.withTransactionAsync(async () => {
+        await migration.up(db);
+        // user_version cannot be parameterized; migration.version is a trusted integer.
+        await db.execAsync(`PRAGMA user_version = ${migration.version}`);
+      });
+
+      currentVersion = migration.version;
+    }
+
+    console.log(`Database schema is at version ${currentVersion}`);
   }
 
   private async ensureInitialized(): Promise<SQLite.SQLiteDatabase> {
