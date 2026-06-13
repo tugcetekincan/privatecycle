@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
@@ -31,7 +32,30 @@ export class BackupService {
   private static readonly BACKUP_SETTINGS_KEY = 'backup_settings';
   private static readonly BACKUP_VERSION = '1.0.0';
 
+  // The local-file backup features rely on expo-file-system's document directory,
+  // which doesn't exist on web. On web we degrade gracefully: export/import work via
+  // browser download / file picker, and folder-based operations become no-ops.
+  private static get isWeb(): boolean {
+    return Platform.OS === 'web';
+  }
+
+  // Trigger a browser download of the given text content (web only).
+  private static downloadInBrowser(filename: string, content: string): void {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
   static async initializeBackupFolder(): Promise<void> {
+    if (this.isWeb) {
+      return; // No persistent backup folder on web.
+    }
     try {
       const folderInfo = await FileSystem.getInfoAsync(this.BACKUP_FOLDER);
       if (!folderInfo.exists) {
@@ -130,9 +154,19 @@ export class BackupService {
       const backupData = await this.createBackup();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `cycle_backup_${timestamp}.json`;
-      
+
+      // On web there's no file system to write to or native share sheet; deliver
+      // the backup as a browser download instead.
+      if (this.isWeb) {
+        this.downloadInBrowser(filename, JSON.stringify(backupData, null, 2));
+        const settings = await this.getBackupSettings();
+        settings.lastBackupTime = Date.now();
+        await this.saveBackupSettings(settings);
+        return filename;
+      }
+
       let filePath: string;
-      
+
       if (shareOptions.saveToDevice) {
         filePath = await this.saveBackupToFile(backupData, filename);
       } else {
@@ -180,7 +214,10 @@ export class BackupService {
         return { success: false, message: 'No backup file path provided' };
       }
 
-      const backupContent = await FileSystem.readAsStringAsync(backupFilePath);
+      // DocumentPicker returns a blob URL on web, which FileSystem can't read; fetch it.
+      const backupContent = this.isWeb
+        ? await (await fetch(backupFilePath)).text()
+        : await FileSystem.readAsStringAsync(backupFilePath);
       const backupData: BackupData = JSON.parse(backupContent);
 
       if (!this.validateBackupData(backupData)) {
@@ -233,6 +270,9 @@ export class BackupService {
   }
 
   static async getLocalBackups(): Promise<Array<{ name: string; path: string; size: number; date: Date }>> {
+    if (this.isWeb) {
+      return []; // No local backup folder on web.
+    }
     try {
       await this.initializeBackupFolder();
       const backupFiles = await FileSystem.readDirectoryAsync(this.BACKUP_FOLDER);
@@ -300,9 +340,12 @@ export class BackupService {
   }
 
   static async performAutoBackup(): Promise<boolean> {
+    if (this.isWeb) {
+      return false; // Auto backup writes to local files, which aren't available on web.
+    }
     try {
       const settings = await this.getBackupSettings();
-      
+
       if (!settings.autoBackupEnabled) {
         return false;
       }

@@ -129,7 +129,7 @@ class SQLiteAnalyticsService {
     const allDailyData = await db.getAllAsync(`
       SELECT date, symptoms, mood
       FROM daily_data
-      WHERE symptoms != "[]" OR mood != ""
+      WHERE symptoms != '[]' OR mood != ''
       ORDER BY date
     `) as { date: string; symptoms: string; mood: string }[];
 
