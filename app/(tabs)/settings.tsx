@@ -8,7 +8,10 @@ import {
   SafeAreaView,
   Switch,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+
+const isWeb = Platform.OS === 'web';
 import { 
   Settings as SettingsIcon, 
   Bell, 
@@ -20,7 +23,8 @@ import {
   Upload,
   HardDrive,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Info
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
@@ -300,8 +304,18 @@ export default function SettingsTab() {
         {/* Backup & Restore */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Backup & Restore</Text>
-          
-          {/* Auto Backup Settings */}
+
+          {isWeb && (
+            <View style={styles.webNotice}>
+              <Info size={18} color={theme.colors.primary} />
+              <Text style={styles.webNoticeText}>
+                On the web, exporting downloads a backup file and importing reads one from your device.
+              </Text>
+            </View>
+          )}
+
+          {/* Auto Backup Settings (local-file based; native only) */}
+          {!isWeb && (
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <RefreshCw size={20} color={theme.colors.textSecondary} />
@@ -317,9 +331,10 @@ export default function SettingsTab() {
               thumbColor={backupSettings.autoBackupEnabled ? theme.colors.white : theme.colors.white}
             />
           </View>
+          )}
 
           {/* Backup Frequency */}
-          {backupSettings.autoBackupEnabled && (
+          {!isWeb && backupSettings.autoBackupEnabled && (
             <TouchableOpacity 
               style={styles.settingItem}
               onPress={() => {
@@ -346,8 +361,9 @@ export default function SettingsTab() {
           )}
 
           {/* Backup Actions */}
-          <TouchableOpacity 
-            style={styles.button} 
+          {!isWeb && (
+          <TouchableOpacity
+            style={styles.button}
             onPress={createManualBackup}
             disabled={loading}
           >
@@ -355,8 +371,9 @@ export default function SettingsTab() {
             <Text style={styles.buttonText}>Create Backup</Text>
             {loading && <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 10 }} />}
           </TouchableOpacity>
+          )}
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.button} 
             onPress={exportBackup}
             disabled={loading}
@@ -376,19 +393,22 @@ export default function SettingsTab() {
             {loading && <ActivityIndicator size="small" color={theme.colors.accent} style={{ marginLeft: 10 }} />}
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.button} 
+          {!isWeb && (
+          <TouchableOpacity
+            style={styles.button}
             onPress={deleteBackup}
           >
             <HardDrive size={20} color={theme.colors.error} />
             <Text style={styles.buttonText}>Delete Backup</Text>
           </TouchableOpacity>
+          )}
         </View>
 
-        {/* Backup Information */}
+        {/* Backup Information (local-file stats; native only) */}
+        {!isWeb && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Backup Information</Text>
-          
+
           <View style={styles.card}>
             <View style={styles.backupInfo}>
               <View style={styles.backupInfoItem}>
@@ -418,6 +438,7 @@ export default function SettingsTab() {
             </View>
           </View>
         </View>
+        )}
 
         {/* Data Management */}
         <View style={styles.section}>
@@ -501,6 +522,24 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textSecondary,
     marginTop: 2,
+  },
+  webNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  webNoticeText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    color: theme.colors.textSecondary,
   },
   card: {
     backgroundColor: theme.colors.surface,

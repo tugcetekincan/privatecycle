@@ -203,11 +203,11 @@ class SQLiteDataService {
       ) as { date: string }[];
       
       const symptomsResult = await db.getAllAsync(
-        'SELECT date, symptoms FROM daily_data WHERE symptoms != "[]" ORDER BY date'
+        "SELECT date, symptoms FROM daily_data WHERE symptoms != '[]' ORDER BY date"
       ) as { date: string; symptoms: string }[];
       
       const moodsResult = await db.getAllAsync(
-        'SELECT date, mood FROM daily_data WHERE mood != "" ORDER BY date'
+        "SELECT date, mood FROM daily_data WHERE mood != '' ORDER BY date"
       ) as { date: string; mood: string }[];
 
       const periods = periodsResult.map(row => row.date);
@@ -485,8 +485,8 @@ class SQLiteDataService {
       // Get symptom counts using SQL
       const symptomCountsResult = await db.getAllAsync(`
         SELECT symptoms
-        FROM daily_data 
-        WHERE symptoms != "[]"
+        FROM daily_data
+        WHERE symptoms != '[]'
       `) as { symptoms: string }[];
 
       const symptomCounts: { [key: string]: number } = {};
@@ -509,8 +509,8 @@ class SQLiteDataService {
       // Get mood counts using SQL
       const moodCountsResult = await db.getAllAsync(`
         SELECT mood, COUNT(*) as count
-        FROM daily_data 
-        WHERE mood != ""
+        FROM daily_data
+        WHERE mood != ''
         GROUP BY mood
         ORDER BY count DESC
         LIMIT 5
