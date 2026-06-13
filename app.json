@@ -27,7 +27,8 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withAndroidSigning"
     ],
     "androidStatusBar": {
       "barStyle": "dark-content",
