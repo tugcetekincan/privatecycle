@@ -39,6 +39,19 @@ const MOODS = [
   { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
+const OVULATION_TESTS = [
+  { id: 'negative', label: 'Negative', color: '#ffcccb' },
+  { id: 'positive', label: 'Positive', color: '#ff6b6b' },
+];
+
+const CERVICAL_MUCUS = [
+  { id: 'dry', label: 'Dry', color: '#ffe0e6' },
+  { id: 'sticky', label: 'Sticky', color: '#ffcccb' },
+  { id: 'creamy', label: 'Creamy', color: '#ff9aa2' },
+  { id: 'watery', label: 'Watery', color: '#ff6b6b' },
+  { id: 'eggwhite', label: 'Egg White', color: '#dc143c' },
+];
+
 export default function TrackTab() {
   const { theme } = useTheme();
   const { showSuccess, DialogComponent } = useDialog();
@@ -48,6 +61,9 @@ export default function TrackTab() {
   const [flowLevel, setFlowLevel] = useState('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [selectedMood, setSelectedMood] = useState('');
+  const [ovulationTest, setOvulationTest] = useState('');
+  const [cervicalMucus, setCervicalMucus] = useState('');
+  const [bbt, setBbt] = useState('');
   const [todayData, setTodayData] = useState<any>(null);
 
   useEffect(() => {
@@ -64,6 +80,9 @@ export default function TrackTab() {
       setFlowLevel(data.flowLevel || '');
       setSelectedSymptoms(data.symptoms || []);
       setSelectedMood(data.mood || '');
+      setOvulationTest(data.ovulationTest || '');
+      setCervicalMucus(data.cervicalMucus || '');
+      setBbt(typeof data.bbt === 'number' ? String(data.bbt) : '');
     } else {
       // Reset for new day
       setTodayData(null);
@@ -71,17 +90,24 @@ export default function TrackTab() {
       setFlowLevel('');
       setSelectedSymptoms([]);
       setSelectedMood('');
+      setOvulationTest('');
+      setCervicalMucus('');
+      setBbt('');
     }
   };
 
   const saveData = async () => {
     const dateKey = DataService.formatDateKey(selectedDate);
+    const parsedBbt = parseFloat(bbt);
     const data = {
       date: dateKey,
       isPeriod: isPeriodDay,
       flowLevel: isPeriodDay ? flowLevel : '',
       symptoms: selectedSymptoms,
       mood: selectedMood,
+      ovulationTest,
+      cervicalMucus,
+      bbt: !isNaN(parsedBbt) ? parsedBbt : null,
     };
 
     await DataService.saveTodayData(dateKey, data);
@@ -293,6 +319,68 @@ export default function TrackTab() {
           </View>
         </View>
 
+        {/* Ovulation & Fertility */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Ovulation & Fertility</Text>
+
+          {/* Ovulation (LH) Test */}
+          <Text style={styles.sectionTitle}>Ovulation Test (LH)</Text>
+          <View style={styles.flowButtons}>
+            {OVULATION_TESTS.map(test => (
+              <TouchableOpacity
+                key={test.id}
+                style={[
+                  styles.flowButton,
+                  { backgroundColor: test.color },
+                  ovulationTest === test.id && styles.flowButtonActive,
+                ]}
+                onPress={() => setOvulationTest(ovulationTest === test.id ? '' : test.id)}>
+                <Text style={[
+                  styles.flowButtonText,
+                  ovulationTest === test.id && styles.flowButtonTextActive,
+                ]}>
+                  {test.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Cervical Mucus */}
+          <Text style={[styles.sectionTitle, styles.sectionTitleSpacing]}>Cervical Mucus</Text>
+          <View style={styles.flowButtons}>
+            {CERVICAL_MUCUS.map(mucus => (
+              <TouchableOpacity
+                key={mucus.id}
+                style={[
+                  styles.flowButton,
+                  styles.flowButtonCompact,
+                  { backgroundColor: mucus.color },
+                  cervicalMucus === mucus.id && styles.flowButtonActive,
+                ]}
+                onPress={() => setCervicalMucus(cervicalMucus === mucus.id ? '' : mucus.id)}>
+                <Text style={[
+                  styles.flowButtonText,
+                  styles.flowButtonTextCompact,
+                  cervicalMucus === mucus.id && styles.flowButtonTextActive,
+                ]}>
+                  {mucus.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Basal Body Temperature */}
+          <Text style={[styles.sectionTitle, styles.sectionTitleSpacing]}>Basal Body Temp (°C)</Text>
+          <TextInput
+            style={styles.bbtInput}
+            value={bbt}
+            onChangeText={setBbt}
+            keyboardType="decimal-pad"
+            placeholder="e.g. 36.6"
+            placeholderTextColor={theme.colors.textSecondary}
+          />
+        </View>
+
         {/* Save Button */}
         <TouchableOpacity style={styles.saveButton} onPress={saveData}>
           <Text style={styles.saveButtonText}>
@@ -500,6 +588,26 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   moodTextActive: {
     color: '#fff',
+  },
+  sectionTitleSpacing: {
+    marginTop: 20,
+  },
+  flowButtonCompact: {
+    paddingHorizontal: 4,
+    marginHorizontal: 3,
+  },
+  flowButtonTextCompact: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  bbtInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.background,
   },
   saveButton: {
     backgroundColor: '#e91e63',
