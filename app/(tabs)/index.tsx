@@ -10,9 +10,10 @@ import {
   Animated,
   Dimensions,
   Modal,
+  TextInput,
 } from 'react-native';
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets } from 'lucide-react-native';
-import { DataService, DailyData } from '@/services/DataService';
+import { DataService, DailyData, LUTEAL_PHASE_DAYS, FERTILE_WINDOW_DAYS } from '@/services/DataService';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
@@ -47,6 +48,19 @@ const MOODS = [
   { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
+const OVULATION_TESTS = [
+  { id: 'negative', label: 'Negative', color: '#ffcccb' },
+  { id: 'positive', label: 'Positive', color: '#ff6b6b' },
+];
+
+const CERVICAL_MUCUS = [
+  { id: 'dry', label: 'Dry', color: '#ffe0e6' },
+  { id: 'sticky', label: 'Sticky', color: '#ffcccb' },
+  { id: 'creamy', label: 'Creamy', color: '#ff9aa2' },
+  { id: 'watery', label: 'Watery', color: '#ff6b6b' },
+  { id: 'eggwhite', label: 'Egg White', color: '#dc143c' },
+];
+
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function CalendarTab() {
@@ -57,6 +71,8 @@ export default function CalendarTab() {
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
   const [nextPeriod, setNextPeriod] = useState<Date | null>(null);
   const [futurePeriods, setFuturePeriods] = useState<Date[]>([]);
+  const [ovulationDates, setOvulationDates] = useState<Date[]>([]);
+  const [nextFertileWindow, setNextFertileWindow] = useState<{ start: Date; ovulation: Date } | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
   const [calendarHeight, setCalendarHeight] = useState(220);
@@ -88,6 +104,36 @@ export default function CalendarTab() {
       loadData();
     }, [])
   );
+
+  // Derive predicted ovulation days + the upcoming fertile window from period predictions
+  useEffect(() => {
+    if (futurePeriods.length === 0) {
+      setOvulationDates([]);
+      setNextFertileWindow(null);
+      return;
+    }
+
+    const ovulations = futurePeriods.map(periodStart => {
+      const ovulation = new Date(periodStart);
+      ovulation.setHours(0, 0, 0, 0);
+      ovulation.setDate(ovulation.getDate() - LUTEAL_PHASE_DAYS);
+      return ovulation;
+    });
+    setOvulationDates(ovulations);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // The soonest ovulation whose fertile window has not fully passed
+    const upcoming = ovulations.find(ovulation => ovulation.getTime() >= today.getTime());
+    if (upcoming) {
+      const start = new Date(upcoming);
+      start.setDate(start.getDate() - FERTILE_WINDOW_DAYS);
+      setNextFertileWindow({ start, ovulation: upcoming });
+    } else {
+      setNextFertileWindow(null);
+    }
+  }, [futurePeriods]);
 
   const loadData = async () => {
     const data = await DataService.getPeriodData();
@@ -182,6 +228,9 @@ export default function CalendarTab() {
       flowLevel: '',
       symptoms: [],
       mood: '',
+      ovulationTest: '',
+      cervicalMucus: '',
+      bbt: null,
     });
     setModalVisible(true);
   };
@@ -310,6 +359,20 @@ export default function CalendarTab() {
     return futurePeriods.some(periodStart => {
       const daysDiff = (date.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24);
       return daysDiff >= 0 && daysDiff <= 6;
+    });
+  };
+
+  const isOvulationDay = (date: Date) => {
+    if (ovulationDates.length === 0) return false;
+    return ovulationDates.some(ovulation => formatDateKey(ovulation) === formatDateKey(date));
+  };
+
+  const isFertileDay = (date: Date) => {
+    if (ovulationDates.length === 0) return false;
+    // Fertile window: the days leading up to ovulation (ovulation day itself is shown separately)
+    return ovulationDates.some(ovulation => {
+      const daysBefore = (ovulation.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+      return daysBefore >= 1 && daysBefore <= FERTILE_WINDOW_DAYS;
     });
   };
 
@@ -448,16 +511,20 @@ export default function CalendarTab() {
       const isPeriod = isPeriodDay(dayDate);
       const isNoPeriod = isNoPeriodDay(dayDate);
       const isPredicted = isPredictedPeriod(dayDate);
-      
+      const isOvulation = isOvulationDay(dayDate);
+      const isFertile = isFertileDay(dayDate);
+
       // Get day positions for pill styling
       const periodPosition = isPeriod ? getDayPosition(dayDate, isPeriodDay) : 'single';
       const noPeriodPosition = isNoPeriod ? getDayPosition(dayDate, isNoPeriodDay) : 'single';
       const predictedPosition = isPredicted ? getDayPosition(dayDate, isPredictedPeriod) : 'single';
-      
+      const fertilePosition = isFertile ? getDayPosition(dayDate, isFertileDay) : 'single';
+
       // Get border radius styles
       const periodBorderRadius = isPeriod ? getDayBorderRadius(periodPosition) : {};
       const noPeriodBorderRadius = isNoPeriod ? getDayBorderRadius(noPeriodPosition) : {};
       const predictedBorderRadius = isPredicted ? getDayBorderRadius(predictedPosition) : {};
+      const fertileBorderRadius = isFertile ? getDayBorderRadius(fertilePosition) : {};
 
       const hasData = hasDataForDate(dayDate);
       
@@ -473,6 +540,8 @@ export default function CalendarTab() {
             isPeriod && [styles.periodDay, periodBorderRadius],
             isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
             isPredicted && [styles.predictedDay, predictedBorderRadius],
+            isFertile && [styles.fertileDay, fertileBorderRadius],
+            isOvulation && styles.ovulationDay,
             hasData && styles.clickableDay,
           ]}
           onPress={() => handleDayPress(dayDate)}
@@ -484,6 +553,8 @@ export default function CalendarTab() {
               isPeriod && styles.periodText,
               isNoPeriod && styles.noPeriodText,
               isPredicted && styles.predictedText,
+              isFertile && styles.fertileText,
+              isOvulation && styles.ovulationText,
             ]}>
             {day}
           </Text>
@@ -582,6 +653,14 @@ export default function CalendarTab() {
             <Text style={styles.legendText}>Predicted</Text>
           </View>
           <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#7ad7c9' }]} />
+            <Text style={styles.legendText}>Fertile</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#00a896' }]} />
+            <Text style={styles.legendText}>Ovulation</Text>
+          </View>
+          <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: theme.colors.accent }]} />
             <Text style={styles.legendText}>Today</Text>
           </View>
@@ -616,6 +695,39 @@ export default function CalendarTab() {
                     </View>
                   );
                 })}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Fertile Window & Ovulation */}
+        {nextFertileWindow && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Fertile Window</Text>
+            <View style={styles.card}>
+              <View style={styles.predictionInfoItem}>
+                <Text style={styles.predictionInfoLabel}>Fertile window</Text>
+                <Text style={[styles.predictionInfoValue, { color: '#00a896' }]}>
+                  {nextFertileWindow.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {' – '}
+                  {nextFertileWindow.ovulation.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
+              <View style={[styles.predictionInfoItem, styles.predictionInfoItemLast]}>
+                <Text style={styles.predictionInfoLabel}>Predicted ovulation</Text>
+                <Text style={[styles.predictionInfoValue, { color: '#00a896' }]}>
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const daysUntil = Math.ceil(
+                      (nextFertileWindow.ovulation.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+                    );
+                    const dateLabel = nextFertileWindow.ovulation.toLocaleDateString('en-US', {
+                      weekday: 'short', month: 'short', day: 'numeric',
+                    });
+                    return daysUntil > 0 ? `${dateLabel} (${daysUntil}d)` : dateLabel;
+                  })()}
+                </Text>
               </View>
             </View>
           </View>
@@ -743,6 +855,78 @@ export default function CalendarTab() {
                     </TouchableOpacity>
                   ))}
                 </View>
+              </View>
+
+              {/* Ovulation & Fertility */}
+              <View style={styles.modalCard}>
+                <Text style={styles.modalCardTitle}>Ovulation & Fertility</Text>
+
+                {/* Ovulation (LH) Test */}
+                <Text style={styles.flowSectionTitle}>Ovulation Test (LH)</Text>
+                <View style={styles.flowButtons}>
+                  {OVULATION_TESTS.map(test => (
+                    <TouchableOpacity
+                      key={test.id}
+                      style={[
+                        styles.flowButton,
+                        { backgroundColor: test.color },
+                        editingData?.ovulationTest === test.id && styles.flowButtonActive,
+                      ]}
+                      onPress={() => editingData && setEditingData({
+                        ...editingData,
+                        ovulationTest: editingData.ovulationTest === test.id ? '' : test.id,
+                      })}>
+                      <Text style={[
+                        styles.flowButtonText,
+                        editingData?.ovulationTest === test.id && styles.flowButtonTextActive,
+                      ]}>
+                        {test.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Cervical Mucus */}
+                <Text style={[styles.flowSectionTitle, styles.flowSectionTitleSpacing]}>Cervical Mucus</Text>
+                <View style={styles.flowButtons}>
+                  {CERVICAL_MUCUS.map(mucus => (
+                    <TouchableOpacity
+                      key={mucus.id}
+                      style={[
+                        styles.flowButton,
+                        styles.flowButtonCompact,
+                        { backgroundColor: mucus.color },
+                        editingData?.cervicalMucus === mucus.id && styles.flowButtonActive,
+                      ]}
+                      onPress={() => editingData && setEditingData({
+                        ...editingData,
+                        cervicalMucus: editingData.cervicalMucus === mucus.id ? '' : mucus.id,
+                      })}>
+                      <Text style={[
+                        styles.flowButtonText,
+                        styles.flowButtonTextCompact,
+                        editingData?.cervicalMucus === mucus.id && styles.flowButtonTextActive,
+                      ]}>
+                        {mucus.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Basal Body Temperature */}
+                <Text style={[styles.flowSectionTitle, styles.flowSectionTitleSpacing]}>Basal Body Temp (°C)</Text>
+                <TextInput
+                  style={styles.bbtInput}
+                  value={editingData?.bbt != null ? String(editingData.bbt) : ''}
+                  onChangeText={(text) => {
+                    if (!editingData) return;
+                    const parsed = parseFloat(text);
+                    setEditingData({ ...editingData, bbt: text === '' || isNaN(parsed) ? null : parsed });
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g. 36.6"
+                  placeholderTextColor={theme.colors.textSecondary}
+                />
               </View>
             </ScrollView>
 
@@ -876,6 +1060,21 @@ const createStyles = (theme: any) => StyleSheet.create({
   predictedText: {
     color: theme.isDark ? theme.colors.white : theme.colors.text,
     fontWeight: '500',
+  },
+  fertileDay: {
+    backgroundColor: theme.isDark ? '#2c6e6a' : '#b8ece6',
+  },
+  fertileText: {
+    color: theme.isDark ? theme.colors.white : theme.colors.text,
+    fontWeight: '500',
+  },
+  ovulationDay: {
+    backgroundColor: '#00a896',
+    borderRadius: 18,
+  },
+  ovulationText: {
+    color: theme.colors.white,
+    fontWeight: 'bold',
   },
   legend: {
     flexDirection: 'row',
@@ -1129,6 +1328,26 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   moodTextSelected: {
     color: theme.colors.white,
+  },
+  flowSectionTitleSpacing: {
+    marginTop: 20,
+  },
+  flowButtonCompact: {
+    paddingHorizontal: 4,
+    marginHorizontal: 3,
+  },
+  flowButtonTextCompact: {
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  bbtInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: theme.colors.text,
+    backgroundColor: theme.colors.background,
   },
   modalFooter: {
     padding: 20,

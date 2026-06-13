@@ -8,12 +8,21 @@ const formatDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Ovulation typically occurs ~14 days before the next period (luteal phase length).
+export const LUTEAL_PHASE_DAYS = 14;
+// The fertile window spans the 5 days leading up to and including ovulation.
+export const FERTILE_WINDOW_DAYS = 5;
+
 export interface DailyData {
   date: string;
   isPeriod: boolean;
   flowLevel: string;
   symptoms: string[];
   mood: string;
+  // Ovulation / fertility tracking
+  ovulationTest: string; // '' | 'positive' | 'negative' (LH/OPK result)
+  cervicalMucus: string; // '' | 'dry' | 'sticky' | 'creamy' | 'watery' | 'eggwhite'
+  bbt: number | null; // basal body temperature (°C)
 }
 
 export interface PeriodData {
@@ -21,6 +30,78 @@ export interface PeriodData {
   symptoms: { [date: string]: string[] };
   moods: { [date: string]: string };
 }
+
+/* ---------------------------------------------------------------------------
+ * Schema migrations
+ *
+ * The database schema is versioned via SQLite's `PRAGMA user_version`. To evolve
+ * the schema, append a new entry to MIGRATIONS with the next version number and
+ * an `up` function. On startup, every migration whose version is greater than the
+ * database's current `user_version` runs in order, each inside a transaction, and
+ * the version is advanced as each one succeeds.
+ *
+ * Rules:
+ *  - Never edit or reorder a migration that has shipped; only append new ones.
+ *  - Keep migrations idempotent where practical (CREATE ... IF NOT EXISTS,
+ *    addColumnIfMissing) so a partially-applied migration can safely re-run.
+ * ------------------------------------------------------------------------- */
+
+interface Migration {
+  version: number;
+  name: string;
+  up: (db: SQLite.SQLiteDatabase) => Promise<void>;
+}
+
+const columnExists = async (
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string
+): Promise<boolean> => {
+  const cols = (await db.getAllAsync(`PRAGMA table_info(${table})`)) as { name: string }[];
+  return cols.some(col => col.name === column);
+};
+
+const addColumnIfMissing = async (
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+  definition: string
+): Promise<void> => {
+  if (!(await columnExists(db, table, column))) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+};
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: 'initial_schema',
+    up: async (db) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS daily_data (
+          date TEXT PRIMARY KEY,
+          is_period INTEGER NOT NULL DEFAULT 0,
+          flow_level TEXT NOT NULL DEFAULT '',
+          symptoms TEXT NOT NULL DEFAULT '[]',
+          mood TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
+        CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
+      `);
+    },
+  },
+  {
+    version: 2,
+    name: 'add_ovulation_fields',
+    up: async (db) => {
+      await addColumnIfMissing(db, 'daily_data', 'ovulation_test', "TEXT NOT NULL DEFAULT ''");
+      await addColumnIfMissing(db, 'daily_data', 'cervical_mucus', "TEXT NOT NULL DEFAULT ''");
+      await addColumnIfMissing(db, 'daily_data', 'bbt', 'REAL');
+    },
+  },
+];
+
+export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
 class SQLiteDataService {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -58,18 +139,10 @@ class SQLiteDataService {
       await this.db.execAsync(`
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = ON;
-        
-        CREATE TABLE IF NOT EXISTS daily_data (
-          date TEXT PRIMARY KEY,
-          is_period INTEGER NOT NULL DEFAULT 0,
-          flow_level TEXT NOT NULL DEFAULT '',
-          symptoms TEXT NOT NULL DEFAULT '[]',
-          mood TEXT NOT NULL DEFAULT ''
-        );
-        
-        CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
-        CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
       `);
+
+      // Bring the schema up to date via versioned migrations
+      await this.runMigrations(this.db);
 
       console.log('SQLite database initialized successfully');
     } catch (error) {
@@ -78,6 +151,37 @@ class SQLiteDataService {
       this.initializationPromise = null;
       throw error;
     }
+  }
+
+  private async runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
+    const versionRow = (await db.getFirstAsync('PRAGMA user_version')) as
+      | { user_version: number }
+      | null;
+    let currentVersion = versionRow?.user_version ?? 0;
+
+    if (currentVersion >= LATEST_SCHEMA_VERSION) {
+      return;
+    }
+
+    for (const migration of MIGRATIONS) {
+      if (migration.version <= currentVersion) {
+        continue;
+      }
+
+      console.log(`Running DB migration v${migration.version} (${migration.name})`);
+
+      // Each migration is atomic: the schema change and the version bump commit
+      // together, so a failed migration leaves user_version untouched and re-runs.
+      await db.withTransactionAsync(async () => {
+        await migration.up(db);
+        // user_version cannot be parameterized; migration.version is a trusted integer.
+        await db.execAsync(`PRAGMA user_version = ${migration.version}`);
+      });
+
+      currentVersion = migration.version;
+    }
+
+    console.log(`Database schema is at version ${currentVersion}`);
   }
 
   private async ensureInitialized(): Promise<SQLite.SQLiteDatabase> {
@@ -146,25 +250,34 @@ class SQLiteDataService {
       const symptoms = JSON.stringify(data.symptoms || []);
       const flowLevel = data.flowLevel || '';
       const mood = data.mood || '';
+      const ovulationTest = data.ovulationTest || '';
+      const cervicalMucus = data.cervicalMucus || '';
+      const bbt = typeof data.bbt === 'number' && !isNaN(data.bbt) ? data.bbt : null;
 
       console.log('Saving data:', {
         dateKey,
         isPeriod: data.isPeriod,
         flowLevel,
         symptoms,
-        mood
+        mood,
+        ovulationTest,
+        cervicalMucus,
+        bbt
       });
 
       await db.runAsync(
-        `INSERT OR REPLACE INTO daily_data 
-         (date, is_period, flow_level, symptoms, mood) 
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO daily_data
+         (date, is_period, flow_level, symptoms, mood, ovulation_test, cervical_mucus, bbt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dateKey,
           data.isPeriod ? 1 : 0,
           flowLevel,
           symptoms,
-          mood
+          mood,
+          ovulationTest,
+          cervicalMucus,
+          bbt
         ]
       );
 
@@ -193,6 +306,9 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
+        ovulation_test: string;
+        cervical_mucus: string;
+        bbt: number | null;
       } | null;
 
       if (!result) return null;
@@ -202,7 +318,10 @@ class SQLiteDataService {
         isPeriod: result.is_period === 1,
         flowLevel: result.flow_level,
         symptoms: JSON.parse(result.symptoms),
-        mood: result.mood
+        mood: result.mood,
+        ovulationTest: result.ovulation_test || '',
+        cervicalMucus: result.cervical_mucus || '',
+        bbt: result.bbt ?? null
       };
     } catch (error) {
       console.error('Error loading today data:', error);
@@ -222,17 +341,23 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
+        ovulation_test: string;
+        cervical_mucus: string;
+        bbt: number | null;
       }[];
 
       const dailyData: { [date: string]: DailyData } = {};
-      
+
       results.forEach(row => {
         dailyData[row.date] = {
           date: row.date,
           isPeriod: row.is_period === 1,
           flowLevel: row.flow_level,
           symptoms: JSON.parse(row.symptoms),
-          mood: row.mood
+          mood: row.mood,
+          ovulationTest: row.ovulation_test || '',
+          cervicalMucus: row.cervical_mucus || '',
+          bbt: row.bbt ?? null
         };
       });
 
@@ -333,6 +458,30 @@ class SQLiteDataService {
         nextPeriodIn = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
+      // Calculate next ovulation + fertile window prediction
+      let nextOvulationIn = 0;
+      let fertileWindowStart: string | null = null;
+      let fertileWindowEnd: string | null = null;
+      if (periodStarts.length > 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Step forward cycle by cycle until we find an ovulation date that hasn't passed.
+        const ovulation = new Date(periodStarts[periodStarts.length - 1]);
+        ovulation.setHours(0, 0, 0, 0);
+        ovulation.setDate(ovulation.getDate() + averageCycle - LUTEAL_PHASE_DAYS);
+        while (ovulation.getTime() < today.getTime()) {
+          ovulation.setDate(ovulation.getDate() + averageCycle);
+        }
+
+        nextOvulationIn = Math.ceil((ovulation.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        const windowStart = new Date(ovulation);
+        windowStart.setDate(windowStart.getDate() - FERTILE_WINDOW_DAYS);
+        fertileWindowStart = formatDateKey(windowStart);
+        fertileWindowEnd = formatDateKey(ovulation);
+      }
+
       // Get symptom counts using SQL
       const symptomCountsResult = await db.getAllAsync(`
         SELECT symptoms
@@ -376,6 +525,9 @@ class SQLiteDataService {
         averageCycle,
         lastPeriodLength,
         nextPeriodIn,
+        nextOvulationIn,
+        fertileWindowStart,
+        fertileWindowEnd,
         totalPeriods: periodStarts.length,
         commonSymptoms,
         moodTrends,
@@ -386,6 +538,9 @@ class SQLiteDataService {
         averageCycle: 28,
         lastPeriodLength: 0,
         nextPeriodIn: 0,
+        nextOvulationIn: 0,
+        fertileWindowStart: null as string | null,
+        fertileWindowEnd: null as string | null,
         totalPeriods: 0,
         commonSymptoms: [],
         moodTrends: [],
@@ -417,15 +572,18 @@ class SQLiteDataService {
         
         for (const [date, data] of Object.entries(dailyData) as [string, any][]) {
           await db.runAsync(
-            `INSERT OR REPLACE INTO daily_data 
-             (date, is_period, flow_level, symptoms, mood) 
-             VALUES (?, ?, ?, ?, ?)`,
+            `INSERT OR REPLACE INTO daily_data
+             (date, is_period, flow_level, symptoms, mood, ovulation_test, cervical_mucus, bbt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               date,
               data.isPeriod ? 1 : 0,
               data.flowLevel || '',
               JSON.stringify(data.symptoms || []),
-              data.mood || ''
+              data.mood || '',
+              data.ovulationTest || '',
+              data.cervicalMucus || '',
+              typeof data.bbt === 'number' ? data.bbt : null
             ]
           );
         }
