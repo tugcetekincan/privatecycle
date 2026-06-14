@@ -29,6 +29,7 @@ const SYMPTOMS = [
   { id: 'fatigue', label: 'Fatigue', icon: '😴' },
   { id: 'backache', label: 'Back Pain', icon: '😖' },
   { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
+  { id: 'cravings', label: 'Food Craving', icon: '🍫' },
 ];
 
 const MOODS = [
@@ -37,6 +38,7 @@ const MOODS = [
   { id: 'anxious', label: 'Anxious', icon: '😰', color: '#ff9800' },
   { id: 'calm', label: 'Calm', icon: '😌', color: '#9c27b0' },
   { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
+  { id: 'lonely', label: 'Lonely', icon: '🥺', color: '#607d8b' },
 ];
 
 const OVULATION_TESTS = [
