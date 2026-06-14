@@ -15,6 +15,15 @@ jobs:
     name: Build signed APK
     runs-on: ubuntu-latest
 
+    # Use React Native's community CLI autolinking. Expo's default autolinking
+    # generates CMake add_subdirectory() entries pointing at each library's
+    # build/generated/source/codegen/jni dir, but does not build those library
+    # modules, so New Architecture codegen never runs for them and the C++
+    # configure step fails. The community autolinker wires the library Gradle
+    # projects (and their codegen) correctly. Requires @react-native-community/cli.
+    env:
+      EXPO_USE_COMMUNITY_AUTOLINKING: '1'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
