@@ -104,8 +104,46 @@ const MIGRATIONS: Migration[] = [
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
+// All database access is funneled through this single promise chain so that no
+// two statements ever run concurrently on the shared connection. On web the
+// wa-sqlite worker is not reentrant — overlapping getAllAsync/runAsync calls
+// (e.g. the calendar page reloading while a save is in flight) throw
+// "Error finalizing statement". Serializing every operation prevents that.
+let opChain: Promise<unknown> = Promise.resolve();
+const serialize = <T>(op: () => Promise<T>): Promise<T> => {
+  const run = opChain.then(op, op);
+  // Keep the chain alive regardless of individual success/failure.
+  opChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+};
+
+// The query methods whose calls must be serialized. withTransactionAsync is
+// intentionally excluded: it is only used by migrations, which run on the raw
+// connection during init (before any serialized access), and serializing it
+// would deadlock against the statements run inside its callback.
+const SERIALIZED_METHODS = new Set(['getAllAsync', 'getFirstAsync', 'runAsync', 'execAsync']);
+
+// Wrap a connection so each query method runs through the global op chain.
+const createSerializedDb = (db: SQLite.SQLiteDatabase): SQLite.SQLiteDatabase =>
+  new Proxy(db, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === 'function') {
+        if (SERIALIZED_METHODS.has(prop as string)) {
+          return (...args: unknown[]) => serialize(() => (value as Function).apply(target, args));
+        }
+        return (value as Function).bind(target);
+      }
+      return value;
+    },
+  });
+
 class SQLiteDataService {
   private db: SQLite.SQLiteDatabase | null = null;
+  private serializedDb: SQLite.SQLiteDatabase | null = null;
   private initializationPromise: Promise<void> | null = null;
 
   constructor() {
@@ -212,7 +250,12 @@ class SQLiteDataService {
       throw new Error('Database initialization failed');
     }
 
-    return this.db;
+    // Hand out the serialized wrapper, never the raw connection, so all callers
+    // share the single op chain.
+    if (!this.serializedDb) {
+      this.serializedDb = createSerializedDb(this.db);
+    }
+    return this.serializedDb;
   }
 
   // Exposes the single shared, migrated connection so other services don't open
