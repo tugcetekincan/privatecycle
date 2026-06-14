@@ -15,15 +15,6 @@ jobs:
     name: Build signed APK
     runs-on: ubuntu-latest
 
-    # Use React Native's community CLI autolinking. Expo's default autolinking
-    # generates CMake add_subdirectory() entries pointing at each library's
-    # build/generated/source/codegen/jni dir, but does not build those library
-    # modules, so New Architecture codegen never runs for them and the C++
-    # configure step fails. The community autolinker wires the library Gradle
-    # projects (and their codegen) correctly. Requires @react-native-community/cli.
-    env:
-      EXPO_USE_COMMUNITY_AUTOLINKING: '1'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,14 +49,18 @@ jobs:
 
       - name: Tune Gradle for CI
         run: |
-          # NOTE: do not enable the Gradle build cache here. node_modules is
-          # reinstalled fresh by `npm ci` every run, which wipes each library's
-          # build/generated/source/codegen/jni output. A cached "UP-TO-DATE"
-          # state then skips React Native codegen, so CMake fails to find those
-          # generated dirs at configure time.
-          {
-            echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
-          } >> android/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+
+      - name: Generate New Architecture codegen
+        working-directory: android
+        # Header-only TurboModule libraries (async-storage, datetimepicker,
+        # gesture-handler, webview) have no native build of their own, so
+        # `assembleRelease` never triggers their generateCodegenArtifactsFromSchema
+        # task. The app's CMake still add_subdirectory()s each library's
+        # build/generated/source/codegen/jni dir, so without this step the C++
+        # configure step fails with "not an existing directory". Running the
+        # aggregate codegen task first materializes those dirs for every library.
+        run: ./gradlew generateCodegenArtifactsFromSchema --no-daemon
 
       - name: Decode release keystore
         env:
