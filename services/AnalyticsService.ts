@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { getSharedDatabase } from './DataService';
 
 export interface CycleAnalytics {
   averageCycleLength: number;
@@ -28,13 +29,10 @@ export interface MonthlyStats {
 }
 
 class SQLiteAnalyticsService {
-  private db: SQLite.SQLiteDatabase | null = null;
-
+  // Reuse DataService's single shared connection. Opening a second connection to
+  // the same database file breaks the schema view on web (wa-sqlite / OPFS).
   private async getDatabase(): Promise<SQLite.SQLiteDatabase> {
-    if (!this.db) {
-      this.db = await SQLite.openDatabaseAsync('cycle_tracker.db');
-    }
-    return this.db;
+    return getSharedDatabase();
   }
 
   async getCyclePhase(date: string): Promise<'menstrual' | 'follicular' | 'ovulation' | 'luteal'> {

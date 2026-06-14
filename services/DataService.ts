@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 
 // Utility function to format date without timezone issues
 const formatDateKey = (date: Date): string => {
@@ -136,10 +137,13 @@ class SQLiteDataService {
         throw new Error('Failed to open database');
       }
 
-      await this.db.execAsync(`
-        PRAGMA journal_mode = WAL;
-        PRAGMA foreign_keys = ON;
-      `);
+      // WAL improves concurrency on native, but the web (wa-sqlite / OPFS) VFS
+      // does not support it — requesting WAL there silently drops writes made
+      // inside transactions (e.g. CREATE TABLE), which corrupts the schema.
+      if (Platform.OS !== 'web') {
+        await this.db.execAsync('PRAGMA journal_mode = WAL;');
+      }
+      await this.db.execAsync('PRAGMA foreign_keys = ON;');
 
       // Bring the schema up to date via versioned migrations
       await this.runMigrations(this.db);
@@ -158,6 +162,23 @@ class SQLiteDataService {
       | { user_version: number }
       | null;
     let currentVersion = versionRow?.user_version ?? 0;
+
+    // Self-heal a corrupt schema: if user_version claims migrations have run but
+    // the core table is missing, the schema was never actually persisted (this
+    // happened on web under the unsupported WAL mode). Reset to 0 so migrations
+    // re-run from scratch and recreate the schema.
+    if (currentVersion > 0) {
+      const coreTable = (await db.getAllAsync(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_data'"
+      )) as { name: string }[];
+      if (coreTable.length === 0) {
+        console.warn(
+          `Schema version is ${currentVersion} but daily_data table is missing; resetting to re-run migrations.`
+        );
+        await db.execAsync('PRAGMA user_version = 0');
+        currentVersion = 0;
+      }
+    }
 
     if (currentVersion >= LATEST_SCHEMA_VERSION) {
       return;
@@ -186,12 +207,20 @@ class SQLiteDataService {
 
   private async ensureInitialized(): Promise<SQLite.SQLiteDatabase> {
     await this.initializeDatabase();
-    
+
     if (!this.db) {
       throw new Error('Database initialization failed');
     }
-    
+
     return this.db;
+  }
+
+  // Exposes the single shared, migrated connection so other services don't open
+  // their own. On web (wa-sqlite / OPFS) a second connection to the same file
+  // yields an inconsistent view and breaks reads/writes — there must be exactly
+  // one connection to cycle_tracker.db across the app.
+  async getSharedDatabase(): Promise<SQLite.SQLiteDatabase> {
+    return this.ensureInitialized();
   }
 
   async getPeriodData(): Promise<PeriodData> {
@@ -599,6 +628,11 @@ class SQLiteDataService {
 }
 
 const sqliteDataService = new SQLiteDataService();
+
+// Shared, migrated SQLite connection. All services must use this rather than
+// calling SQLite.openDatabaseAsync themselves — see getSharedDatabase above.
+export const getSharedDatabase = (): Promise<SQLite.SQLiteDatabase> =>
+  sqliteDataService.getSharedDatabase();
 
 export class DataService {
   static formatDateKey = formatDateKey;
