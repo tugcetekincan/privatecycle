@@ -49,9 +49,13 @@ jobs:
 
       - name: Tune Gradle for CI
         run: |
+          # NOTE: do not enable the Gradle build cache here. node_modules is
+          # reinstalled fresh by `npm ci` every run, which wipes each library's
+          # build/generated/source/codegen/jni output. A cached "UP-TO-DATE"
+          # state then skips React Native codegen, so CMake fails to find those
+          # generated dirs at configure time.
           {
             echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
-            echo "org.gradle.caching=true"
           } >> android/gradle.properties
 
       - name: Decode release keystore
@@ -67,7 +71,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew assembleRelease --no-daemon --build-cache \
+          ./gradlew assembleRelease --no-daemon --no-build-cache \
             -x lintVitalRelease -x lintVitalAnalyzeRelease \
             -PreactNativeArchitectures=arm64-v8a \
             -PMYAPP_RELEASE_STORE_FILE=release.keystore \
