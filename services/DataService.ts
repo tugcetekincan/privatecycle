@@ -8,21 +8,12 @@ const formatDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-// Ovulation typically occurs ~14 days before the next period (luteal phase length).
-export const LUTEAL_PHASE_DAYS = 14;
-// The fertile window spans the 5 days leading up to and including ovulation.
-export const FERTILE_WINDOW_DAYS = 5;
-
 export interface DailyData {
   date: string;
   isPeriod: boolean;
   flowLevel: string;
   symptoms: string[];
   mood: string;
-  // Ovulation / fertility tracking
-  ovulationTest: string; // '' | 'positive' | 'negative' (LH/OPK result)
-  cervicalMucus: string; // '' | 'dry' | 'sticky' | 'creamy' | 'watery' | 'eggwhite'
-  bbt: number | null; // basal body temperature (°C)
 }
 
 export interface PeriodData {
@@ -88,15 +79,6 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
         CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
       `);
-    },
-  },
-  {
-    version: 2,
-    name: 'add_ovulation_fields',
-    up: async (db) => {
-      await addColumnIfMissing(db, 'daily_data', 'ovulation_test', "TEXT NOT NULL DEFAULT ''");
-      await addColumnIfMissing(db, 'daily_data', 'cervical_mucus', "TEXT NOT NULL DEFAULT ''");
-      await addColumnIfMissing(db, 'daily_data', 'bbt', 'REAL');
     },
   },
 ];
@@ -250,34 +232,25 @@ class SQLiteDataService {
       const symptoms = JSON.stringify(data.symptoms || []);
       const flowLevel = data.flowLevel || '';
       const mood = data.mood || '';
-      const ovulationTest = data.ovulationTest || '';
-      const cervicalMucus = data.cervicalMucus || '';
-      const bbt = typeof data.bbt === 'number' && !isNaN(data.bbt) ? data.bbt : null;
 
       console.log('Saving data:', {
         dateKey,
         isPeriod: data.isPeriod,
         flowLevel,
         symptoms,
-        mood,
-        ovulationTest,
-        cervicalMucus,
-        bbt
+        mood
       });
 
       await db.runAsync(
         `INSERT OR REPLACE INTO daily_data
-         (date, is_period, flow_level, symptoms, mood, ovulation_test, cervical_mucus, bbt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (date, is_period, flow_level, symptoms, mood)
+         VALUES (?, ?, ?, ?, ?)`,
         [
           dateKey,
           data.isPeriod ? 1 : 0,
           flowLevel,
           symptoms,
-          mood,
-          ovulationTest,
-          cervicalMucus,
-          bbt
+          mood
         ]
       );
 
@@ -306,9 +279,6 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
-        ovulation_test: string;
-        cervical_mucus: string;
-        bbt: number | null;
       } | null;
 
       if (!result) return null;
@@ -318,10 +288,7 @@ class SQLiteDataService {
         isPeriod: result.is_period === 1,
         flowLevel: result.flow_level,
         symptoms: JSON.parse(result.symptoms),
-        mood: result.mood,
-        ovulationTest: result.ovulation_test || '',
-        cervicalMucus: result.cervical_mucus || '',
-        bbt: result.bbt ?? null
+        mood: result.mood
       };
     } catch (error) {
       console.error('Error loading today data:', error);
@@ -341,9 +308,6 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
-        ovulation_test: string;
-        cervical_mucus: string;
-        bbt: number | null;
       }[];
 
       const dailyData: { [date: string]: DailyData } = {};
@@ -354,10 +318,7 @@ class SQLiteDataService {
           isPeriod: row.is_period === 1,
           flowLevel: row.flow_level,
           symptoms: JSON.parse(row.symptoms),
-          mood: row.mood,
-          ovulationTest: row.ovulation_test || '',
-          cervicalMucus: row.cervical_mucus || '',
-          bbt: row.bbt ?? null
+          mood: row.mood
         };
       });
 
@@ -458,30 +419,6 @@ class SQLiteDataService {
         nextPeriodIn = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
-      // Calculate next ovulation + fertile window prediction
-      let nextOvulationIn = 0;
-      let fertileWindowStart: string | null = null;
-      let fertileWindowEnd: string | null = null;
-      if (periodStarts.length > 0) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        // Step forward cycle by cycle until we find an ovulation date that hasn't passed.
-        const ovulation = new Date(periodStarts[periodStarts.length - 1]);
-        ovulation.setHours(0, 0, 0, 0);
-        ovulation.setDate(ovulation.getDate() + averageCycle - LUTEAL_PHASE_DAYS);
-        while (ovulation.getTime() < today.getTime()) {
-          ovulation.setDate(ovulation.getDate() + averageCycle);
-        }
-
-        nextOvulationIn = Math.ceil((ovulation.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-        const windowStart = new Date(ovulation);
-        windowStart.setDate(windowStart.getDate() - FERTILE_WINDOW_DAYS);
-        fertileWindowStart = formatDateKey(windowStart);
-        fertileWindowEnd = formatDateKey(ovulation);
-      }
-
       // Get symptom counts using SQL
       const symptomCountsResult = await db.getAllAsync(`
         SELECT symptoms
@@ -525,9 +462,6 @@ class SQLiteDataService {
         averageCycle,
         lastPeriodLength,
         nextPeriodIn,
-        nextOvulationIn,
-        fertileWindowStart,
-        fertileWindowEnd,
         totalPeriods: periodStarts.length,
         commonSymptoms,
         moodTrends,
@@ -538,9 +472,6 @@ class SQLiteDataService {
         averageCycle: 28,
         lastPeriodLength: 0,
         nextPeriodIn: 0,
-        nextOvulationIn: 0,
-        fertileWindowStart: null as string | null,
-        fertileWindowEnd: null as string | null,
         totalPeriods: 0,
         commonSymptoms: [],
         moodTrends: [],
@@ -573,17 +504,14 @@ class SQLiteDataService {
         for (const [date, data] of Object.entries(dailyData) as [string, any][]) {
           await db.runAsync(
             `INSERT OR REPLACE INTO daily_data
-             (date, is_period, flow_level, symptoms, mood, ovulation_test, cervical_mucus, bbt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (date, is_period, flow_level, symptoms, mood)
+             VALUES (?, ?, ?, ?, ?)`,
             [
               date,
               data.isPeriod ? 1 : 0,
               data.flowLevel || '',
               JSON.stringify(data.symptoms || []),
-              data.mood || '',
-              data.ovulationTest || '',
-              data.cervicalMucus || '',
-              typeof data.bbt === 'number' ? data.bbt : null
+              data.mood || ''
             ]
           );
         }
