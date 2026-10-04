@@ -137,7 +137,7 @@ export default function TrackTab() {
         </View>
 
         {/* Date Selection */}
-        <TouchableOpacity style={styles.dateCard} onPress={showDatePickerModal}>
+        <TouchableOpacity testID="track-date-card" style={styles.dateCard} onPress={showDatePickerModal}>
           <Calendar size={20} color={theme.colors.textSecondary} />
           <View style={styles.dateContent}>
             <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
@@ -145,7 +145,7 @@ export default function TrackTab() {
               <Text style={styles.todayBadge}>Today</Text>
             )}
             {todayData && (
-              <Text style={styles.hasDataBadge}>Has Data</Text>
+              <Text testID="track-has-data" style={styles.hasDataBadge}>Has Data</Text>
             )}
           </View>
           <ChevronDown size={20} color={theme.colors.textSecondary} />
@@ -156,6 +156,7 @@ export default function TrackTab() {
             <View style={styles.webDatePickerContainer}>
               <input
                 type="date"
+                data-testid="track-date-input"
                 style={{
                   width: '100%',
                   padding: 12,
@@ -176,6 +177,7 @@ export default function TrackTab() {
                 autoFocus={true}
               />
               <TouchableOpacity 
+                testID="track-date-done"
                 style={styles.datePickerButton}
                 onPress={() => setShowDatePicker(false)}
               >
@@ -209,6 +211,7 @@ export default function TrackTab() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Period</Text>
           <TouchableOpacity 
+            testID="track-period-toggle"
             style={[styles.periodButton, isPeriodDay && styles.periodButtonActive]}
             onPress={() => setIsPeriodDay(!isPeriodDay)}>
             <Droplets size={20} color={isPeriodDay ? theme.colors.white : theme.colors.primary} />
@@ -225,6 +228,7 @@ export default function TrackTab() {
                 {FLOW_LEVELS.map(level => (
                   <TouchableOpacity
                     key={level.id}
+                    testID={`track-flow-${level.id}`}
                     style={[
                       styles.flowButton,
                       { backgroundColor: level.color },
@@ -251,6 +255,7 @@ export default function TrackTab() {
             {SYMPTOMS.map(symptom => (
               <TouchableOpacity
                 key={symptom.id}
+                testID={`track-symptom-${symptom.id}`}
                 style={[
                   styles.symptomButton,
                   selectedSymptoms.includes(symptom.id) && styles.symptomButtonActive
@@ -275,6 +280,7 @@ export default function TrackTab() {
             {MOODS.map(mood => (
               <TouchableOpacity
                 key={mood.id}
+                testID={`track-mood-${mood.id}`}
                 style={[
                   styles.moodButton,
                   { borderColor: mood.color },
@@ -294,7 +300,7 @@ export default function TrackTab() {
         </View>
 
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton} onPress={saveData}>
+        <TouchableOpacity testID="track-save-button" style={styles.saveButton} onPress={saveData}>
           <Text style={styles.saveButtonText}>
             {isToday(selectedDate) ? "Save" : `Save for ${selectedDate.toLocaleDateString()}`}
           </Text>

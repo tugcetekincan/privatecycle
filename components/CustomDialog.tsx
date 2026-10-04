@@ -137,17 +137,17 @@ const CustomDialog: React.FC<DialogProps> = ({
       onRequestClose={onDismiss}
     >
       <View style={styles.overlay}>
-        <View style={styles.dialog}>
+        <View testID="dialog" style={styles.dialog}>
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: getIconBackgroundColor() }]}>
               {getIcon()}
             </View>
-            <Text style={styles.title}>{title}</Text>
+            <Text testID="dialog-title" style={styles.title}>{title}</Text>
           </View>
 
           <View style={styles.content}>
             {message && (
-              <Text style={styles.message}>{message}</Text>
+              <Text testID="dialog-message" style={styles.message}>{message}</Text>
             )}
             {children}
           </View>
@@ -156,6 +156,10 @@ const CustomDialog: React.FC<DialogProps> = ({
             {buttons.map((button, index) => (
               <TouchableOpacity
                 key={index}
+                testID={`dialog-button-${button.text
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-|-$/g, '')}`}
                 style={getButtonStyle(button.style || 'default', index, buttons.length)}
                 onPress={() => handleButtonPress(button)}
                 activeOpacity={0.7}

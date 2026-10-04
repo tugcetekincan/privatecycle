@@ -72,28 +72,28 @@ export default function InsightsTab() {
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <Calendar size={32} color={theme.colors.primary} />
-            <Text style={styles.statNumber}>{stats.averageCycle}</Text>
+            <Text testID="insights-avg-cycle" style={styles.statNumber}>{stats.averageCycle}</Text>
             <Text style={styles.statLabel}>Avg Cycle Length</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
             <Heart size={32} color={theme.colors.error} />
-            <Text style={styles.statNumber}>{stats.lastPeriodLength}</Text>
+            <Text testID="insights-last-period" style={styles.statNumber}>{stats.lastPeriodLength}</Text>
             <Text style={styles.statLabel}>Last Period</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
             <TrendingUp size={32} color={theme.colors.success} />
-            <Text style={styles.statNumber}>{stats.nextPeriodIn}</Text>
+            <Text testID="insights-next-period" style={styles.statNumber}>{stats.nextPeriodIn}</Text>
             <Text style={styles.statLabel}>Next Period</Text>
             <Text style={styles.statUnit}>days</Text>
           </View>
 
           <View style={styles.statCard}>
             <BarChart2 size={32} color={theme.colors.warning} />
-            <Text style={styles.statNumber}>{stats.totalPeriods}</Text>
+            <Text testID="insights-total-periods" style={styles.statNumber}>{stats.totalPeriods}</Text>
             <Text style={styles.statLabel}>Total Tracked</Text>
             <Text style={styles.statUnit}>periods</Text>
           </View>

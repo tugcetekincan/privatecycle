@@ -266,6 +266,34 @@ class SQLiteDataService {
     }
   }
 
+  /**
+   * Insert or replace many days in a single transaction. Useful for restoring
+   * backups and seeding demo data, where per-row round trips are wasteful.
+   */
+  async saveManyDailyData(data: { [date: string]: DailyData }): Promise<void> {
+    const entries = Object.entries(data);
+    if (entries.length === 0) return;
+
+    const db = await this.ensureInitialized();
+
+    await db.withTransactionAsync(async () => {
+      for (const [dateKey, day] of entries) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO daily_data
+           (date, is_period, flow_level, symptoms, mood)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            dateKey,
+            day.isPeriod ? 1 : 0,
+            day.flowLevel || '',
+            JSON.stringify(day.symptoms || []),
+            day.mood || '',
+          ]
+        );
+      }
+    });
+  }
+
   async getTodayData(dateKey: string): Promise<DailyData | null> {
     try {
       const db = await this.ensureInitialized();
@@ -537,6 +565,10 @@ export class DataService {
 
   static async saveTodayData(dateKey: string, data: DailyData): Promise<void> {
     return sqliteDataService.saveTodayData(dateKey, data);
+  }
+
+  static async saveManyDailyData(data: { [date: string]: DailyData }): Promise<void> {
+    return sqliteDataService.saveManyDailyData(data);
   }
 
   static async getTodayData(dateKey: string): Promise<DailyData | null> {

@@ -36,7 +36,8 @@ export default function TabLayout() {
             tabBarIcon: ({ size, color }) => (
               <Calendar size={size} color={color} />
             ),
-            tabBarLabel: 'Calendar'
+            tabBarLabel: 'Calendar',
+            tabBarButtonTestID: 'tab-calendar',
           }}
         />
         <Tabs.Screen
@@ -45,7 +46,8 @@ export default function TabLayout() {
             tabBarIcon: ({ size, color }) => (
               <Heart size={size} color={color} />
             ),
-            tabBarLabel: 'Track'
+            tabBarLabel: 'Track',
+            tabBarButtonTestID: 'tab-track',
           }}
         />
         <Tabs.Screen
@@ -54,7 +56,8 @@ export default function TabLayout() {
             tabBarIcon: ({ size, color }) => (
               <BarChart2 size={size} color={color} />
             ),
-            tabBarLabel: 'Insights'
+            tabBarLabel: 'Insights',
+            tabBarButtonTestID: 'tab-insights',
           }}
         />
         <Tabs.Screen
@@ -63,7 +66,8 @@ export default function TabLayout() {
             tabBarIcon: ({ size, color }) => (
               <Settings size={size} color={color} />
             ),
-            tabBarLabel: 'Settings'
+            tabBarLabel: 'Settings',
+            tabBarButtonTestID: 'tab-settings',
           }}
         />
       </Tabs>

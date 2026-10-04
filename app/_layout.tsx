@@ -6,13 +6,18 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { useMigration } from '@/hooks/useMigration';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
+import { useDevSeed } from '@/hooks/useDevSeed';
+import { installDevGlobals } from '@/services/devGlobals';
+
+installDevGlobals();
 
 function RootLayoutContent() {
   const { theme } = useTheme();
   const { isCompleted } = useMigration();
+  const { ready: isDevSeedReady } = useDevSeed(isCompleted);
   useAutoBackup();
-  
-  if (!isCompleted) {
+
+  if (!isCompleted || !isDevSeedReady) {
     return null;
   }
   

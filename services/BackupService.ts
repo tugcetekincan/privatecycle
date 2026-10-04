@@ -247,10 +247,7 @@ export class BackupService {
   static async restoreFromBackup(backupData: BackupData): Promise<void> {
     try {
       await DataService.clearAllData();
-
-      for (const [dateKey, dayData] of Object.entries(backupData.data.dailyData)) {
-        await DataService.saveTodayData(dateKey, dayData);
-      }
+      await DataService.saveManyDailyData(backupData.data.dailyData);
     } catch (error) {
       console.error('Error restoring from backup:', error);
       throw error;
@@ -258,14 +255,15 @@ export class BackupService {
   }
 
   static validateBackupData(data: any): data is BackupData {
-    return (
+    return Boolean(
       data &&
-      typeof data.version === 'string' &&
-      typeof data.timestamp === 'number' &&
-      data.data &&
-      typeof data.data.dailyData === 'object' &&
-      data.metadata &&
-      typeof data.metadata.totalDays === 'number'
+        typeof data.version === 'string' &&
+        typeof data.timestamp === 'number' &&
+        data.data &&
+        typeof data.data.dailyData === 'object' &&
+        data.data.dailyData !== null &&
+        data.metadata &&
+        typeof data.metadata.totalDays === 'number'
     );
   }
 

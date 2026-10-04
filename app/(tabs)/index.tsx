@@ -467,6 +467,7 @@ export default function CalendarTab() {
       days.push(
         <DayComponent
           key={day}
+          testID={`calendar-day-${formatDateKey(dayDate)}`}
           style={[
             styles.dayCell,
             isToday && styles.today,
@@ -528,13 +529,13 @@ export default function CalendarTab() {
 
         {/* Calendar Navigation */}
         <View style={styles.calendarHeader}>
-          <TouchableOpacity onPress={() => navigateMonth('prev')}>
+          <TouchableOpacity testID="calendar-prev-month" onPress={() => navigateMonth('prev')}>
             <ChevronLeft size={24} color={theme.colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.monthYear}>
+          <Text testID="calendar-month-label" style={styles.monthYear}>
             {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
           </Text>
-          <TouchableOpacity onPress={() => navigateMonth('next')}>
+          <TouchableOpacity testID="calendar-next-month" onPress={() => navigateMonth('next')}>
             <ChevronRight size={24} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
@@ -629,7 +630,7 @@ export default function CalendarTab() {
         visible={modalVisible}
         onRequestClose={closeModal}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View testID="day-modal" style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {selectedDateData?.date.toLocaleDateString('en-US', { 
@@ -639,7 +640,7 @@ export default function CalendarTab() {
                   day: 'numeric' 
                 })}
               </Text>
-              <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+              <TouchableOpacity testID="day-modal-close" onPress={closeModal} style={styles.closeButton}>
                 <X size={24} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -649,6 +650,7 @@ export default function CalendarTab() {
               <View style={styles.modalCard}>
                 <Text style={styles.modalCardTitle}>Period</Text>
                 <TouchableOpacity 
+                  testID="day-modal-period-toggle"
                   style={[styles.periodButton, editingData?.isPeriod && styles.periodButtonActive]}
                   onPress={() => editingData && setEditingData({
                     ...editingData,
@@ -669,6 +671,7 @@ export default function CalendarTab() {
                       {FLOW_LEVELS.map(level => (
                         <TouchableOpacity
                           key={level.id}
+                          testID={`day-modal-flow-${level.id}`}
                           style={[
                             styles.flowButton,
                             { backgroundColor: level.color },
@@ -698,6 +701,7 @@ export default function CalendarTab() {
                   {SYMPTOMS.map(symptom => (
                     <TouchableOpacity
                       key={symptom.id}
+                      testID={`day-modal-symptom-${symptom.id}`}
                       style={[
                         styles.symptomChip,
                         editingData?.symptoms.includes(symptom.id) && styles.symptomChipSelected,
@@ -722,6 +726,7 @@ export default function CalendarTab() {
                   {MOODS.map(mood => (
                     <TouchableOpacity
                       key={mood.id}
+                      testID={`day-modal-mood-${mood.id}`}
                       style={[
                         styles.moodChip,
                         editingData?.mood === mood.id && [
@@ -748,6 +753,7 @@ export default function CalendarTab() {
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
+                testID="day-modal-save"
                 style={styles.saveButton}
                 onPress={saveModalData}>
                 <Check size={20} color="#fff" />

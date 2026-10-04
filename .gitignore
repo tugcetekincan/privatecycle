@@ -12,3 +12,9 @@ expo-env.d.ts
 /.expo
 /dist
 *.apk
+
+# Test + verification artifacts
+/artifacts
+/test-results
+/playwright-report
+*.log

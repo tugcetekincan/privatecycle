@@ -1,0 +1,45 @@
+# PrivateCycle on-device smoke flow.
+#
+# Prerequisites:
+#   - a dev build installed on a connected device (npx expo run:android)
+#   - in-app data: the Calendar/Track screens work with empty data too
+#
+# Run: ~/.maestro/bin/maestro test maestro/
+#
+# Selectors use React Native testID (Maestro `id:`). If a selector fails,
+# inspect the tree with `~/.maestro/bin/maestro hierarchy`.
+appId: com.ncan.privatecycle
+---
+- launchApp
+- assertVisible: 'Period Calendar'
+
+- tapOn:
+    id: 'tab-track'
+- assertVisible: 'Track Your Day'
+
+# Toggle period on if it is off, then save today.
+- runFlow:
+    when:
+      visible: 'No Period'
+    commands:
+      - tapOn:
+          id: 'track-period-toggle'
+- tapOn:
+    id: 'track-symptom-cramps'
+- tapOn:
+    id: 'track-mood-calm'
+- tapOn:
+    id: 'track-save-button'
+- assertVisible: 'Success'
+- tapOn:
+    id: 'dialog-button-ok'
+
+- tapOn:
+    id: 'tab-insights'
+- assertVisible: 'Insights'
+
+- tapOn:
+    id: 'tab-settings'
+- assertVisible: 'Settings'
+
+- takeScreenshot: privatecycle-smoke

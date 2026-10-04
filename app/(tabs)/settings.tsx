@@ -24,10 +24,12 @@ import {
   HardDrive,
   Clock,
   RefreshCw,
-  Info
+  Info,
+  Database,
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
+import { seedDemoData, resetDemoData } from '@/services/DevSeedService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
 import { useDialog } from '@/hooks/useDialog';
@@ -215,6 +217,40 @@ export default function SettingsTab() {
     );
   };
 
+  // --- Developer helpers (__DEV__ only) ---
+
+  const loadDemoData = async () => {
+    try {
+      const result = await seedDemoData({ force: true });
+      await loadBackupData();
+      showSuccess('Demo Data Loaded', `${result.days} days of sample data were generated.`);
+    } catch (error) {
+      console.error('Error loading demo data:', error);
+      showError('Error', 'Failed to load demo data');
+    }
+  };
+
+  const confirmResetDemoData = () => {
+    showConfirm(
+      'Reset Demo Data',
+      'This deletes all tracking data (backups are kept). Continue?',
+      async () => {
+        try {
+          await resetDemoData();
+          await loadBackupData();
+          showSuccess('Data Reset', 'All tracking data has been deleted.');
+        } catch (error) {
+          console.error('Error resetting demo data:', error);
+          showError('Error', 'Failed to reset data');
+        }
+      },
+      undefined,
+      'Reset',
+      'Cancel',
+      true
+    );
+  };
+
   const styles = createStyles(theme);
 
   return (
@@ -239,6 +275,7 @@ export default function SettingsTab() {
               </View>
             </View>
             <Switch
+              testID="settings-notifications-switch"
               value={notifications}
               onValueChange={setNotifications}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -255,6 +292,7 @@ export default function SettingsTab() {
               </View>
             </View>
             <Switch
+              testID="settings-darkmode-switch"
               value={isDark}
               onValueChange={toggleTheme}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -290,12 +328,12 @@ export default function SettingsTab() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support</Text>
           
-          <TouchableOpacity style={styles.button} onPress={showHelp}>
+          <TouchableOpacity testID="settings-help" style={styles.button} onPress={showHelp}>
             <HelpCircle size={20} color={theme.colors.success} />
             <Text style={styles.buttonText}>Help & FAQ</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.button} onPress={showAbout}>
+          <TouchableOpacity testID="settings-about" style={styles.button} onPress={showAbout}>
             <SettingsIcon size={20} color={theme.colors.textSecondary} />
             <Text style={styles.buttonText}>About</Text>
           </TouchableOpacity>
@@ -325,6 +363,7 @@ export default function SettingsTab() {
               </View>
             </View>
             <Switch
+              testID="settings-auto-backup-switch"
               value={backupSettings.autoBackupEnabled}
               onValueChange={(value) => updateBackupSettings({ autoBackupEnabled: value })}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -363,6 +402,7 @@ export default function SettingsTab() {
           {/* Backup Actions */}
           {!isWeb && (
           <TouchableOpacity
+            testID="settings-create-backup"
             style={styles.button}
             onPress={createManualBackup}
             disabled={loading}
@@ -374,6 +414,7 @@ export default function SettingsTab() {
           )}
 
           <TouchableOpacity
+            testID="settings-export"
             style={styles.button} 
             onPress={exportBackup}
             disabled={loading}
@@ -384,6 +425,7 @@ export default function SettingsTab() {
           </TouchableOpacity>
 
           <TouchableOpacity 
+            testID="settings-import"
             style={styles.button} 
             onPress={importBackup}
             disabled={loading}
@@ -440,11 +482,36 @@ export default function SettingsTab() {
         </View>
         )}
 
+        {/* Developer Tools (dev builds only) */}
+        {__DEV__ && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Developer</Text>
+
+            <TouchableOpacity
+              testID="settings-dev-seed"
+              style={styles.button}
+              onPress={loadDemoData}
+            >
+              <Database size={20} color={theme.colors.primary} />
+              <Text style={styles.buttonText}>Load Demo Data</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              testID="settings-dev-reset"
+              style={styles.button}
+              onPress={confirmResetDemoData}
+            >
+              <RefreshCw size={20} color={theme.colors.error} />
+              <Text style={[styles.buttonText, styles.dangerText]}>Reset Demo Data</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Data Management */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data Management</Text>
           
-          <TouchableOpacity style={[styles.button, styles.dangerButton]} onPress={clearAllData}>
+          <TouchableOpacity testID="settings-clear-all" style={[styles.button, styles.dangerButton]} onPress={clearAllData}>
             <Trash2 size={20} color={theme.colors.error} />
             <Text style={[styles.buttonText, styles.dangerText]}>Clear All Data</Text>
           </TouchableOpacity>
