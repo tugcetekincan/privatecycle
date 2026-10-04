@@ -198,15 +198,16 @@ A change is done when:
 ## CI
 
 Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then a
-signed release APK (arm64-v8a, release keystore) uploaded as a workflow
-artifact kept for 2 days. `workflow_dispatch` re-runs it on demand; pushes
-that only touch markdown, `artifacts/`, `maestro/` or `.opencode/` are
-skipped; superseded runs are cancelled. Cold builds are ~15 min; warm builds
-reuse cross-run caches (Gradle home, `native-libs-v3`, `app-build-v1`,
-ccache) and are much faster. Cache keys are versioned — **bump the version
-suffix when the cached paths change**, because GitHub's cache entries are
-immutable and an old key would keep restoring the old layout. Release
-publishing stays tag-only (see below).
+signed release APK (arm64-v8a, release keystore) published to the rolling
+`ci-latest` pre-release, downloadable straight from the Releases page
+(`PrivateCycle.apk`); workflow artifacts are not used. `workflow_dispatch`
+re-runs it on demand; pushes that only touch markdown, `artifacts/`,
+`maestro/` or `.opencode/` are skipped; superseded runs are cancelled. Cold
+builds are ~15 min; warm builds reuse cross-run caches (Gradle home,
+`native-libs-v3`, `app-build-v1`, ccache) and are much faster. Cache keys are
+versioned — **bump the version suffix when the cached paths change**, because
+GitHub's cache entries are immutable and an old key would keep restoring the
+old layout. Versioned release publishing stays tag-only (see below).
 
 ## Releases
 

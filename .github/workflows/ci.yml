@@ -24,6 +24,9 @@ on:
       - '.opencode/**'
   workflow_dispatch:
 
+permissions:
+  contents: write # publish the rolling ci-latest pre-release
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -43,6 +46,11 @@ jobs:
       CCACHE_COMPRESS: 'true'
       CCACHE_MAXSIZE: 750M
       CCACHE_LOGFILE: /tmp/ccache.log
+      # CI checkouts rewrite file timestamps on every run; without these,
+      # ccache's direct/preprocessed lookups can miss even for identical code.
+      CCACHE_SLOPPINESS: 'time_macros,include_file_mtime,include_file_ctime'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -184,26 +192,34 @@ jobs:
             -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
             -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
 
+      # Publishes the APK to a rolling pre-release so it is downloadable from
+      # the Releases page directly; workflow artifacts are not used. This is a
+      # moving build (`ci-latest`), not a versioned release.
+      - name: Publish rolling CI release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle.apk
+          NOTES="Rolling prerelease of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
+          if gh release view ci-latest >/dev/null 2>&1; then
+            gh release edit ci-latest --notes "$NOTES"
+          else
+            gh release create ci-latest --prerelease --title "Latest CI build" \
+              --notes "$NOTES" --target "$GITHUB_SHA"
+          fi
+          gh release upload ci-latest PrivateCycle.apk --clobber
+
       - name: Cache diagnostics
         if: always()
         run: |
           du -sh .ccache 2>/dev/null || true
           ccache --show-stats 2>/dev/null || true
           if [ -f /tmp/ccache.log ]; then
-            echo "--- ccache miss reasons ---"
-            grep -oE 'Result: [A-Za-z ]+|direct mode: [A-Za-z ]+|preprocessed mode: [A-Za-z ]+|Compiler check failed[^\"]*|no such file[^\"]*' /tmp/ccache.log \
-              | sort | uniq -c | sort -rn | head -15
-            echo "--- ccache log sample ---"
-            grep -E "Result: miss|Compiler check|Cannot|failed" /tmp/ccache.log | head -15
+            echo "--- build dir hashes seen by ccache ---"
+            grep -oE '\.cxx/RelWithDebInfo/[a-z0-9]+' /tmp/ccache.log | sort -u | head
+            echo "--- sample compiler invocation ---"
+            grep -m1 -oE 'Command line: .*' /tmp/ccache.log | cut -c1-300 || true
           fi
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: PrivateCycle-${{ github.sha }}
-          path: android/app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-          retention-days: 2
 
       - name: Job summary
         run: |
@@ -211,6 +227,6 @@ jobs:
             echo "## CI"
             echo ""
             echo "- Commit: \`${GITHUB_SHA:0:7}\`"
-            echo "- Artifact: \`PrivateCycle-${GITHUB_SHA}\` (retained 2 days)"
+            echo "- APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/ci-latest"
             echo "- Trigger: \`${GITHUB_EVENT_NAME}\`"
           } >> "$GITHUB_STEP_SUMMARY"
