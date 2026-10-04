@@ -42,6 +42,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: 'true'
       CCACHE_MAXSIZE: 750M
+      CCACHE_LOGFILE: /tmp/ccache.log
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -139,23 +140,6 @@ jobs:
           restore-keys: |
             app-build-v1-${{ runner.os }}-
 
-      # A fresh checkout stamps sources with the current time, newer than the
-      # restored Ninja objects, which would force a full native recompile.
-      # When both native caches hit exactly the native inputs are unchanged,
-      # so mark the cached objects/binaries newer than any checkout timestamp
-      # and let Ninja's incremental check skip the compilation.
-      - name: Keep cached native outputs fresh
-        if: steps.native-cache.outputs.cache-hit == 'true' && steps.app-cache.outputs.cache-hit == 'true'
-        run: |
-          find \
-            android/app/.cxx \
-            android/app/build/intermediates/cxx \
-            node_modules/@*/*/android/.cxx \
-            node_modules/@*/*/android/build/intermediates/cxx \
-            node_modules/*/android/.cxx \
-            node_modules/*/android/build/intermediates/cxx \
-            -type f -exec touch -d 'now + 1 day' {} + 2>/dev/null || true
-
       - name: Tune Gradle for CI
         run: |
           echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
@@ -205,6 +189,13 @@ jobs:
         run: |
           du -sh .ccache 2>/dev/null || true
           ccache --show-stats 2>/dev/null || true
+          if [ -f /tmp/ccache.log ]; then
+            echo "--- ccache miss reasons ---"
+            grep -oE 'Result: [A-Za-z ]+|direct mode: [A-Za-z ]+|preprocessed mode: [A-Za-z ]+|Compiler check failed[^\"]*|no such file[^\"]*' /tmp/ccache.log \
+              | sort | uniq -c | sort -rn | head -15
+            echo "--- ccache log sample ---"
+            grep -E "Result: miss|Compiler check|Cannot|failed" /tmp/ccache.log | head -15
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
