@@ -284,7 +284,9 @@ export class BackupService {
             
             let backupDate: Date;
             if (fileInfo.exists && 'modificationTime' in fileInfo && fileInfo.modificationTime > 0) {
-              backupDate = new Date(fileInfo.modificationTime);
+              // expo-file-system reports modificationTime in seconds since epoch,
+              // while Date expects milliseconds (otherwise dates land in 1970).
+              backupDate = new Date(fileInfo.modificationTime * 1000);
             } else {
               const timestampMatch = filename.match(/cycle_backup_(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})/);
               if (timestampMatch) {

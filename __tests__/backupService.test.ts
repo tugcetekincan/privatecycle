@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system';
 import { BackupService, BackupData } from '@/services/BackupService';
 import { DataService, DailyData } from '@/services/DataService';
 
@@ -9,6 +10,9 @@ jest.mock('@/services/DataService', () => ({
     saveManyDailyData: jest.fn(),
   },
 }));
+
+const readDirectoryAsync = FileSystem.readDirectoryAsync as jest.Mock;
+const getInfoAsync = FileSystem.getInfoAsync as jest.Mock;
 
 const mockedDataService = DataService as jest.Mocked<typeof DataService>;
 
@@ -89,6 +93,37 @@ describe('BackupService', () => {
 
       expect(mockedDataService.clearAllData).toHaveBeenCalledTimes(1);
       expect(mockedDataService.saveManyDailyData).toHaveBeenCalledWith(backup.data.dailyData);
+    });
+  });
+
+  describe('getLocalBackups', () => {
+    const backupFilename = 'cycle_backup_2026-03-15T10-30-00.json';
+    const modifiedSeconds = Date.UTC(2026, 2, 15, 10, 30, 0) / 1000;
+
+    beforeEach(() => {
+      readDirectoryAsync.mockResolvedValue([backupFilename]);
+      getInfoAsync.mockResolvedValue({
+        exists: true,
+        uri: `file:///document/backups/${backupFilename}`,
+        size: 2048,
+        isDirectory: false,
+        modificationTime: modifiedSeconds,
+      });
+    });
+
+    it('converts file modificationTime from seconds to a Date (not 1970)', async () => {
+      const backups = await BackupService.getLocalBackups();
+
+      expect(backups).toHaveLength(1);
+      expect(backups[0].date.getTime()).toBe(modifiedSeconds * 1000);
+      expect(backups[0].date.getUTCFullYear()).toBe(2026);
+    });
+
+    it('reports the corrected date as lastBackup in getBackupStats', async () => {
+      const stats = await BackupService.getBackupStats();
+
+      expect(stats.totalBackups).toBe(1);
+      expect(stats.lastBackup?.getTime()).toBe(modifiedSeconds * 1000);
     });
   });
 
