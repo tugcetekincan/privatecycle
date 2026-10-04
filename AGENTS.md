@@ -76,10 +76,16 @@ dependencies, data or backup formats, migration strategies, UX flows, build
 tooling. Small, obvious changes (typos, copy tweaks, local fixes) don't need
 the ceremony; use judgment.
 
-**Then commit and push.** Once a change passes the verification ladder,
-commit it in small focused commits with clear messages and push to the
-current branch. Don't leave finished work uncommitted. The only things that
-always need explicit approval are tags and releases — see
+**Report results, get verification, then commit and push.** Finish by
+explaining the achieved results: what changed, what you ran, and the evidence
+(test output, screenshots). Ask the user to verify that everything looks
+right. Only after they confirm, commit in small focused commits and push to
+the current branch. Commit messages are one-liners — imperative and scoped
+(`fix: …`, `feat: …`, `test: …`, `docs: …`), no body; the details belong in
+the diff and the report. Don't leave verified work sitting uncommitted or
+unpushed — once the user says yes, land it promptly. If the user has
+explicitly pre-authorized committing, the round trip can be skipped. Tags and
+releases always need explicit approval regardless — see
 `privatecycle-release`.
 
 ## The verification ladder
@@ -184,7 +190,9 @@ A change is done when:
 - data/migration/backup changes are backward compatible (or the version bump
   and migration path are called out);
 - the relevant skills/AGENTS.md are updated if the workflow itself changed;
-- the work is committed and pushed (see "Working with the user").
+- the achieved results were reported and the user verified them;
+- once verified, the work is committed and pushed (see "Working with the
+  user").
 
 ## Releases
 
