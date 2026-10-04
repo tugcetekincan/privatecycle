@@ -87,7 +87,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: native-ccache-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json') }}
+          # Rolling key: ccache is a mutable cache, and actions/cache never
+          # overwrites an existing key, so include the run id and rely on
+          # restore-keys to fetch the newest snapshot.
+          key: native-ccache-v1-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             native-ccache-v1-${{ runner.os }}-
 
@@ -96,6 +99,7 @@ jobs:
       # builds live inside node_modules, which `npm ci` wipes - so restore
       # them after install, before Gradle runs.
       - name: Restore native library builds
+        id: native-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -123,6 +127,7 @@ jobs:
       # android/ is generated fresh on every run. Without these caches Gradle
       # recompiles all New Architecture C++ from scratch (the ~15 min cost).
       - name: Restore app build outputs
+        id: app-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -133,6 +138,23 @@ jobs:
           key: app-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
           restore-keys: |
             app-build-v1-${{ runner.os }}-
+
+      # A fresh checkout stamps sources with the current time, newer than the
+      # restored Ninja objects, which would force a full native recompile.
+      # When both native caches hit exactly the native inputs are unchanged,
+      # so mark the cached objects/binaries newer than any checkout timestamp
+      # and let Ninja's incremental check skip the compilation.
+      - name: Keep cached native outputs fresh
+        if: steps.native-cache.outputs.cache-hit == 'true' && steps.app-cache.outputs.cache-hit == 'true'
+        run: |
+          find \
+            android/app/.cxx \
+            android/app/build/intermediates/cxx \
+            node_modules/@*/*/android/.cxx \
+            node_modules/@*/*/android/build/intermediates/cxx \
+            node_modules/*/android/.cxx \
+            node_modules/*/android/build/intermediates/cxx \
+            -type f -exec touch -d 'now + 1 day' {} + 2>/dev/null || true
 
       - name: Tune Gradle for CI
         run: |
