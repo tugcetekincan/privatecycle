@@ -40,7 +40,8 @@ scripts/                web harness (see below), debug probe
 __tests__/              Jest suites
 maestro/                on-device smoke flow
 .opencode/skills/       agent runbooks (keep updated)
-.github/workflows/      android-release.yml (tag-triggered signed APK)
+.github/workflows/      ci.yml (per-push verify + APK artifact),
+                        android-release.yml (tag-triggered signed APK)
 plugins/withAndroidSigning.js   Expo config plugin for release signing
 ```
 
@@ -194,6 +195,19 @@ A change is done when:
 - once verified, the work is committed and pushed (see "Working with the
   user").
 
+## CI
+
+Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then a
+signed release APK (arm64-v8a, release keystore) uploaded as a workflow
+artifact kept for 2 days. `workflow_dispatch` re-runs it on demand; pushes
+that only touch markdown, `artifacts/`, `maestro/` or `.opencode/` are
+skipped; superseded runs are cancelled. Cold builds are ~15 min; warm builds
+reuse cross-run caches (Gradle home, `native-libs-v3`, `app-build-v1`,
+ccache) and are much faster. Cache keys are versioned — **bump the version
+suffix when the cached paths change**, because GitHub's cache entries are
+immutable and an old key would keep restoring the old layout. Release
+publishing stays tag-only (see below).
+
 ## Releases
 
 Tag-driven: `git tag vX.Y.Z && git push origin vX.Y.Z` triggers
@@ -210,7 +224,9 @@ and bump `expo.version` in `app.json` first. Details and secrets:
 - Expo/Metro first bundle takes ~30 s (≈2400 modules); subsequent rebuilds are
   fast. Timeouts already account for it.
 - CI needs `./gradlew generateCodegenArtifactsFromSchema` before
-  `assembleRelease` (New Arch header-only TurboModules); don't remove that step.
+  `assembleRelease` (New Arch header-only TurboModules); don't remove that
+  step. `ci.yml` skips it only when the restored caches already contain every
+  codegen dir (see the guard step); `android-release.yml` always runs it.
 - `arm64-v8a` only in CI releases (speed), so x86 devices need a local build.
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
 - `@react-native-community/datetimepicker` has no web implementation — the
