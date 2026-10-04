@@ -96,13 +96,15 @@ jobs:
       # builds live inside node_modules, which `npm ci` wipes - so restore
       # them after install, before Gradle runs.
       - name: Restore native library builds
-        id: native-cache
         uses: actions/cache@v4
         with:
           path: |
             node_modules/*/android/build
             node_modules/*/android/.cxx
             node_modules/*/android/.gradle
+            node_modules/@*/*/android/build
+            node_modules/@*/*/android/.cxx
+            node_modules/@*/*/android/.gradle
             node_modules/@react-native/gradle-plugin/**/build
             node_modules/@react-native/gradle-plugin/**/.gradle
             node_modules/expo-modules-autolinking/android/**/build
@@ -111,9 +113,9 @@ jobs:
             node_modules/expo-modules-core/expo-module-gradle-plugin/**/.gradle
             node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/build
             node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/.gradle
-          key: native-libs-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: native-libs-v3-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            native-libs-v2-${{ runner.os }}-
+            native-libs-v3-${{ runner.os }}-
 
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install
@@ -121,7 +123,6 @@ jobs:
       # android/ is generated fresh on every run. Without these caches Gradle
       # recompiles all New Architecture C++ from scratch (the ~15 min cost).
       - name: Restore app build outputs
-        id: app-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -143,12 +144,26 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
 
-      # Materializes codegen dirs for header-only TurboModule libraries before
-      # CMake configures (see android-release.yml for the full explanation).
-      # On exact cache hits those dirs and their task history are already
-      # restored, so the extra Gradle invocation can be skipped.
+      # The app's CMakeLists add_subdirectory()s every library's generated
+      # codegen dir. If the restored caches already contain all of them the
+      # explicit codegen pass can be skipped; otherwise materialize them first.
+      - name: Check cached codegen outputs
+        id: codegen-dirs
+        run: |
+          autolink=android/app/build/generated/autolinking/src/main/jni/Android-autolinking.cmake
+          missing=false
+          if [ ! -f "$autolink" ]; then
+            missing=true
+          else
+            while IFS= read -r dir; do
+              [ -d "$dir" ] || missing=true
+            done < <(sed -n 's/^add_subdirectory("\([^"]*\)".*/\1/p' "$autolink")
+          fi
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+          echo "codegen dirs missing: $missing"
+
       - name: Generate New Architecture codegen
-        if: steps.app-cache.outputs.cache-hit != 'true' || steps.native-cache.outputs.cache-hit != 'true'
+        if: steps.codegen-dirs.outputs.missing == 'true'
         working-directory: android
         run: ./gradlew generateCodegenArtifactsFromSchema
 
@@ -164,6 +179,7 @@ jobs:
             -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
 
       - name: Cache diagnostics
+        if: always()
         run: |
           du -sh .ccache 2>/dev/null || true
           ccache --show-stats 2>/dev/null || true
