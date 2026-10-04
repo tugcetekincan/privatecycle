@@ -163,6 +163,11 @@ jobs:
             -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
             -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
 
+      - name: Cache diagnostics
+        run: |
+          du -sh .ccache 2>/dev/null || true
+          ccache --show-stats 2>/dev/null || true
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
