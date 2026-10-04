@@ -6,9 +6,14 @@ name: CI
 # The APK is uploaded as a workflow artifact; publishing a GitHub Release
 # stays tag-only in android-release.yml.
 #
-# Cold (cache-miss) builds are as expensive as a release build (~15 min).
-# Warm builds reuse cached Gradle and CMake/native outputs and should be
-# much faster. Caches are keyed on package-lock.json / app.json / plugins.
+# Caches (see steps below for the reasoning):
+#  - native-libs-v2: Gradle/CMake outputs of autolinked libraries and the
+#    Gradle plugin included builds (npm ci wipes node_modules, so restore
+#    happens after install).
+#  - app-build-v1: generated android/ project outputs + Gradle task history.
+#  - native-ccache-v1: compiled objects, so native recompiles stay cheap even
+#    though a fresh checkout makes Ninja think inputs are newer than outputs.
+# Cold builds are ~15 min; warm builds should stay well under 6.
 on:
   push:
     branches: [main]
@@ -32,6 +37,11 @@ jobs:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # The NDK toolchain maps NDK_CCACHE to CMAKE_<LANG>_COMPILER_LAUNCHER.
+      NDK_CCACHE: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPRESS: 'true'
+      CCACHE_MAXSIZE: 750M
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,18 +75,45 @@ jobs:
         with:
           cache-read-only: false
 
+      - name: Ensure ccache
+        run: |
+          command -v ccache >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ccache
+          }
+          ccache --version | head -1
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: native-ccache-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json') }}
+          restore-keys: |
+            native-ccache-v1-${{ runner.os }}-
+
       # Native outputs of the autolinked libraries (reanimated, screens,
-      # gesture-handler, expo-modules-core) live inside node_modules, which
-      # `npm ci` wipes - so restore them after install, before Gradle runs.
+      # gesture-handler, expo-modules-core) and of the Gradle plugin included
+      # builds live inside node_modules, which `npm ci` wipes - so restore
+      # them after install, before Gradle runs.
       - name: Restore native library builds
+        id: native-cache
         uses: actions/cache@v4
         with:
           path: |
             node_modules/*/android/build
             node_modules/*/android/.cxx
-          key: native-libs-v1-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+            node_modules/*/android/.gradle
+            node_modules/@react-native/gradle-plugin/**/build
+            node_modules/@react-native/gradle-plugin/**/.gradle
+            node_modules/expo-modules-autolinking/android/**/build
+            node_modules/expo-modules-autolinking/android/**/.gradle
+            node_modules/expo-modules-core/expo-module-gradle-plugin/**/build
+            node_modules/expo-modules-core/expo-module-gradle-plugin/**/.gradle
+            node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/build
+            node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/.gradle
+          key: native-libs-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            native-libs-v1-${{ runner.os }}-
+            native-libs-v2-${{ runner.os }}-
 
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --no-install
@@ -84,6 +121,7 @@ jobs:
       # android/ is generated fresh on every run. Without these caches Gradle
       # recompiles all New Architecture C++ from scratch (the ~15 min cost).
       - name: Restore app build outputs
+        id: app-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -107,7 +145,10 @@ jobs:
 
       # Materializes codegen dirs for header-only TurboModule libraries before
       # CMake configures (see android-release.yml for the full explanation).
+      # On exact cache hits those dirs and their task history are already
+      # restored, so the extra Gradle invocation can be skipped.
       - name: Generate New Architecture codegen
+        if: steps.app-cache.outputs.cache-hit != 'true' || steps.native-cache.outputs.cache-hit != 'true'
         working-directory: android
         run: ./gradlew generateCodegenArtifactsFromSchema
 
