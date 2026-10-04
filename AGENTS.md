@@ -58,6 +58,30 @@ plugins/withAndroidSigning.js   Expo config plugin for release signing
 | `npm run emulator:start` | Boot the headless AVD and wait until ready |
 | `npm run dev` | Expo dev server (native, no proxy) |
 
+## Working with the user
+
+**Clarify before building.** When a request is ambiguous, or the approach,
+scope or trade-offs are not clearly defined, do not guess and charge ahead.
+Brainstorm with the user first:
+
+1. Restate the goal and constraints as you understand them (1–2 sentences).
+2. Lay out the realistic options (usually 2–4), each with its pros and cons
+   and what it means for this repository.
+3. Give your recommendation and the reasoning behind it.
+4. Ask which direction to take — use the `question` tool when available so
+   the choice is explicit — and only then start the work.
+
+This applies to decisions that are expensive to reverse: architecture,
+dependencies, data or backup formats, migration strategies, UX flows, build
+tooling. Small, obvious changes (typos, copy tweaks, local fixes) don't need
+the ceremony; use judgment.
+
+**Then commit and push.** Once a change passes the verification ladder,
+commit it in small focused commits with clear messages and push to the
+current branch. Don't leave finished work uncommitted. The only things that
+always need explicit approval are tags and releases — see
+`privatecycle-release`.
+
 ## The verification ladder
 
 Work down only as far as the change requires; stop when the risk is covered.
@@ -146,8 +170,7 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
 - Do not edit `node_modules/`, `.expo/`, `artifacts/`, `android/`, `ios/`.
-- Don't commit or push unless asked. Don't push tags at all without explicit
-  approval (`privatecycle-release`).
+- Tags and releases always need explicit approval (`privatecycle-release`).
 
 ## Definition of done
 
@@ -160,7 +183,8 @@ A change is done when:
 - new UI has testIDs and new logic has tests;
 - data/migration/backup changes are backward compatible (or the version bump
   and migration path are called out);
-- the relevant skills/AGENTS.md are updated if the workflow itself changed.
+- the relevant skills/AGENTS.md are updated if the workflow itself changed;
+- the work is committed and pushed (see "Working with the user").
 
 ## Releases
 
