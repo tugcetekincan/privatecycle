@@ -24,6 +24,16 @@ if [ ! -x "$EMULATOR" ]; then
 fi
 
 if [ ! -w /dev/kvm ]; then
+  # The user may already be in the kvm group without a fresh login session
+  # (supplementary groups are read at login). Re-exec through sg so the
+  # emulator gets the group without requiring a reboot.
+  if getent group kvm | cut -d: -f4 | tr ',' '\n' | grep -qx "${USER:-$(id -un)}"; then
+    echo "KVM not in this session's groups yet; re-executing via 'sg kvm'..."
+    quoted_args=""
+    for arg in "$@"; do quoted_args="$quoted_args $(printf '%q' "$arg")"; done
+    # shellcheck disable=SC2086
+    exec sg kvm -c "bash $(printf '%q' "$0")$quoted_args"
+  fi
   echo "ERROR: /dev/kvm is not writable by this shell." >&2
   echo "The admin action was: sudo usermod -aG kvm $USER" >&2
   echo "A reboot (or full log-out/log-in) is required for the group to take effect." >&2
