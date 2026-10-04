@@ -26,8 +26,16 @@ appId: com.ncan.privatecycle
           id: 'track-period-toggle'
 - tapOn:
     id: 'track-symptom-cramps'
+- scrollUntilVisible:
+    element:
+      id: 'track-mood-calm'
+    direction: DOWN
 - tapOn:
     id: 'track-mood-calm'
+- scrollUntilVisible:
+    element:
+      id: 'track-save-button'
+    direction: DOWN
 - tapOn:
     id: 'track-save-button'
 - assertVisible: 'Success'
@@ -42,4 +50,8 @@ appId: com.ncan.privatecycle
     id: 'tab-settings'
 - assertVisible: 'Settings'
 
+# Back to the calendar: today should now be marked as a period day.
+- tapOn:
+    id: 'tab-calendar'
+- assertVisible: 'Period Calendar'
 - takeScreenshot: privatecycle-smoke

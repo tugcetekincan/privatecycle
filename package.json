@@ -10,7 +10,7 @@
     "smoke:web": "node scripts/smoke-web.mjs",
     "screenshots": "node scripts/smoke-web.mjs",
     "debug:web": "node scripts/debug-web.mjs",
-    "e2e:mobile": "maestro test maestro/",
+    "e2e:mobile": "~/.maestro/bin/maestro test maestro/",
     "emulator:start": "bash scripts/android-emulator.sh",
     "test": "jest",
     "test:watch": "jest --watch",

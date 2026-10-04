@@ -183,6 +183,8 @@ and bump `expo.version` in `app.json` first. Details and secrets:
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
 - `@react-native-community/datetimepicker` has no web implementation — the
   Track screen renders an `<input type="date">` on web instead.
-- This machine: Android SDK + platform-tools + Maestro are installed under
-  `~/Android/Sdk` and `~/.maestro`, but there is no KVM access, so no local
-  emulator (see the mobile skill).
+- This machine: Android SDK, platform-tools, NDK, CMake, Maestro and a
+  `privatecycle` AVD are installed. `npm run emulator:start` boots the emulator
+  headless (it re-execs through `sg kvm` when the session predates the group
+  change); `npm run e2e:mobile` runs the validated Maestro flow. Stop with
+  `adb emu kill`.

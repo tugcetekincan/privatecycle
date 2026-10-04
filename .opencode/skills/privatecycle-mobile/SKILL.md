@@ -23,10 +23,11 @@ adb version
 
 Maestro is installed at `~/.maestro/bin/maestro` (add `~/.maestro/bin` to PATH).
 
-An emulator is **not** available on this machine: `tcan` is not in the `kvm`
-group and there is no passwordless sudo. Use a physical device, or ask the
-user to run `sudo usermod -aG kvm $USER` (then re-login) before installing an
-emulator system image.
+An emulator **is available** on this machine: the SDK lives in `~/Android/Sdk`,
+the AVD is named `privatecycle`, and `npm run emulator:start` boots it headless.
+If the current session predates the `usermod -aG kvm`, the script re-executes
+itself through `sg kvm`, so a reboot is nice-to-have but not required. Stop the
+emulator with `adb emu kill`.
 
 ## Physical device (USB or wireless debugging)
 
@@ -61,20 +62,26 @@ data on device; the `?seed` URL mechanism is web-only.
 
 ## Maestro flows
 
-`maestro/smoke.yaml` covers launch → tabs → track save. Run with:
+`maestro/smoke.yaml` covers launch → tabs → track save → back to calendar.
+Validated on the `privatecycle` AVD via `npm run e2e:mobile` (≈1 min). Run with:
 
 ```sh
-~/.maestro/bin/maestro test maestro/          # all flows
-~/.maestro/bin/maestro hierarchy              # inspect the view tree if selectors fail
+npm run e2e:mobile                      # = ~/.maestro/bin/maestro test maestro/
+~/.maestro/bin/maestro test maestro/    # if you prefer the raw command
+~/.maestro/bin/maestro hierarchy        # inspect the view tree if selectors fail
 ```
 
 Notes:
 - Flows select by `id:`, which maps to React Native `testID` on Android. Keep
   testIDs stable (see the `privatecycle-verify` skill for the naming scheme).
-- These flows have not been run on a device yet (none was attached when they
-  were written). Treat the first run as a debugging session and adjust waits /
-  selectors as needed.
-- `maestro test --debug-output <dir>` and `takeScreenshot:` are useful.
+- Long screens need `scrollUntilVisible` before tapping elements below the
+  fold; `track-mood-*` and `track-save-button` are examples.
+- `takeScreenshot:` writes to `~/.maestro/tests/<timestamp>/<flow>/takeScreenshot/`.
+  Copy the file into `artifacts/screenshots/` when you need it as evidence.
+- First build on a fresh checkout takes ~20 min (`npx expo run:android
+  --variant release --no-bundler`); later builds are incremental. Use
+  `ORG_GRADLE_PROJECT_reactNativeArchitectures=x86_64` to build only the
+  emulator ABI.
 
 ## Emulator (only on a KVM-capable machine)
 
