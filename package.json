@@ -17,6 +17,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "android": "expo run:android",
+    "android:dev": "bash scripts/android-dev.sh",
+    "prebuild:android": "expo prebuild --platform android --clean --no-install",
+    "prebuild:android:dev": "APP_VARIANT=dev expo prebuild --platform android --clean --no-install",
     "ios": "expo run:ios"
   },
   "dependencies": {

@@ -1,17 +1,43 @@
 # PrivateCycle on-device smoke flow.
 #
+# Targets the dev app variant (com.ncan.privatecycle.dev) installed with
+# `npm run android:dev`. The base-identity release app has no Metro
+# connection, so there is nothing to smoke-test there.
+#
 # Prerequisites:
-#   - a dev build installed on a connected device (npx expo run:android)
+#   - a dev build installed on a connected device (npm run android:dev)
 #   - in-app data: the Calendar/Track screens work with empty data too
 #
-# Run: ~/.maestro/bin/maestro test maestro/
+# Run: npm run e2e:mobile    (= ~/.maestro/bin/maestro test maestro/)
 #
 # Selectors use React Native testID (Maestro `id:`). If a selector fails,
 # inspect the tree with `~/.maestro/bin/maestro hierarchy`.
-appId: com.ncan.privatecycle
+appId: com.ncan.privatecycle.dev
 ---
 - launchApp
-- assertVisible: 'Period Calendar'
+
+# The dev client shows a one-time "developer menu" onboarding overlay shortly
+# after launch (fresh installs). Wait for either the overlay or the app,
+# dismiss the overlay if present, then wait for the calendar. A cold dev
+# client can take a while to reconnect to Metro and load the JS bundle.
+- extendedWaitUntil:
+    visible: 'Continue|Period Calendar'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: 'Continue'
+    commands:
+      - tapOn: 'Continue'
+# After the onboarding, the regular dev menu can be left open on top of the
+# app; close it with BACK when its items are visible.
+- runFlow:
+    when:
+      visible: 'Reload'
+    commands:
+      - pressKey: Back
+- extendedWaitUntil:
+    visible: 'Period Calendar'
+    timeout: 90000
 
 - tapOn:
     id: 'tab-track'

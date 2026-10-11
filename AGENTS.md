@@ -31,6 +31,7 @@ app/                    expo-router screens
   (tabs)/track.tsx      Daily logging (period/flow/symptoms/mood)
   (tabs)/insights.tsx   Cycle stats from DataService.getInsights()
   (tabs)/settings.tsx   Preferences, backup UI, Developer section (__DEV__)
+app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo)
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady
@@ -55,8 +56,10 @@ plugins/withAndroidSigning.js   Expo config plugin for release signing
 | `npm run smoke:web` | headless end-to-end + screenshots (~1–3 min) |
 | `npm run dev:web` | interactive app at http://localhost:8082 |
 | `npm run debug:web` | headless probe: console, failed requests, DB check |
-| `npm run e2e:mobile` | Maestro flows (needs a connected device) |
+| `npm run e2e:mobile` | Maestro smoke flow on the dev variant (needs a connected device) |
 | `npm run emulator:start` | Boot the headless AVD and wait until ready |
+| `npm run prebuild:android:dev` | Regenerate `android/` for the dev app identity |
+| `npm run android:dev` | Build/install/run the dev variant (coexists with the release app) |
 | `npm run dev` | Expo dev server (native, no proxy) |
 
 ## Working with the user
@@ -232,6 +235,13 @@ and bump `expo.version` in `app.json` first. Details and secrets:
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
 - `@react-native-community/datetimepicker` has no web implementation — the
   Track screen renders an `<input type="date">` on web instead.
+- **Local dev builds are the dev app variant.** `npm run android:dev`
+  installs `com.ncan.privatecycle.dev` ("PrivateCycle Dev", blue icon)
+  alongside the release app, with its own data sandbox — import a backup
+  exported from the release app to test with realistic data. `android/`
+  targets one identity at a time: `android:dev` refuses to run when it was
+  generated for the base package, and `npm run prebuild:android` switches
+  back. Details in the `privatecycle-mobile` skill.
 - This machine: Android SDK, platform-tools, NDK, CMake, Maestro and a
   `privatecycle` AVD are installed. `npm run emulator:start` boots the emulator
   headless (it re-execs through `sg kvm` when the session predates the group

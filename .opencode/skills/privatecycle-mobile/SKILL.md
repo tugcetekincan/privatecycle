@@ -41,11 +41,34 @@ Wireless (Android 11+): enable Developer options → Wireless debugging →
 
 ## Build and install
 
-- One-time dev build (fast refresh after this):
-  `npx expo run:android` — prebuilds `android/`, Gradle downloads NDK/CMake
-  on first run, takes 10–30 min. The dev client (`expo-dev-client`, already a
-  dependency) lets `npx expo start --dev-client` reload JS over the network —
-  no reinstall per change.
+Local dev builds use a **separate app identity** (defined in `app.config.js`,
+enabled by `APP_VARIANT=dev`) so they install alongside the release app and
+never touch real data:
+
+| | Release app | Dev variant |
+| --- | --- | --- |
+| applicationId | `com.ncan.privatecycle` | `com.ncan.privatecycle.dev` |
+| Label / scheme | PrivateCycle / `myapp` | PrivateCycle Dev / `privatecycle-dev` |
+| Icon tint | pink | blue |
+
+```sh
+npm run prebuild:android:dev   # once, and after native config/dependency changes
+npm run android:dev            # build + install + start Metro (dev client)
+```
+
+- `android:dev` refuses to run when `android/` was generated for the base
+  package; regenerate with `prebuild:android:dev` first — never let a dev
+  build install over the production package.
+- Day-to-day JS-only changes: keep Metro running (`npm run dev`) and reload
+  the dev app; no rebuild needed.
+- Emulator ABI only (faster):
+  `ORG_GRADLE_PROJECT_reactNativeArchitectures=x86_64 npm run android:dev`.
+- Switching back to the base identity locally:
+  `npm run prebuild:android` then `npm run android` (or plain
+  `npx expo run:android` after regenerating).
+- Backup testing: export a backup in the release app (share sheet → Files),
+  then import it in the dev app via Settings → Import Backup. On the emulator
+  `adb push backup.json /sdcard/Download/` also works.
 - Release sanity check: the tagged GitHub Actions workflow builds the APK
   (`android-release.yml`). Don't reproduce that locally unless debugging CI.
 
@@ -62,14 +85,18 @@ data on device; the `?seed` URL mechanism is web-only.
 
 ## Maestro flows
 
-`maestro/smoke.yaml` covers launch → tabs → track save → back to calendar.
-Validated on the `privatecycle` AVD via `npm run e2e:mobile` (≈1 min). Run with:
+`maestro/smoke.yaml` covers launch → tabs → track save → back to calendar,
+targeting the dev variant. Validated on the `privatecycle` AVD via
+`npm run e2e:mobile` (≈1 min). Run with:
 
 ```sh
 npm run e2e:mobile                      # = ~/.maestro/bin/maestro test maestro/
-~/.maestro/bin/maestro test maestro/    # if you prefer the raw command
 ~/.maestro/bin/maestro hierarchy        # inspect the view tree if selectors fail
 ```
+
+Notes:
+- The flow dismisses the dev client's one-time "Continue" onboarding overlay
+  and waits up to 90 s for the JS bundle after a cold start.
 
 Notes:
 - Flows select by `id:`, which maps to React Native `testID` on Android. Keep
