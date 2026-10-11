@@ -1,10 +1,12 @@
 name: CI
 
-# Per-commit verification + signed APK.
+# Per-commit verification + signed APKs.
 #
-# Pushes to main run typecheck, Jest, then a signed release APK (arm64-v8a).
-# The APK is uploaded as a workflow artifact; publishing a GitHub Release
-# stays tag-only in android-release.yml.
+# Pushes to main run typecheck, Jest, then two signed release APKs:
+#  - stable identity (com.ncan.privatecycle) -> rolling `ci-latest` prerelease
+#  - nightly identity (com.ncan.privatecycle.nightly) -> rolling `nightly`
+#    prerelease; installs next to the stable app for testing with real data
+# Versioned release publishing stays tag-only in android-release.yml.
 #
 # Caches (see steps below for the reasoning):
 #  - native-libs-v2: Gradle/CMake outputs of autolinked libraries and the
@@ -135,9 +137,11 @@ jobs:
 
       # android/ is generated fresh on every run. Without these caches Gradle
       # recompiles all New Architecture C++ from scratch (the ~15 min cost).
+      # Restore-only: the matching explicit save runs right after the stable
+      # build, before the nightly prebuild wipes android/ (see below).
       - name: Restore app build outputs
         id: app-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             android/.gradle
@@ -209,6 +213,72 @@ jobs:
           fi
           gh release upload ci-latest PrivateCycle.apk --clobber
 
+      # Snapshot the stable build outputs while android/ still holds them: the
+      # nightly prebuild below wipes the directory, and the implicit cache save
+      # at job end would otherwise store nightly-identity artifacts under the
+      # stable app-build key. Skipped when this run restored the exact key
+      # (cache entries are immutable, so saving again would be a no-op).
+      - name: Save app build outputs (stable)
+        if: steps.app-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            android/.gradle
+            android/build
+            android/app/build
+            android/app/.cxx
+          key: app-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
+
+      # --- Nightly channel -------------------------------------------------
+      # Same code, separate identity (com.ncan.privatecycle.nightly): a
+      # standalone release build that installs alongside the stable app, so
+      # features can be tried against imported real data without touching it.
+      # `prebuild --clean` wipes android/, so the CI tuning, keystore and
+      # codegen must be re-applied; ccache and the Gradle home keep this
+      # second build cheap.
+      - name: Prebuild nightly variant
+        run: APP_VARIANT=nightly npx expo prebuild --platform android --clean --no-install
+
+      - name: Tune Gradle for CI (nightly)
+        run: |
+          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+
+      - name: Decode release keystore (nightly)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
+      - name: Generate New Architecture codegen (nightly)
+        working-directory: android
+        run: ./gradlew generateCodegenArtifactsFromSchema
+
+      - name: Build nightly APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease --build-cache \
+            -x lintVitalRelease -x lintVitalAnalyzeRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -PMYAPP_RELEASE_STORE_FILE=release.keystore \
+            -PMYAPP_RELEASE_STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
+            -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
+            -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+
+      - name: Publish rolling nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle-Nightly.apk
+          NOTES="Nightly of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly --notes "$NOTES"
+          else
+            gh release create nightly --prerelease --title "PrivateCycle (Nightly)" \
+              --notes "$NOTES" --target "$GITHUB_SHA"
+          fi
+          gh release upload nightly PrivateCycle-Nightly.apk --clobber
+
       - name: Cache diagnostics
         if: always()
         run: |
@@ -227,6 +297,7 @@ jobs:
             echo "## CI"
             echo ""
             echo "- Commit: \`${GITHUB_SHA:0:7}\`"
-            echo "- APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/ci-latest"
+            echo "- Stable APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/ci-latest"
+            echo "- Nightly APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/nightly"
             echo "- Trigger: \`${GITHUB_EVENT_NAME}\`"
           } >> "$GITHUB_STEP_SUMMARY"

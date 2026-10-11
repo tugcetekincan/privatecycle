@@ -41,22 +41,33 @@ Wireless (Android 11+): enable Developer options → Wireless debugging →
 
 ## Build and install
 
-Local dev builds use a **separate app identity** (defined in `app.config.js`,
-enabled by `APP_VARIANT=dev`) so they install alongside the release app and
-never touch real data:
+The app can exist in **three identities** (defined in `app.config.js`); each
+has its own applicationId and data sandbox, so they coexist on one device:
 
-| | Release app | Dev variant |
-| --- | --- | --- |
-| applicationId | `com.ncan.privatecycle` | `com.ncan.privatecycle.dev` |
-| Label / scheme | PrivateCycle / `myapp` | PrivateCycle Dev / `privatecycle-dev` |
-| Icon tint | pink | blue |
+| | Stable app | Dev (local) | Nightly (CI) |
+| --- | --- | --- | --- |
+| applicationId | `com.ncan.privatecycle` | `com.ncan.privatecycle.dev` | `com.ncan.privatecycle.nightly` |
+| Label / scheme | PrivateCycle / `myapp` | PrivateCycle Dev / `privatecycle-dev` | PrivateCycle Nightly / `privatecycle-nightly` |
+| Icon tint | pink | blue | amber |
+| Signed with | release key (CI) | debug key | release key (CI) |
+| JS source | embedded | Metro (dev client) | embedded |
+| How to get it | `ci-latest` release | `npm run android:dev` | `nightly` release |
+
+Local dev builds:
 
 ```sh
 npm run prebuild:android:dev   # once, and after native config/dependency changes
 npm run android:dev            # build + install + start Metro (dev client)
 ```
 
-- `android:dev` refuses to run when `android/` was generated for the base
+For testing features against imported real data **without a local build**,
+download `PrivateCycle-Nightly.apk` from the rolling `nightly` pre-release
+(rebuilt on every push to `main`). Export a backup from the stable app
+(share sheet → Files), then import it in the nightly app via
+Settings → Import Backup. On the emulator
+`adb push backup.json /sdcard/Download/` also works.
+
+- `android:dev` refuses to run when `android/` was generated for another
   package; regenerate with `prebuild:android:dev` first — never let a dev
   build install over the production package.
 - Day-to-day JS-only changes: keep Metro running (`npm run dev`) and reload
@@ -66,9 +77,6 @@ npm run android:dev            # build + install + start Metro (dev client)
 - Switching back to the base identity locally:
   `npm run prebuild:android` then `npm run android` (or plain
   `npx expo run:android` after regenerating).
-- Backup testing: export a backup in the release app (share sheet → Files),
-  then import it in the dev app via Settings → Import Backup. On the emulator
-  `adb push backup.json /sdcard/Download/` also works.
 - Release sanity check: the tagged GitHub Actions workflow builds the APK
   (`android-release.yml`). Don't reproduce that locally unless debugging CI.
 

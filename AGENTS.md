@@ -200,17 +200,23 @@ A change is done when:
 
 ## CI
 
-Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then a
-signed release APK (arm64-v8a, release keystore) published to the rolling
-`ci-latest` pre-release, downloadable straight from the Releases page
-(`PrivateCycle.apk`); workflow artifacts are not used. `workflow_dispatch`
-re-runs it on demand; pushes that only touch markdown, `artifacts/`,
-`maestro/` or `.opencode/` are skipped; superseded runs are cancelled. Cold
-builds are ~15 min; warm builds reuse cross-run caches (Gradle home,
-`native-libs-v3`, `app-build-v1`, ccache) and are much faster. Cache keys are
-versioned — **bump the version suffix when the cached paths change**, because
-GitHub's cache entries are immutable and an old key would keep restoring the
-old layout. Versioned release publishing stays tag-only (see below).
+Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then
+two signed release APKs (arm64-v8a, release keystore) published to rolling
+pre-releases, downloadable straight from the Releases page; workflow
+artifacts are not used:
+
+- `ci-latest` → `PrivateCycle.apk` — stable identity;
+- `nightly` → `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`,
+  installable next to the stable app to test with imported real data.
+
+`workflow_dispatch` re-runs it on demand; pushes that only touch markdown,
+`artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
+cancelled. Cold builds are ~15 min; warm builds reuse cross-run caches
+(Gradle home, `native-libs-v3`, `app-build-v1`, ccache) and are much faster.
+Cache keys are versioned — **bump the version suffix when the cached paths
+change**, because GitHub's cache entries are immutable and an old key would
+keep restoring the old layout. Versioned release publishing stays tag-only
+(see below).
 
 ## Releases
 
@@ -235,12 +241,15 @@ and bump `expo.version` in `app.json` first. Details and secrets:
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
 - `@react-native-community/datetimepicker` has no web implementation — the
   Track screen renders an `<input type="date">` on web instead.
-- **Local dev builds are the dev app variant.** `npm run android:dev`
-  installs `com.ncan.privatecycle.dev` ("PrivateCycle Dev", blue icon)
-  alongside the release app, with its own data sandbox — import a backup
-  exported from the release app to test with realistic data. `android/`
+- **Three installable identities.** Stable `com.ncan.privatecycle` (release
+  APK / `ci-latest`), local dev `com.ncan.privatecycle.dev` ("PrivateCycle
+  Dev", blue icon, debug-signed dev client, `npm run android:dev`), and
+  nightly `com.ncan.privatecycle.nightly` ("PrivateCycle Nightly", amber
+  icon, release-signed, downloadable from the `nightly` pre-release). They
+  coexist on one device with separate data sandboxes — import a backup
+  exported from the stable app to test with realistic data. `android/`
   targets one identity at a time: `android:dev` refuses to run when it was
-  generated for the base package, and `npm run prebuild:android` switches
+  generated for another package, and `npm run prebuild:android` switches
   back. Details in the `privatecycle-mobile` skill.
 - This machine: Android SDK, platform-tools, NDK, CMake, Maestro and a
   `privatecycle` AVD are installed. `npm run emulator:start` boots the emulator
