@@ -16,7 +16,7 @@
       "package": "com.ncan.privatecycle",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#de908b"
+        "backgroundColor": "#eae6d5"
       }
     },
     "web": {

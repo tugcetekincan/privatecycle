@@ -1,0 +1,41 @@
+<!-- PrivateCycle launcher icon — "Groove" (linocut pressed bud)
+     Source of truth for assets/images/icon.png (full-bleed),
+     assets/images/adaptive-icon.png (this file without the bg rect,
+     recentered/scaled into the adaptive safe zone) and favicon.png.
+     Edit here, then re-render the PNGs; keep the wobble/flat-ink look. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <filter id="carve" x="-6%" y="-6%" width="112%" height="112%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="23" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.26  0 0 0 0 0.26  0 0 0 0 0.18  0 0 0 0.55 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#eae6d5"/>
+
+  <g transform="translate(-26,-12)" filter="url(#carve)" fill="#b34d2e">
+    <!-- stem -->
+    <path d="M480 822 C 452 660 508 560 566 436" fill="none" stroke="#b34d2e" stroke-width="30" stroke-linecap="round"/>
+
+    <!-- left leaf -->
+    <path d="M505 604 C 416 592 362 542 362 486 C 362 448 396 420 434 424 C 494 432 522 530 505 604 Z"/>
+    <!-- left leaf carve slits -->
+    <path d="M484 572 C 440 570 404 542 428 510" fill="none" stroke="#eae6d5" stroke-width="13"/>
+    <path d="M452 480 C 424 478 416 452 436 438" fill="none" stroke="#eae6d5" stroke-width="11"/>
+
+    <!-- right leaf -->
+    <path d="M556 520 C 606 470 668 440 706 462 C 736 480 740 500 722 522 C 694 556 618 556 556 520 Z"/>
+    <path d="M664 474 C 688 468 706 486 694 508" fill="none" stroke="#eae6d5" stroke-width="11"/>
+
+    <!-- bud -->
+    <path d="M566 252 C 600 298 626 338 626 386 C 626 424 600 448 566 448 C 532 448 506 424 506 386 C 506 338 532 298 566 252 Z"/>
+    <path d="M552 302 C 538 326 532 356 540 388" fill="none" stroke="#eae6d5" stroke-width="11"/>
+    <path d="M586 298 C 600 326 606 356 598 388" fill="none" stroke="#eae6d5" stroke-width="10"/>
+  </g>
+
+  <rect width="1024" height="1024" filter="url(#grain)" opacity="0.10"/>
+</svg>
