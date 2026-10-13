@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 
+import Constants from 'expo-constants';
 const isWeb = Platform.OS === 'web';
 import { 
   Settings as SettingsIcon, 
@@ -204,9 +205,10 @@ export default function SettingsTab() {
   };
 
   const showAbout = () => {
+    const version = Constants.expoConfig?.version ?? 'unknown';
     showInfo(
       'About Period Tracker',
-      'A simple and private period tracking app to help you monitor your menstrual cycle, symptoms, and overall health patterns.\n\nVersion 1.0.0'
+      `A simple and private period tracking app to help you monitor your menstrual cycle, symptoms, and overall health patterns.\n\nVersion ${version}`
     );
   };
 
