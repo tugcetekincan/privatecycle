@@ -27,16 +27,17 @@ current when the workflow changes. Deeper runbooks live in
 ```
 app/                    expo-router screens
   _layout.tsx           providers, migration gate, dev-seed gate, dev globals
-  (tabs)/index.tsx      Calendar (month grid, day modal, predictions)
-  (tabs)/track.tsx      Daily logging (period/flow/symptoms/mood)
-  (tabs)/insights.tsx   Cycle stats from DataService.getInsights()
+  (tabs)/index.tsx      Calendar (month grid, day modal, period + fertility forecast)
+  (tabs)/track.tsx      Daily logging (period/ovulation/flow/symptoms/mood)
+  (tabs)/insights.tsx   Cycle + fertility stats from DataService
   (tabs)/settings.tsx   Preferences, backup UI, Developer section (__DEV__)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo)
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady
 services/               DataService (SQLite owner), BackupService,
-                        AnalyticsService, DevSeedService, devGlobals
+                        AnalyticsService, DevSeedService, FertilityService
+                        (pure ovulation/fertile-window forecast), devGlobals
 scripts/                web harness (see below), debug probe
 __tests__/              Jest suites
 maestro/                on-device smoke flow
@@ -151,6 +152,10 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   guards this.
 - Period-start detection lives in SQL (`DATE(date, '-1 day')`) and in
   `AnalyticsService.getCyclePhase`; keep both consistent if you touch them.
+- Ovulation/fertile-window forecasting is pure math in
+  `services/FertilityService.ts` (day helpers in `services/dateKey.ts`),
+  exposed through `DataService.getFertilityForecast()`. Recorded ovulation
+  beats the prediction for the cycle it belongs to.
 
 **Backups**
 - `BackupData` JSON is a public interface: users keep these files. Only add
