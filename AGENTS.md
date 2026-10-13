@@ -218,6 +218,10 @@ Each publish also refreshes the release title with the build commit and UTC
 date (e.g. `PrivateCycle (Nightly) · caa4d80 · 2026-10-13`), so the Releases
 page shows which build is current without opening it.
 
+Every build stamps a build-time `versionCode` (unix minutes, wired through
+`ANDROID_VERSION_CODE` in `app.config.js`), so each APK is installable over
+the previous one — updater apps that compare versionCodes rely on this.
+
 `workflow_dispatch` re-runs it on demand; pushes that only touch markdown,
 `artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
 cancelled. Cold builds are ~15 min; warm builds reuse cross-run caches

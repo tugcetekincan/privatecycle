@@ -45,7 +45,10 @@ jobs:
         run: npm ci
 
       - name: Prebuild Android project
-        run: npx expo prebuild --platform android --no-install
+        run: |
+          # Build-time versionCode (unix minutes), increasing with every release.
+          export ANDROID_VERSION_CODE=$(($(date +%s) / 60))
+          npx expo prebuild --platform android --no-install
 
       - name: Tune Gradle for CI
         run: |

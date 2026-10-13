@@ -34,13 +34,40 @@ const VARIANTS = {
 
 const variant = VARIANTS[process.env.APP_VARIANT];
 
-module.exports = ({ config }) => {
-  if (!variant) {
+/**
+ * Every CI/release build stamps ANDROID_VERSION_CODE (unix minutes) so the
+ * versionCode strictly increases with each build and any APK installs over an
+ * older one. Updater apps (Obtainium etc.) compare versionCodes, so without
+ * this every build would look like the same version. Local builds keep
+ * app.json's value (currently unset -> Expo's default).
+ */
+const withVersionCode = (config) => {
+  const raw = process.env.ANDROID_VERSION_CODE;
+  if (!raw) {
     return config;
+  }
+  const versionCode = Number(raw);
+  if (!Number.isInteger(versionCode) || versionCode <= 0) {
+    throw new Error(`Invalid ANDROID_VERSION_CODE: ${raw}`);
+  }
+  return {
+    ...config,
+    android: {
+      ...config.android,
+      versionCode,
+    },
+  };
+};
+
+module.exports = ({ config }) => {
+  const base = withVersionCode(config);
+
+  if (!variant) {
+    return base;
   }
 
   return {
-    ...config,
+    ...base,
     name: variant.name,
     // Distinct slug too: expo-dev-client derives its `exp+<slug>` deep-link
     // scheme from it, and sharing one would make `expo run:android` ambiguous
@@ -48,16 +75,16 @@ module.exports = ({ config }) => {
     slug: variant.slug,
     scheme: variant.scheme,
     android: {
-      ...config.android,
+      ...base.android,
       package: variant.package,
       adaptiveIcon: {
-        ...config.android?.adaptiveIcon,
+        ...base.android?.adaptiveIcon,
         // Distinct launcher tint so the channels are never confused.
         backgroundColor: variant.iconColor,
       },
     },
     ios: {
-      ...config.ios,
+      ...base.ios,
       bundleIdentifier: variant.package,
     },
   };

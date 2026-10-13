@@ -133,7 +133,11 @@ jobs:
             native-libs-v3-${{ runner.os }}-
 
       - name: Prebuild Android project
-        run: npx expo prebuild --platform android --no-install
+        run: |
+          # Build-time versionCode (unix minutes): every APK must install over
+          # the previous one, and updaters compare versionCodes.
+          export ANDROID_VERSION_CODE=$(($(date +%s) / 60))
+          npx expo prebuild --platform android --no-install
 
       # android/ is generated fresh on every run. Without these caches Gradle
       # recompiles all New Architecture C++ from scratch (the ~15 min cost).
@@ -240,7 +244,9 @@ jobs:
       # codegen must be re-applied; ccache and the Gradle home keep this
       # second build cheap.
       - name: Prebuild nightly variant
-        run: APP_VARIANT=nightly npx expo prebuild --platform android --clean --no-install
+        run: |
+          export ANDROID_VERSION_CODE=$(($(date +%s) / 60))
+          APP_VARIANT=nightly npx expo prebuild --platform android --clean --no-install
 
       - name: Tune Gradle for CI (nightly)
         run: |
