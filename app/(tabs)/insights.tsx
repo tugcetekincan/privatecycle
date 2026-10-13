@@ -9,7 +9,12 @@ import {
 import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
+import { FertilityForecast } from '@/services/FertilityService';
+import { daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
+
+// Intentional accent for ovulation marks; keeps them distinct from period pink.
+const OVULATION_COLOR = '#009688';
 
 export default function InsightsTab() {
   const { theme } = useTheme();
@@ -21,10 +26,15 @@ export default function InsightsTab() {
     commonSymptoms: [] as Array<{symptom: string, count: number}>,
     moodTrends: [] as Array<{mood: string, count: number}>,
   });
+  const [fertility, setFertility] = useState<FertilityForecast | null>(null);
 
   const loadInsights = useCallback(async () => {
-    const data = await DataService.getInsights();
+    const [data, ovulation] = await Promise.all([
+      DataService.getInsights(),
+      DataService.getFertilityForecast(),
+    ]);
     setStats(data);
+    setFertility(ovulation);
   }, []);
 
   useFocusEffect(
@@ -57,7 +67,20 @@ export default function InsightsTab() {
     return emojiMap[mood] || '😐';
   };
 
+  const formatShortDate = (dateKey: string) => {
+    return parseDateKey(dateKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const daysUntilLabel = (dateKey: string) => {
+    const days = daysBetween(parseDateKey(formatDateKey(new Date())), parseDateKey(dateKey));
+    if (days <= 0) return 'today';
+    return days === 1 ? 'in 1 day' : `in ${days} days`;
+  };
+
   const styles = createStyles(theme);
+
+  const currentCycleOvulation = fertility?.currentCycleOvulation ?? null;
+  const nextCycleForecast = fertility?.cycles[0] ?? null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -97,6 +120,45 @@ export default function InsightsTab() {
             <Text style={styles.statLabel}>Total Tracked</Text>
             <Text style={styles.statUnit}>periods</Text>
           </View>
+        </View>
+
+        {/* Fertility */}
+        <View testID="insights-fertility-card" style={styles.card}>
+          <Text style={styles.cardTitle}>Fertility</Text>
+          {currentCycleOvulation || nextCycleForecast ? (
+            <View style={styles.fertilityRows}>
+              {currentCycleOvulation && (
+                <View style={styles.fertilityRow}>
+                  <Text style={styles.fertilityLabel}>Recorded ovulation</Text>
+                  <Text testID="insights-recorded-ovulation" style={styles.fertilityValue}>
+                    {formatShortDate(currentCycleOvulation)}
+                  </Text>
+                </View>
+              )}
+              {nextCycleForecast && (
+                <>
+                  <View style={styles.fertilityRow}>
+                    <Text style={styles.fertilityLabel}>Next ovulation</Text>
+                    <Text testID="insights-next-ovulation" style={styles.fertilityValue}>
+                      {formatShortDate(nextCycleForecast.ovulationDate)} ({daysUntilLabel(nextCycleForecast.ovulationDate)})
+                    </Text>
+                  </View>
+                  <View style={styles.fertilityRow}>
+                    <Text style={styles.fertilityLabel}>Fertile window</Text>
+                    <Text testID="insights-fertile-window" style={styles.fertilityValue}>
+                      {formatShortDate(nextCycleForecast.windowStart)} – {formatShortDate(nextCycleForecast.windowEnd)}
+                    </Text>
+                  </View>
+                </>
+              )}
+              <Text style={styles.fertilityNote}>
+                {fertility?.stats.basis === 'recorded' ? 'Personalized from your recorded cycles' : 'Estimated from a standard cycle'}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.noDataText}>Track your period to see fertility forecasts!</Text>
+          )}
+          <Text style={styles.fertilityDisclaimer}>Wellness estimate — not a contraceptive method.</Text>
         </View>
 
         {/* Common Symptoms */}
@@ -364,5 +426,33 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.colors.text,
     flex: 1,
     lineHeight: 22,
+  },
+  fertilityRows: {
+    gap: 12,
+  },
+  fertilityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fertilityLabel: {
+    fontSize: 16,
+    color: theme.colors.textSecondary,
+  },
+  fertilityValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: OVULATION_COLOR,
+  },
+  fertilityNote: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
+  },
+  fertilityDisclaimer: {
+    fontSize: 11,
+    color: theme.colors.textSecondary,
+    marginTop: 10,
+    fontStyle: 'italic',
   },
 });

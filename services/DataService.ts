@@ -1,12 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-
-// Utility function to format date without timezone issues
-const formatDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { computeFertilityForecast, FertilityForecast } from './FertilityService';
+import { formatDateKey } from './dateKey';
 
 export interface DailyData {
   date: string;
@@ -14,10 +8,12 @@ export interface DailyData {
   flowLevel: string;
   symptoms: string[];
   mood: string;
+  isOvulation: boolean;
 }
 
 export interface PeriodData {
   periods: string[];
+  ovulationDays: string[];
   symptoms: { [date: string]: string[] };
   moods: { [date: string]: string };
 }
@@ -79,6 +75,13 @@ const MIGRATIONS: Migration[] = [
         CREATE INDEX IF NOT EXISTS idx_daily_data_date ON daily_data(date);
         CREATE INDEX IF NOT EXISTS idx_daily_data_period ON daily_data(is_period);
       `);
+    },
+  },
+  {
+    version: 2,
+    name: 'add_ovulation_flag',
+    up: async (db) => {
+      await addColumnIfMissing(db, 'daily_data', 'is_ovulation', 'INTEGER NOT NULL DEFAULT 0');
     },
   },
 ];
@@ -176,12 +179,35 @@ class SQLiteDataService {
     return this.db;
   }
 
+  /** Recorded period start days (first day of each consecutive period run), ascending. */
+  private async queryPeriodStarts(db: SQLite.SQLiteDatabase): Promise<string[]> {
+    const rows = await db.getAllAsync(`
+      WITH period_days AS (
+        SELECT date, 
+               DATE(date, '-1 day') as prev_day
+        FROM daily_data 
+        WHERE is_period = 1
+        ORDER BY date
+      )
+      SELECT pd.date
+      FROM period_days pd
+      LEFT JOIN daily_data prev ON prev.date = pd.prev_day AND prev.is_period = 1
+      WHERE prev.date IS NULL
+      ORDER BY pd.date
+    `) as { date: string }[];
+    return rows.map(row => row.date);
+  }
+
   async getPeriodData(): Promise<PeriodData> {
     try {
       const db = await this.ensureInitialized();
       
       const periodsResult = await db.getAllAsync(
         'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
+      ) as { date: string }[];
+      
+      const ovulationResult = await db.getAllAsync(
+        'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
       ) as { date: string }[];
       
       const symptomsResult = await db.getAllAsync(
@@ -193,6 +219,7 @@ class SQLiteDataService {
       ) as { date: string; mood: string }[];
 
       const periods = periodsResult.map(row => row.date);
+      const ovulationDays = ovulationResult.map(row => row.date);
       
       const symptoms: { [date: string]: string[] } = {};
       symptomsResult.forEach(row => {
@@ -213,10 +240,10 @@ class SQLiteDataService {
         }
       });
 
-      return { periods, symptoms, moods };
+      return { periods, ovulationDays, symptoms, moods };
     } catch (error) {
       console.error('Error loading period data:', error);
-      return { periods: [], symptoms: {}, moods: {} };
+      return { periods: [], ovulationDays: [], symptoms: {}, moods: {} };
     }
   }
 
@@ -238,19 +265,21 @@ class SQLiteDataService {
         isPeriod: data.isPeriod,
         flowLevel,
         symptoms,
-        mood
+        mood,
+        isOvulation: data.isOvulation
       });
 
       await db.runAsync(
         `INSERT OR REPLACE INTO daily_data
-         (date, is_period, flow_level, symptoms, mood)
-         VALUES (?, ?, ?, ?, ?)`,
+         (date, is_period, flow_level, symptoms, mood, is_ovulation)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           dateKey,
           data.isPeriod ? 1 : 0,
           flowLevel,
           symptoms,
-          mood
+          mood,
+          data.isOvulation ? 1 : 0
         ]
       );
 
@@ -280,14 +309,15 @@ class SQLiteDataService {
       for (const [dateKey, day] of entries) {
         await db.runAsync(
           `INSERT OR REPLACE INTO daily_data
-           (date, is_period, flow_level, symptoms, mood)
-           VALUES (?, ?, ?, ?, ?)`,
+           (date, is_period, flow_level, symptoms, mood, is_ovulation)
+           VALUES (?, ?, ?, ?, ?, ?)`,
           [
             dateKey,
             day.isPeriod ? 1 : 0,
             day.flowLevel || '',
             JSON.stringify(day.symptoms || []),
             day.mood || '',
+            day.isOvulation ? 1 : 0,
           ]
         );
       }
@@ -307,6 +337,7 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
+        is_ovulation: number;
       } | null;
 
       if (!result) return null;
@@ -316,7 +347,8 @@ class SQLiteDataService {
         isPeriod: result.is_period === 1,
         flowLevel: result.flow_level,
         symptoms: JSON.parse(result.symptoms),
-        mood: result.mood
+        mood: result.mood,
+        isOvulation: result.is_ovulation === 1
       };
     } catch (error) {
       console.error('Error loading today data:', error);
@@ -336,6 +368,7 @@ class SQLiteDataService {
         flow_level: string;
         symptoms: string;
         mood: string;
+        is_ovulation: number;
       }[];
 
       const dailyData: { [date: string]: DailyData } = {};
@@ -346,7 +379,8 @@ class SQLiteDataService {
           isPeriod: row.is_period === 1,
           flowLevel: row.flow_level,
           symptoms: JSON.parse(row.symptoms),
-          mood: row.mood
+          mood: row.mood,
+          isOvulation: row.is_ovulation === 1
         };
       });
 
@@ -361,24 +395,7 @@ class SQLiteDataService {
     try {
       const db = await this.ensureInitialized();
       
-      // Get period start dates using SQL for better performance
-      const periodStartsQuery = `
-        WITH period_days AS (
-          SELECT date, 
-                 DATE(date, '-1 day') as prev_day
-          FROM daily_data 
-          WHERE is_period = 1
-          ORDER BY date
-        )
-        SELECT pd.date
-        FROM period_days pd
-        LEFT JOIN daily_data prev ON prev.date = pd.prev_day AND prev.is_period = 1
-        WHERE prev.date IS NULL
-        ORDER BY pd.date
-      `;
-      
-      const periodStartsResult = await db.getAllAsync(periodStartsQuery) as { date: string }[];
-      const periodStarts = periodStartsResult.map(row => row.date);
+      const periodStarts = await this.queryPeriodStarts(db);
       
       // Calculate average cycle length
       let averageCycle = 28;
@@ -507,6 +524,29 @@ class SQLiteDataService {
     }
   }
 
+  /**
+   * Ovulation + fertile-window forecast derived from recorded data. The math
+   * itself is pure (see FertilityService); this only loads the raw day lists.
+   */
+  async getFertilityForecast(): Promise<FertilityForecast> {
+    try {
+      const db = await this.ensureInitialized();
+      const periodStarts = await this.queryPeriodStarts(db);
+      const ovulationResult = await db.getAllAsync(
+        'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
+      ) as { date: string }[];
+
+      return computeFertilityForecast({
+        periodStarts,
+        ovulationDays: ovulationResult.map(row => row.date),
+        today: new Date(),
+      });
+    } catch (error) {
+      console.error('Error calculating fertility forecast:', error);
+      return computeFertilityForecast({ periodStarts: [], ovulationDays: [], today: new Date() });
+    }
+  }
+
   async clearAllData(): Promise<void> {
     try {
       const db = await this.ensureInitialized();
@@ -532,14 +572,15 @@ class SQLiteDataService {
         for (const [date, data] of Object.entries(dailyData) as [string, any][]) {
           await db.runAsync(
             `INSERT OR REPLACE INTO daily_data
-             (date, is_period, flow_level, symptoms, mood)
-             VALUES (?, ?, ?, ?, ?)`,
+             (date, is_period, flow_level, symptoms, mood, is_ovulation)
+             VALUES (?, ?, ?, ?, ?, ?)`,
             [
               date,
               data.isPeriod ? 1 : 0,
               data.flowLevel || '',
               JSON.stringify(data.symptoms || []),
-              data.mood || ''
+              data.mood || '',
+              data.isOvulation ? 1 : 0
             ]
           );
         }
@@ -581,6 +622,10 @@ export class DataService {
 
   static async getInsights() {
     return sqliteDataService.getInsights();
+  }
+
+  static async getFertilityForecast(): Promise<FertilityForecast> {
+    return sqliteDataService.getFertilityForecast();
   }
 
   static async clearAllData(): Promise<void> {

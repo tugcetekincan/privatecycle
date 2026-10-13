@@ -16,12 +16,13 @@ const getInfoAsync = FileSystem.getInfoAsync as jest.Mock;
 
 const mockedDataService = DataService as jest.Mocked<typeof DataService>;
 
-const sampleDay = (date: string): DailyData => ({
+const sampleDay = (date: string, isOvulation = false): DailyData => ({
   date,
   isPeriod: true,
   flowLevel: 'medium',
   symptoms: ['cramps'],
   mood: 'calm',
+  isOvulation,
 });
 
 describe('BackupService', () => {
@@ -33,7 +34,7 @@ describe('BackupService', () => {
     it('wraps daily data with version, timestamp and metadata', async () => {
       mockedDataService.getAllDailyData.mockResolvedValue({
         '2026-01-02': sampleDay('2026-01-02'),
-        '2026-01-01': sampleDay('2026-01-01'),
+        '2026-01-01': sampleDay('2026-01-01', true),
       });
 
       const backup = await BackupService.createBackup();
@@ -42,6 +43,8 @@ describe('BackupService', () => {
       expect(typeof backup.timestamp).toBe('number');
       expect(backup.metadata.totalDays).toBe(2);
       expect(backup.metadata.dateRange).toEqual({ start: '2026-01-01', end: '2026-01-02' });
+      expect(backup.data.dailyData['2026-01-01'].isOvulation).toBe(true);
+      expect(backup.data.dailyData['2026-01-02'].isOvulation).toBe(false);
     });
 
     it('handles an empty database', async () => {

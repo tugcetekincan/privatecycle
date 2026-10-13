@@ -50,6 +50,37 @@ describe('generateDemoDailyData', () => {
       expect(day.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
   });
+
+  it('marks at most one ovulation day per cycle, 13-15 days after a period start', () => {
+    const data = generateDemoDailyData({ days: 120, endDate: END, seed: 7 });
+    const keys = Object.keys(data).sort();
+    const toDate = (key: string) => {
+      const [y, m, d] = key.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+
+    const ovulationDays = keys.filter((key) => data[key].isOvulation);
+    expect(ovulationDays.length).toBeGreaterThan(2);
+
+    const starts = keys.filter(
+      (key, index) => data[key].isPeriod && (index === 0 || !data[keys[index - 1]].isPeriod)
+    );
+
+    for (const ovulation of ovulationDays) {
+      const offset = starts
+        .map((start) => (toDate(ovulation).getTime() - toDate(start).getTime()) / (24 * 60 * 60 * 1000))
+        .filter((value) => value >= 0)
+        .sort((a, b) => a - b)[0];
+      expect(offset).toBeGreaterThanOrEqual(13);
+      expect(offset).toBeLessThanOrEqual(15);
+    }
+
+    for (let i = 0; i < starts.length; i++) {
+      const end = i + 1 < starts.length ? starts[i + 1] : '9999-12-31';
+      const marks = ovulationDays.filter((key) => key >= starts[i] && key < end).length;
+      expect(marks).toBeLessThanOrEqual(1);
+    }
+  });
 });
 
 describe('parseDevSeedAction', () => {

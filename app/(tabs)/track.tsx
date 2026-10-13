@@ -10,7 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Heart, Droplets, Smile, Calendar, ChevronDown } from 'lucide-react-native';
+import { Heart, Droplets, Smile, Calendar, ChevronDown, Egg } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
@@ -39,12 +39,16 @@ const MOODS = [
   { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
+// Intentional accent for ovulation marks; keeps them distinct from period pink.
+const OVULATION_COLOR = '#009688';
+
 export default function TrackTab() {
   const { theme } = useTheme();
   const { showSuccess, DialogComponent } = useDialog();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isPeriodDay, setIsPeriodDay] = useState(false);
+  const [isOvulation, setIsOvulation] = useState(false);
   const [flowLevel, setFlowLevel] = useState('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [selectedMood, setSelectedMood] = useState('');
@@ -61,6 +65,7 @@ export default function TrackTab() {
     if (data) {
       setTodayData(data);
       setIsPeriodDay(data.isPeriod || false);
+      setIsOvulation(data.isOvulation || false);
       setFlowLevel(data.flowLevel || '');
       setSelectedSymptoms(data.symptoms || []);
       setSelectedMood(data.mood || '');
@@ -68,6 +73,7 @@ export default function TrackTab() {
       // Reset for new day
       setTodayData(null);
       setIsPeriodDay(false);
+      setIsOvulation(false);
       setFlowLevel('');
       setSelectedSymptoms([]);
       setSelectedMood('');
@@ -82,6 +88,7 @@ export default function TrackTab() {
       flowLevel: isPeriodDay ? flowLevel : '',
       symptoms: selectedSymptoms,
       mood: selectedMood,
+      isOvulation,
     };
 
     await DataService.saveTodayData(dateKey, data);
@@ -246,6 +253,20 @@ export default function TrackTab() {
               </View>
             </View>
           )}
+        </View>
+
+        {/* Ovulation */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Ovulation</Text>
+          <TouchableOpacity
+            testID="track-ovulation-toggle"
+            style={[styles.ovulationButton, isOvulation && styles.ovulationButtonActive]}
+            onPress={() => setIsOvulation(!isOvulation)}>
+            <Egg size={20} color={isOvulation ? theme.colors.white : OVULATION_COLOR} />
+            <Text style={[styles.ovulationButtonText, isOvulation && styles.ovulationButtonTextActive]}>
+              {isOvulation ? 'Ovulation Day' : 'No Ovulation'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Symptoms */}
@@ -414,6 +435,27 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginLeft: 8,
   },
   periodButtonTextActive: {
+    color: '#fff',
+  },
+  ovulationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: OVULATION_COLOR,
+  },
+  ovulationButtonActive: {
+    backgroundColor: OVULATION_COLOR,
+  },
+  ovulationButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: OVULATION_COLOR,
+    marginLeft: 8,
+  },
+  ovulationButtonTextActive: {
     color: '#fff',
   },
   flowSection: {

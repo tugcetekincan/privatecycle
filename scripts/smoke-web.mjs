@@ -147,6 +147,10 @@ try {
   await page.getByTestId('calendar-month-label').waitFor({ state: 'visible', timeout: 30_000 });
   await page.screenshot({ path: shot('01-calendar'), fullPage: true });
 
+  // The seeded data must produce a fertility forecast card with predictions.
+  await page.getByTestId('calendar-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('calendar-next-ovulation').waitFor({ state: 'visible', timeout: 15_000 });
+
   // Watermark: sample a period day from the current month if one exists.
   const today = new Date();
   const monthPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
@@ -166,6 +170,12 @@ try {
   await page.getByTestId('track-flow-medium').click();
   await page.getByTestId('track-symptom-cramps').click();
   await page.getByTestId('track-mood-calm').click();
+
+  const ovulationToggle = page.getByTestId('track-ovulation-toggle');
+  const ovulationText = (await ovulationToggle.textContent()) ?? '';
+  if (ovulationText.includes('No Ovulation')) {
+    await ovulationToggle.click();
+  }
   await page.screenshot({ path: shot('02-track-filled'), fullPage: true });
 
   await page.getByTestId('track-save-button').click();
@@ -181,8 +191,19 @@ try {
   const sampleDay = `${monthPrefix}-15`;
   await page.getByTestId(`calendar-day-${sampleDay}`).click();
   await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-ovulation-toggle').waitFor({ state: 'visible', timeout: 15_000 });
+  // Let the slide-in animation settle so the screenshot shows the full sheet.
+  await page.waitForTimeout(600);
   await page.screenshot({ path: shot('04-calendar-day-modal'), fullPage: true });
   await page.getByTestId('day-modal-close').click();
+
+  const recordedOvulationCount = await page
+    .locator('[data-testid^="calendar-ovulation-recorded-"]')
+    .count();
+  log(`calendar: recorded ovulation marks this month = ${recordedOvulationCount}`);
+  if (recordedOvulationCount === 0) {
+    failures.push('expected at least one recorded ovulation mark in the current month');
+  }
   log('calendar day modal flow OK');
 
   // --- Insights: seeded data must produce non-trivial stats. ---
@@ -201,6 +222,8 @@ try {
   if (!(avgCycle >= 20 && avgCycle <= 40)) {
     failures.push(`insights avg cycle out of expected range: ${avgCycle}`);
   }
+  await page.getByTestId('insights-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('insights-next-ovulation').waitFor({ state: 'visible', timeout: 15_000 });
   await page.screenshot({ path: shot('05-insights'), fullPage: true });
 
   // --- Settings: dev tools, theme toggle, export button present. ---
@@ -213,6 +236,11 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.getByTestId('tab-track').click();
   await page.getByTestId('track-has-data').waitFor({ state: 'visible', timeout: 30_000 });
+
+  const persistedOvulation = (await page.getByTestId('track-ovulation-toggle').textContent()) ?? '';
+  if (!persistedOvulation.includes('Ovulation Day')) {
+    failures.push(`ovulation flag did not persist across reload: "${persistedOvulation}"`);
+  }
   log('persistence after reload OK');
 
   if (periodCell) {

@@ -63,9 +63,11 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
   // every 26-30 days, each lasting 4-6 days. Offsets are days relative to
   // endDate (0 = endDate, negative = earlier).
   const periodDays = new Set<number>();
+  const ovulationDays = new Set<number>();
   const flowByOffset = new Map<number, string>();
   let cursor = -days + 6;
   while (cursor <= 0) {
+    const start = cursor;
     const length = 4 + Math.floor(rng() * 3);
     const end = Math.min(cursor + length, 1); // clamp so today can be a period day
     for (let offset = cursor; offset < end; offset++) {
@@ -73,6 +75,9 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
       periodDays.add(offset);
       flowByOffset.set(offset, index === 0 ? 'light' : index <= 2 ? 'medium' : 'light');
     }
+    // One estimated ovulation per cycle, 13-15 days after the period start,
+    // so both recorded history and forecasts have data to show.
+    ovulationDays.add(start + 13 + Math.floor(rng() * 3));
     cursor += 26 + Math.floor(rng() * 5);
   }
 
@@ -83,6 +88,7 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
     date.setDate(date.getDate() + offset);
     const dateKey = DataService.formatDateKey(date);
     const isPeriod = periodDays.has(offset);
+    const isOvulation = ovulationDays.has(offset);
 
     const symptoms: string[] = [];
     if (isPeriod) {
@@ -102,6 +108,7 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
       flowLevel: isPeriod ? (flowByOffset.get(offset) ?? 'medium') : '',
       symptoms: [...new Set(symptoms)],
       mood,
+      isOvulation,
     };
   }
 

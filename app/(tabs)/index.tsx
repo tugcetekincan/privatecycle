@@ -11,8 +11,10 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets } from 'lucide-react-native';
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets, Egg } from 'lucide-react-native';
 import { DataService, DailyData } from '@/services/DataService';
+import { FertilityForecast } from '@/services/FertilityService';
+import { addDays, daysBetween, parseDateKey } from '@/services/dateKey';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
@@ -47,6 +49,15 @@ const MOODS = [
   { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
+// Intentional accent for ovulation marks; keeps them distinct from period pink.
+const OVULATION_COLOR = '#009688';
+
+// A predicted period span covers seven days from its start, as before.
+const PREDICTED_PERIOD_DAYS = 7;
+
+// Fertile window convention: five days before ovulation + ovulation day.
+const FERTILE_WINDOW_DAYS_BEFORE = 5;
+
 const { width: screenWidth } = Dimensions.get('window');
 
 export default function CalendarTab() {
@@ -55,8 +66,12 @@ export default function CalendarTab() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
-  const [nextPeriod, setNextPeriod] = useState<Date | null>(null);
-  const [futurePeriods, setFuturePeriods] = useState<Date[]>([]);
+  const [ovulationDates, setOvulationDates] = useState<string[]>([]);
+  const [futurePeriods, setFuturePeriods] = useState<string[]>([]);
+  const [predictedPeriodKeys, setPredictedPeriodKeys] = useState<Set<string>>(new Set());
+  const [fertileWindowKeys, setFertileWindowKeys] = useState<Set<string>>(new Set());
+  const [predictedOvulationKeys, setPredictedOvulationKeys] = useState<Set<string>>(new Set());
+  const [forecast, setForecast] = useState<FertilityForecast | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
   const [calendarHeight, setCalendarHeight] = useState(220);
@@ -92,71 +107,45 @@ export default function CalendarTab() {
   const loadData = async () => {
     const data = await DataService.getPeriodData();
     const dailyData = await DataService.getAllDailyData();
+    const fertility = await DataService.getFertilityForecast();
+
     setAllDailyData(dailyData);
     setPeriodDates(data.periods);
-    
+    setOvulationDates(data.ovulationDays);
+    setForecast(fertility);
+    setFuturePeriods(fertility.futurePeriodStarts);
+
     // Get dates where user explicitly marked "no period"
     const noPeriodDates = Object.entries(dailyData)
       .filter(([_, dayData]) => !dayData.isPeriod)
       .map(([date, _]) => date);
     setNoPeriodDates(noPeriodDates);
-    
-    // Calculate multiple predicted periods considering all tracked data
-    if (data.periods.length >= 1) {
-      const sortedPeriods = data.periods.sort();
-      
-      // Find all period start dates (first day of each consecutive period group)
-      const periodStarts: string[] = [];
-      const periodSet = new Set(sortedPeriods);
-      
-      for (const periodDate of sortedPeriods) {
-        const prevDay = new Date(periodDate);
-        prevDay.setDate(prevDay.getDate() - 1);
-        const prevDayStr = prevDay.toISOString().split('T')[0];
-        
-        if (!periodSet.has(prevDayStr)) {
-          periodStarts.push(periodDate);
-        }
-      }
-      
-      if (periodStarts.length >= 2) {
-        const avgCycle = calculateAverageCycleFromStarts(periodStarts);
-        const cycleVariability = calculateCycleVariability(periodStarts);
-        const lastPeriodStart = new Date(periodStarts[periodStarts.length - 1]);
-        
-        // Calculate multiple future periods (next 6 periods)
-        const predictions: Date[] = [];
-        for (let i = 1; i <= 6; i++) {
-          const predicted = new Date(lastPeriodStart);
-          // Add deterministic variability to predictions beyond the first one
-          // Use a seeded approach based on the last period date and prediction index
-          let adjustment = 0;
-          if (i > 1) {
-            const seed = lastPeriodStart.getTime() + i;
-            const pseudoRandom = (Math.sin(seed) + 1) / 2; // Normalize to 0-1
-            adjustment = Math.round((pseudoRandom - 0.5) * cycleVariability * 0.5);
-          }
-          predicted.setDate(predicted.getDate() + (avgCycle * i) + adjustment);
-          predictions.push(predicted);
-        }
-        
-        setNextPeriod(predictions[0]);
-        setFuturePeriods(predictions);
-      } else if (periodStarts.length === 1) {
-        // Use default cycle length for predictions
-        const lastPeriodStart = new Date(periodStarts[0]);
-        const predictions: Date[] = [];
-        
-        for (let i = 1; i <= 6; i++) {
-          const predicted = new Date(lastPeriodStart);
-          predicted.setDate(predicted.getDate() + (28 * i)); // Default cycle
-          predictions.push(predicted);
-        }
-        
-        setNextPeriod(predictions[0]);
-        setFuturePeriods(predictions);
+
+    // Predicted period days: seven days from each predicted start.
+    const predictedPeriodKeys = new Set<string>();
+    for (const start of fertility.futurePeriodStarts) {
+      const startDate = parseDateKey(start);
+      for (let offset = 0; offset < PREDICTED_PERIOD_DAYS; offset++) {
+        predictedPeriodKeys.add(formatDateKey(addDays(startDate, offset)));
       }
     }
+    setPredictedPeriodKeys(predictedPeriodKeys);
+
+    // Predicted fertile window / ovulation days; the service already omits
+    // cycles whose window has passed and cycles with a recorded ovulation.
+    const todayKey = formatDateKey(new Date());
+    const ovulationKeys = new Set<string>();
+    const windowKeys = new Set<string>();
+    for (const cycle of fertility.cycles) {
+      ovulationKeys.add(cycle.ovulationDate);
+      const windowStart = parseDateKey(cycle.windowStart);
+      for (let offset = 0; offset <= FERTILE_WINDOW_DAYS_BEFORE; offset++) {
+        const key = formatDateKey(addDays(windowStart, offset));
+        if (key >= todayKey) windowKeys.add(key);
+      }
+    }
+    setPredictedOvulationKeys(ovulationKeys);
+    setFertileWindowKeys(windowKeys);
   };
 
   const hasDataForDate = (date: Date): boolean => {
@@ -165,6 +154,7 @@ export default function CalendarTab() {
     // Only consider it as having data if it has meaningful content
     return data && (
       data.isPeriod || 
+      data.isOvulation ||
       data.symptoms.length > 0 || 
       data.mood !== '' || 
       data.flowLevel !== ''
@@ -182,6 +172,7 @@ export default function CalendarTab() {
       flowLevel: '',
       symptoms: [],
       mood: '',
+      isOvulation: false,
     });
     setModalVisible(true);
   };
@@ -215,56 +206,6 @@ export default function CalendarTab() {
         ? editingData.symptoms.filter(id => id !== symptomId)
         : [...editingData.symptoms, symptomId]
     });
-  };
-
-  const calculateAverageCycle = (periods: string[], noPeriodDates?: string[]): number => {
-    if (periods.length < 2) return 28;
-    
-    const cycles: number[] = [];
-    const sortedPeriods = periods.sort();
-    
-    for (let i = 1; i < sortedPeriods.length; i++) {
-      const prev = new Date(sortedPeriods[i - 1]);
-      const curr = new Date(sortedPeriods[i]);
-      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
-      cycles.push(diff);
-    }
-    
-    return Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length);
-  };
-
-  const calculateAverageCycleFromStarts = (periodStarts: string[]): number => {
-    if (periodStarts.length < 2) return 28;
-    
-    const cycles: number[] = [];
-    const sortedStarts = periodStarts.sort();
-    
-    for (let i = 1; i < sortedStarts.length; i++) {
-      const prev = new Date(sortedStarts[i - 1]);
-      const curr = new Date(sortedStarts[i]);
-      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
-      cycles.push(diff);
-    }
-    
-    return Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length);
-  };
-
-  const calculateCycleVariability = (periodStarts: string[]): number => {
-    if (periodStarts.length < 3) return 2; // Default variability
-    
-    const cycles: number[] = [];
-    const sortedStarts = periodStarts.sort();
-    
-    for (let i = 1; i < sortedStarts.length; i++) {
-      const prev = new Date(sortedStarts[i - 1]);
-      const curr = new Date(sortedStarts[i]);
-      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
-      cycles.push(diff);
-    }
-    
-    const mean = cycles.reduce((a, b) => a + b, 0) / cycles.length;
-    const variance = cycles.reduce((acc, cycle) => acc + Math.pow(cycle - mean, 2), 0) / cycles.length;
-    return Math.sqrt(variance);
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -303,14 +244,45 @@ export default function CalendarTab() {
     return noPeriodDates.includes(formatDateKey(date));
   };
 
+  const isOvulationDay = (date: Date) => {
+    return ovulationDates.includes(formatDateKey(date));
+  };
+
   const isPredictedPeriod = (date: Date) => {
-    if (futurePeriods.length === 0) return false;
-    
-    // Check if date falls within any predicted period (6-7 days each)
-    return futurePeriods.some(periodStart => {
-      const daysDiff = (date.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24);
-      return daysDiff >= 0 && daysDiff <= 6;
+    return predictedPeriodKeys.has(formatDateKey(date));
+  };
+
+  const isPredictedOvulationDay = (date: Date) => {
+    return predictedOvulationKeys.has(formatDateKey(date));
+  };
+
+  const isFertileWindowDay = (date: Date) => {
+    return fertileWindowKeys.has(formatDateKey(date));
+  };
+
+  const formatPredictionDate = (dateKey: string) => {
+    return parseDateKey(dateKey).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
     });
+  };
+
+  const formatShortDate = (dateKey: string) => {
+    return parseDateKey(dateKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const daysUntilLabel = (dateKey: string) => {
+    const days = daysBetween(parseDateKey(formatDateKey(new Date())), parseDateKey(dateKey));
+    if (days <= 0) return 'Today';
+    return days === 1 ? 'in 1 day' : `in ${days} days`;
+  };
+
+  const getOvulationHint = (date: Date): string | null => {
+    const key = formatDateKey(date);
+    if (predictedOvulationKeys.has(key)) return 'Predicted ovulation day';
+    if (fertileWindowKeys.has(key)) return 'Within the predicted fertile window';
+    return null;
   };
 
   // Generic helper function to determine day position for pill styling
@@ -444,32 +416,37 @@ export default function CalendarTab() {
     // Days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const dayDate = new Date(date.getFullYear(), date.getMonth(), day);
-      const isToday = formatDateKey(dayDate) === formatDateKey(new Date());
+      const dayKey = formatDateKey(dayDate);
+      const isToday = dayKey === formatDateKey(new Date());
       const isPeriod = isPeriodDay(dayDate);
       const isNoPeriod = isNoPeriodDay(dayDate);
       const isPredicted = isPredictedPeriod(dayDate);
-      
+      const isOvulation = isOvulationDay(dayDate);
+      const isPredictedOvulation = !isOvulation && isPredictedOvulationDay(dayDate);
+      const isFertile = isFertileWindowDay(dayDate);
+
       // Get day positions for pill styling
       const periodPosition = isPeriod ? getDayPosition(dayDate, isPeriodDay) : 'single';
       const noPeriodPosition = isNoPeriod ? getDayPosition(dayDate, isNoPeriodDay) : 'single';
       const predictedPosition = isPredicted ? getDayPosition(dayDate, isPredictedPeriod) : 'single';
-      
+
       // Get border radius styles
       const periodBorderRadius = isPeriod ? getDayBorderRadius(periodPosition) : {};
       const noPeriodBorderRadius = isNoPeriod ? getDayBorderRadius(noPeriodPosition) : {};
       const predictedBorderRadius = isPredicted ? getDayBorderRadius(predictedPosition) : {};
 
       const hasData = hasDataForDate(dayDate);
-      
+
       // Allow clicking on any day, not just ones with data
       const DayComponent = TouchableOpacity;
-      
+
       days.push(
         <DayComponent
           key={day}
-          testID={`calendar-day-${formatDateKey(dayDate)}`}
+          testID={`calendar-day-${dayKey}`}
           style={[
             styles.dayCell,
+            isFertile && styles.fertileWindowDay,
             isToday && styles.today,
             isPeriod && [styles.periodDay, periodBorderRadius],
             isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
@@ -490,6 +467,15 @@ export default function CalendarTab() {
           </Text>
           {isToday && (
             <View style={styles.todayIndicator} />
+          )}
+          {isOvulation && (
+            <View testID={`calendar-ovulation-recorded-${dayKey}`} style={styles.ovulationDot} />
+          )}
+          {isPredictedOvulation && (
+            <View
+              testID={`calendar-ovulation-predicted-${dayKey}`}
+              style={[styles.ovulationDot, styles.ovulationDotPredicted]}
+            />
           )}
         </DayComponent>
       );
@@ -517,6 +503,9 @@ export default function CalendarTab() {
   );
 
   const styles = createStyles(theme);
+
+  const currentCycleOvulation = forecast?.currentCycleOvulation ?? null;
+  const nextCycleForecast = forecast?.cycles[0] ?? null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -583,6 +572,14 @@ export default function CalendarTab() {
             <Text style={styles.legendText}>Predicted</Text>
           </View>
           <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: OVULATION_COLOR }]} />
+            <Text style={styles.legendText}>Ovulation</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, styles.legendFertileDot]} />
+            <Text style={styles.legendText}>Fertile window</Text>
+          </View>
+          <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: theme.colors.accent }]} />
             <Text style={styles.legendText}>Today</Text>
           </View>
@@ -594,25 +591,18 @@ export default function CalendarTab() {
             <Text style={styles.sectionTitle}>Upcoming Periods</Text>
             <View style={styles.card}>
               <View style={styles.predictionInfo}>
-                {futurePeriods.slice(0, 3).map((period, index) => {
-                  const today = new Date();
-                  const daysUntil = Math.ceil((period.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                  const isLast = index === futurePeriods.slice(0, 3).length - 1;
-                  
+                {futurePeriods.slice(0, 3).map((periodStart, index, shown) => {
+                  const isLast = index === shown.length - 1;
+
                   return (
-                    <View key={index} style={[
-                      styles.predictionInfoItem,
-                      isLast && styles.predictionInfoItemLast
-                    ]}>
+                    <View
+                      key={periodStart}
+                      style={[styles.predictionInfoItem, isLast && styles.predictionInfoItemLast]}>
                       <Text style={styles.predictionInfoLabel}>
-                        {period.toLocaleDateString('en-US', { 
-                          weekday: 'short', 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
+                        {formatPredictionDate(periodStart)}
                       </Text>
                       <Text style={styles.predictionInfoValue}>
-                        {daysUntil > 0 ? `${daysUntil} days` : 'Today'}
+                        {daysUntilLabel(periodStart)}
                       </Text>
                     </View>
                   );
@@ -621,6 +611,55 @@ export default function CalendarTab() {
             </View>
           </View>
         )}
+
+        {/* Fertility Forecast */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Fertility Forecast</Text>
+          <View testID="calendar-fertility-card" style={styles.card}>
+            {currentCycleOvulation || nextCycleForecast ? (
+              <View style={styles.predictionInfo}>
+                {currentCycleOvulation && (
+                  <View style={styles.predictionInfoItem}>
+                    <Text style={styles.predictionInfoLabel}>Recorded ovulation</Text>
+                    <Text testID="calendar-recorded-ovulation" style={styles.fertilityValue}>
+                      {formatShortDate(currentCycleOvulation)}
+                    </Text>
+                  </View>
+                )}
+                {nextCycleForecast && (
+                  <>
+                    <View style={styles.predictionInfoItem}>
+                      <Text style={styles.predictionInfoLabel}>
+                        {nextCycleForecast.isCurrentCycle ? 'Ovulation expected' : 'Next ovulation'}
+                      </Text>
+                      <Text testID="calendar-next-ovulation" style={styles.fertilityValue}>
+                        {formatShortDate(nextCycleForecast.ovulationDate)} · {daysUntilLabel(nextCycleForecast.ovulationDate)}
+                      </Text>
+                    </View>
+                    <View style={[styles.predictionInfoItem, styles.predictionInfoItemLast]}>
+                      <Text style={styles.predictionInfoLabel}>Fertile window</Text>
+                      <Text testID="calendar-fertile-window" style={styles.fertilityValue}>
+                        {formatShortDate(nextCycleForecast.windowStart)} – {formatShortDate(nextCycleForecast.windowEnd)}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : (
+              <Text testID="calendar-fertility-empty" style={styles.fertilityEmpty}>
+                {forecast && forecast.futurePeriodStarts.length === 0
+                  ? 'Track a period to see fertility forecasts!'
+                  : 'No upcoming fertile window right now.'}
+              </Text>
+            )}
+            {nextCycleForecast && (
+              <Text style={styles.fertilityNote}>
+                {forecast?.stats.basis === 'recorded' ? 'Personalized from your recorded cycles' : 'Estimated from a standard cycle'}
+                {' · wellness estimate, not a contraceptive method'}
+              </Text>
+            )}
+          </View>
+        </View>
       </ScrollView>
 
       {/* Day Details Modal */}
@@ -691,6 +730,28 @@ export default function CalendarTab() {
                       ))}
                     </View>
                   </View>
+                )}
+              </View>
+
+              {/* Ovulation */}
+              <View style={styles.modalCard}>
+                <Text style={styles.modalCardTitle}>Ovulation</Text>
+                <TouchableOpacity
+                  testID="day-modal-ovulation-toggle"
+                  style={[styles.ovulationButton, editingData?.isOvulation && styles.ovulationButtonActive]}
+                  onPress={() => editingData && setEditingData({
+                    ...editingData,
+                    isOvulation: !editingData.isOvulation,
+                  })}>
+                  <Egg size={20} color={editingData?.isOvulation ? theme.colors.white : OVULATION_COLOR} />
+                  <Text style={[styles.ovulationButtonText, editingData?.isOvulation && styles.ovulationButtonTextActive]}>
+                    {editingData?.isOvulation ? 'Ovulation Day' : 'No Ovulation'}
+                  </Text>
+                </TouchableOpacity>
+                {!editingData?.isOvulation && selectedDateData && getOvulationHint(selectedDateData.date) && (
+                  <Text testID="day-modal-ovulation-hint" style={styles.ovulationHint}>
+                    {getOvulationHint(selectedDateData.date)}
+                  </Text>
                 )}
               </View>
 
@@ -883,6 +944,74 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.isDark ? theme.colors.white : theme.colors.text,
     fontWeight: '500',
   },
+  fertileWindowDay: {
+    backgroundColor: theme.isDark ? 'rgba(0, 150, 136, 0.30)' : 'rgba(0, 150, 136, 0.14)',
+  },
+  ovulationDot: {
+    position: 'absolute',
+    top: 2,
+    left: '50%',
+    marginLeft: -3.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: OVULATION_COLOR,
+  },
+  ovulationDotPredicted: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: OVULATION_COLOR,
+  },
+  legendFertileDot: {
+    backgroundColor: theme.isDark ? 'rgba(0, 150, 136, 0.45)' : 'rgba(0, 150, 136, 0.2)',
+  },
+  fertilityValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: OVULATION_COLOR,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  fertilityNote: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 12,
+  },
+  fertilityEmpty: {
+    fontSize: 16,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 10,
+  },
+  ovulationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: OVULATION_COLOR,
+  },
+  ovulationButtonActive: {
+    backgroundColor: OVULATION_COLOR,
+  },
+  ovulationButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: OVULATION_COLOR,
+    marginLeft: 8,
+  },
+  ovulationButtonTextActive: {
+    color: '#fff',
+  },
+  ovulationHint: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    marginTop: 10,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -944,6 +1073,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
