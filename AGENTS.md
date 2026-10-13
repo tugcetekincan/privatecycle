@@ -214,6 +214,10 @@ artifacts are not used:
 - `nightly` → `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`,
   installable next to the stable app to test with imported real data.
 
+Each publish also refreshes the release title with the build commit and UTC
+date (e.g. `PrivateCycle (Nightly) · caa4d80 · 2026-10-13`), so the Releases
+page shows which build is current without opening it.
+
 `workflow_dispatch` re-runs it on demand; pushes that only touch markdown,
 `artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
 cancelled. Cold builds are ~15 min; warm builds reuse cross-run caches

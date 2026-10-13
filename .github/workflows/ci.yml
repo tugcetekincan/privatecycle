@@ -198,17 +198,19 @@ jobs:
 
       # Publishes the APK to a rolling pre-release so it is downloadable from
       # the Releases page directly; workflow artifacts are not used. This is a
-      # moving build (`ci-latest`), not a versioned release.
+      # moving build (`ci-latest`), not a versioned release. The title carries
+      # the build sha + date so staleness is visible at a glance.
       - name: Publish rolling CI release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle.apk
+          TITLE="Latest CI build · ${GITHUB_SHA:0:7} · $(date -u '+%Y-%m-%d')"
           NOTES="Rolling prerelease of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
           if gh release view ci-latest >/dev/null 2>&1; then
-            gh release edit ci-latest --notes "$NOTES"
+            gh release edit ci-latest --title "$TITLE" --notes "$NOTES"
           else
-            gh release create ci-latest --prerelease --title "Latest CI build" \
+            gh release create ci-latest --prerelease --title "$TITLE" \
               --notes "$NOTES" --target "$GITHUB_SHA"
           fi
           gh release upload ci-latest PrivateCycle.apk --clobber
@@ -270,11 +272,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle-Nightly.apk
+          TITLE="PrivateCycle (Nightly) · ${GITHUB_SHA:0:7} · $(date -u '+%Y-%m-%d')"
           NOTES="Nightly of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
           if gh release view nightly >/dev/null 2>&1; then
-            gh release edit nightly --notes "$NOTES"
+            gh release edit nightly --title "$TITLE" --notes "$NOTES"
           else
-            gh release create nightly --prerelease --title "PrivateCycle (Nightly)" \
+            gh release create nightly --prerelease --title "$TITLE" \
               --notes "$NOTES" --target "$GITHUB_SHA"
           fi
           gh release upload nightly PrivateCycle-Nightly.apk --clobber
