@@ -169,13 +169,39 @@ try {
   }
   await page.getByTestId('track-flow-medium').click();
   await page.getByTestId('track-symptom-cramps').click();
-  await page.getByTestId('track-mood-calm').click();
+  await page.getByTestId('track-flow-medium').click();
+  await page.getByTestId('track-symptom-cramps').click();
+
+  // Mood picker (Mix 1): overall face + strength chips auto-save on every tap.
+  // Pick values that differ from the seeded day so the assertions are exact.
+  const moodBefore = await page.evaluate(async () => {
+    const dateKey = __privatecycle.DataService.formatDateKey(new Date());
+    const data = await __privatecycle.DataService.getTodayData(dateKey);
+    return {
+      valence: data?.moodValence ?? 0,
+      tags: (data?.moodTags ?? []).map((tag) => tag.id),
+    };
+  });
+  const targetValence = moodBefore.valence === 4 ? 5 : 4;
+  const pool = ['happy', 'calm', 'energetic', 'tired', 'low', 'anxious', 'irritable', 'overwhelmed'];
+  const targetTag = pool.find((id) => !moodBefore.tags.includes(id));
+  if (!targetTag) {
+    failures.push('smoke setup: no unused mood tag available');
+  }
+  await page.getByTestId(`mood-valence-${targetValence}`).click();
+  await page.getByTestId(`mood-tag-${targetTag}`).click();
+  await page.getByTestId(`mood-tag-${targetTag}`).click(); // strength -> 2
+  await page.getByTestId('mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
 
   const ovulationToggle = page.getByTestId('track-ovulation-toggle');
   const ovulationText = (await ovulationToggle.textContent()) ?? '';
   if (ovulationText.includes('No Ovulation')) {
     await ovulationToggle.click();
   }
+
+  // Clicking lower cards auto-scrolls the Track screen down; bring the top
+  // back into view so the screenshot shows the mood picker.
+  await page.getByTestId('track-date-card').scrollIntoViewIfNeeded();
   await page.screenshot({ path: shot('02-track-filled'), fullPage: true });
 
   await page.getByTestId('track-save-button').click();
@@ -192,9 +218,10 @@ try {
   await page.getByTestId(`calendar-day-${sampleDay}`).click();
   await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('day-modal-ovulation-toggle').waitFor({ state: 'visible', timeout: 15_000 });
-  // Let the slide-in animation settle so the screenshot shows the full sheet.
+  // The modal slides in from the bottom; let the animation finish so the
+  // screenshot actually captures the sheet.
   await page.waitForTimeout(600);
-  await page.screenshot({ path: shot('04-calendar-day-modal'), fullPage: true });
+  await page.screenshot({ path: shot('04-calendar-day-modal') });
   await page.getByTestId('day-modal-close').click();
 
   const recordedOvulationCount = await page
@@ -242,6 +269,33 @@ try {
     failures.push(`ovulation flag did not persist across reload: "${persistedOvulation}"`);
   }
   log('persistence after reload OK');
+
+  // Mood auto-save must survive the reload: valence, tag strength and the
+  // legacy mood mirror (first tag id) all intact.
+  const savedMood = await page.evaluate(async () => {
+    const dateKey = __privatecycle.DataService.formatDateKey(new Date());
+    const data = await __privatecycle.DataService.getTodayData(dateKey);
+    return data
+      ? { valence: data.moodValence, mood: data.mood, tags: data.moodTags ?? [] }
+      : null;
+  });
+  if (!savedMood) {
+    failures.push('mood persistence: no data for today after reload');
+  } else {
+    if (savedMood.valence !== targetValence) {
+      failures.push(`mood persistence: expected valence ${targetValence}, got ${savedMood.valence}`);
+    }
+    const persistedTag = savedMood.tags.find((tag) => tag.id === targetTag);
+    if (!persistedTag || persistedTag.level !== 2) {
+      failures.push(
+        `mood persistence: expected ${targetTag} at level 2, got ${JSON.stringify(savedMood.tags)}`
+      );
+    }
+    if (savedMood.tags.length > 0 && savedMood.mood !== savedMood.tags[0].id) {
+      failures.push('mood persistence: legacy mood column does not mirror the first tag');
+    }
+    log(`mood persistence OK: valence=${savedMood.valence} tags=${JSON.stringify(savedMood.tags)}`);
+  }
 
   if (periodCell) {
     const count = await periodCell.count();

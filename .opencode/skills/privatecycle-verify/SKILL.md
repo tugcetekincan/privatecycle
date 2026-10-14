@@ -90,8 +90,10 @@ Naming convention: `area-element`, kebab-case.
   `day-modal-ovulation-toggle`, `day-modal-ovulation-hint`,
   `day-modal-symptom-{id}`, `day-modal-mood-{id}`, `day-modal-save`
 - Track: `track-date-card`, `track-period-toggle`, `track-ovulation-toggle`,
-  `track-flow-{id}`, `track-symptom-{id}`, `track-mood-{id}`,
-  `track-save-button`, `track-has-data`
+  `track-flow-{id}`, `track-symptom-{id}`, `track-save-button`, `track-has-data`
+- Mood picker (`components/MoodPicker.tsx`, Track for now): `mood-valence-{1..5}`,
+  `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`. Mood auto-saves, so
+  there is no track-level mood save button.
 - Insights: `insights-avg-cycle`, `insights-last-period`,
   `insights-next-period`, `insights-total-periods`,
   `insights-fertility-card`, `insights-recorded-ovulation`,
@@ -113,10 +115,11 @@ selectors so flows don't break when copy changes.
 2. starts the header proxy on `SMOKE_PROXY_PORT` (default 8092),
 3. launches Chromium via Playwright (420×900 viewport),
 4. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
-5. walks Track (period/ovulation toggles, flow/symptom/mood/save/dialog),
-   Calendar (day modal, fertility forecast), Insights (stats + fertility from
-   seeded data), Settings,
-6. reloads and asserts persistence, screenshots along the way,
+5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
+   Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
+   (stats + fertility from seeded data), Settings,
+6. reloads and asserts persistence (including mood valence/strength from the
+   DB), screenshots along the way,
 7. fails on page errors / console errors, then kills the whole process tree.
 
 Both scripts fail fast if their ports are occupied and kill Expo's process

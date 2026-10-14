@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   TextInput,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Heart, Droplets, Smile, Calendar, ChevronDown, Egg } from 'lucide-react-native';
+import { Heart, Droplets, Calendar, ChevronDown, Egg } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
+import { MoodTag, MoodValue, primaryMoodId } from '@/services/MoodTags';
+import MoodPicker from '@/components/MoodPicker';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -31,14 +33,6 @@ const SYMPTOMS = [
   { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
 ];
 
-const MOODS = [
-  { id: 'happy', label: 'Happy', icon: '😊', color: '#4caf50' },
-  { id: 'sad', label: 'Sad', icon: '😢', color: '#2196f3' },
-  { id: 'anxious', label: 'Anxious', icon: '😰', color: '#ff9800' },
-  { id: 'calm', label: 'Calm', icon: '😌', color: '#9c27b0' },
-  { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
-];
-
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
 const OVULATION_COLOR = '#009688';
 
@@ -51,32 +45,44 @@ export default function TrackTab() {
   const [isOvulation, setIsOvulation] = useState(false);
   const [flowLevel, setFlowLevel] = useState('');
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
-  const [selectedMood, setSelectedMood] = useState('');
-  const [todayData, setTodayData] = useState<any>(null);
+  const [moodValence, setMoodValence] = useState(0);
+  const [moodTags, setMoodTags] = useState<MoodTag[]>([]);
+  const [moodSaved, setMoodSaved] = useState(false);
+  const [hasDayData, setHasDayData] = useState(false);
+  const moodSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadTodayData();
   }, [selectedDate]);
+
+  useEffect(
+    () => () => {
+      if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+    },
+    []
+  );
 
   const loadTodayData = async () => {
     const dateKey = DataService.formatDateKey(selectedDate);
     const data = await DataService.getTodayData(dateKey);
     
     if (data) {
-      setTodayData(data);
+      setHasDayData(true);
       setIsPeriodDay(data.isPeriod || false);
       setIsOvulation(data.isOvulation || false);
       setFlowLevel(data.flowLevel || '');
       setSelectedSymptoms(data.symptoms || []);
-      setSelectedMood(data.mood || '');
+      setMoodValence(data.moodValence || 0);
+      setMoodTags(data.moodTags || []);
     } else {
       // Reset for new day
-      setTodayData(null);
+      setHasDayData(false);
       setIsPeriodDay(false);
       setIsOvulation(false);
       setFlowLevel('');
       setSelectedSymptoms([]);
-      setSelectedMood('');
+      setMoodValence(0);
+      setMoodTags([]);
     }
   };
 
@@ -87,13 +93,36 @@ export default function TrackTab() {
       isPeriod: isPeriodDay,
       flowLevel: isPeriodDay ? flowLevel : '',
       symptoms: selectedSymptoms,
-      mood: selectedMood,
+      mood: primaryMoodId(moodTags),
+      moodValence,
+      moodTags,
       isOvulation,
     };
 
     await DataService.saveTodayData(dateKey, data);
     showSuccess('Success', 'Your data has been saved!');
     loadTodayData();
+  };
+
+  // Mood auto-saves on every tap; a transient "✓ Saved" pill gives feedback.
+  const handleMoodChange = async (next: MoodValue) => {
+    const dateKey = DataService.formatDateKey(selectedDate);
+    setMoodValence(next.valence);
+    setMoodTags(next.tags);
+    setMoodSaved(true);
+    if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+    moodSavedTimer.current = setTimeout(() => setMoodSaved(false), 2000);
+
+    try {
+      await DataService.saveMoodData(dateKey, {
+        mood: primaryMoodId(next.tags),
+        moodValence: next.valence,
+        moodTags: next.tags,
+      });
+      setHasDayData(true);
+    } catch (error) {
+      console.error('Error auto-saving mood:', error);
+    }
   };
 
   const toggleSymptom = (symptomId: string) => {
@@ -151,7 +180,7 @@ export default function TrackTab() {
             {isToday(selectedDate) && (
               <Text style={styles.todayBadge}>Today</Text>
             )}
-            {todayData && (
+            {hasDayData && (
               <Text testID="track-has-data" style={styles.hasDataBadge}>Has Data</Text>
             )}
           </View>
@@ -213,6 +242,14 @@ export default function TrackTab() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Mood (auto-saves on every tap) */}
+        <MoodPicker
+          valence={moodValence}
+          tags={moodTags}
+          saved={moodSaved}
+          onChange={handleMoodChange}
+        />
 
         {/* Period Tracking */}
         <View style={styles.card}>
@@ -288,32 +325,6 @@ export default function TrackTab() {
                   selectedSymptoms.includes(symptom.id) && styles.symptomTextActive
                 ]}>
                   {symptom.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Mood */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mood</Text>
-          <View style={styles.moodsRow}>
-            {MOODS.map(mood => (
-              <TouchableOpacity
-                key={mood.id}
-                testID={`track-mood-${mood.id}`}
-                style={[
-                  styles.moodButton,
-                  { borderColor: mood.color },
-                  selectedMood === mood.id && { backgroundColor: mood.color }
-                ]}
-                onPress={() => setSelectedMood(mood.id)}>
-                <Text style={styles.moodEmoji}>{mood.icon}</Text>
-                <Text style={[
-                  styles.moodText,
-                  selectedMood === mood.id && styles.moodTextActive
-                ]}>
-                  {mood.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -523,31 +534,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   symptomTextActive: {
     color: '#fff',
     fontWeight: '500',
-  },
-  moodsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  moodButton: {
-    width: '30%',
-    alignItems: 'center',
-    padding: 12,
-    marginVertical: 5,
-    borderWidth: 2,
-    borderRadius: 10,
-  },
-  moodEmoji: {
-    fontSize: 24,
-    marginBottom: 5,
-  },
-  moodText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  moodTextActive: {
-    color: '#fff',
   },
   saveButton: {
     backgroundColor: '#e91e63',

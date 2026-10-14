@@ -63,6 +63,10 @@ export default function InsightsTab() {
       anxious: '😰',
       irritated: '😤',
       calm: '😌',
+      energetic: '⚡',
+      tired: '😴',
+      low: '😔',
+      overwhelmed: '😩',
     };
     return emojiMap[mood] || '😐';
   };

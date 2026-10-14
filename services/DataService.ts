@@ -1,14 +1,20 @@
 import * as SQLite from 'expo-sqlite';
 import { computeFertilityForecast, FertilityForecast } from './FertilityService';
 import { formatDateKey } from './dateKey';
+import { MoodTag, parseMoodTags, serializeMoodTags } from './MoodTags';
 
 export interface DailyData {
   date: string;
   isPeriod: boolean;
   flowLevel: string;
   symptoms: string[];
+  /** Legacy single mood id. Mirrors the primary (first) mood tag. */
   mood: string;
   isOvulation: boolean;
+  /** Overall valence 1-5; 0 means not set. Optional: absent in old backups. */
+  moodValence?: number;
+  /** Multi-select feeling tags with intensity; optional: absent in old backups. */
+  moodTags?: MoodTag[];
 }
 
 export interface PeriodData {
@@ -82,6 +88,15 @@ const MIGRATIONS: Migration[] = [
     name: 'add_ovulation_flag',
     up: async (db) => {
       await addColumnIfMissing(db, 'daily_data', 'is_ovulation', 'INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+  {
+    version: 3,
+    name: 'mood_detail',
+    up: async (db) => {
+      // Overall valence (1-5, 0 = not set) and multi-select feeling tags.
+      await addColumnIfMissing(db, 'daily_data', 'mood_valence', 'INTEGER NOT NULL DEFAULT 0');
+      await addColumnIfMissing(db, 'daily_data', 'mood_tags', "TEXT NOT NULL DEFAULT '[]'");
     },
   },
 ];
@@ -259,6 +274,8 @@ class SQLiteDataService {
       const symptoms = JSON.stringify(data.symptoms || []);
       const flowLevel = data.flowLevel || '';
       const mood = data.mood || '';
+      const moodValence = data.moodValence || 0;
+      const moodTags = serializeMoodTags(data.moodTags || []);
 
       console.log('Saving data:', {
         dateKey,
@@ -271,14 +288,16 @@ class SQLiteDataService {
 
       await db.runAsync(
         `INSERT OR REPLACE INTO daily_data
-         (date, is_period, flow_level, symptoms, mood, is_ovulation)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags, is_ovulation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           dateKey,
           data.isPeriod ? 1 : 0,
           flowLevel,
           symptoms,
           mood,
+          moodValence,
+          moodTags,
           data.isOvulation ? 1 : 0
         ]
       );
@@ -309,19 +328,55 @@ class SQLiteDataService {
       for (const [dateKey, day] of entries) {
         await db.runAsync(
           `INSERT OR REPLACE INTO daily_data
-           (date, is_period, flow_level, symptoms, mood, is_ovulation)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags, is_ovulation)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             dateKey,
             day.isPeriod ? 1 : 0,
             day.flowLevel || '',
             JSON.stringify(day.symptoms || []),
             day.mood || '',
+            day.moodValence || 0,
+            serializeMoodTags(day.moodTags || []),
             day.isOvulation ? 1 : 0,
           ]
         );
       }
     });
+  }
+
+  /**
+   * Update only the mood fields for a day (valence + tags + legacy primary
+   * mood id). Used by the mood picker's auto-save so period/symptom edits a
+   * user has in progress are never overwritten. Creates the row if the day
+   * has no data yet.
+   */
+  async saveMoodData(
+    dateKey: string,
+    mood: { mood: string; moodValence: number; moodTags: MoodTag[] }
+  ): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+
+      await db.runAsync(
+        `INSERT INTO daily_data
+         (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags)
+         VALUES (?, 0, '', '[]', ?, ?, ?)
+         ON CONFLICT(date) DO UPDATE SET
+           mood = excluded.mood,
+           mood_valence = excluded.mood_valence,
+           mood_tags = excluded.mood_tags`,
+        [
+          dateKey,
+          mood.mood || '',
+          mood.moodValence || 0,
+          serializeMoodTags(mood.moodTags || [])
+        ]
+      );
+    } catch (error) {
+      console.error('Error saving mood data for date', dateKey, ':', error);
+      throw error;
+    }
   }
 
   async getTodayData(dateKey: string): Promise<DailyData | null> {
@@ -338,6 +393,8 @@ class SQLiteDataService {
         symptoms: string;
         mood: string;
         is_ovulation: number;
+        mood_valence: number;
+        mood_tags: string;
       } | null;
 
       if (!result) return null;
@@ -348,7 +405,9 @@ class SQLiteDataService {
         flowLevel: result.flow_level,
         symptoms: JSON.parse(result.symptoms),
         mood: result.mood,
-        isOvulation: result.is_ovulation === 1
+        isOvulation: result.is_ovulation === 1,
+        moodValence: result.mood_valence ?? 0,
+        moodTags: parseMoodTags(result.mood_tags),
       };
     } catch (error) {
       console.error('Error loading today data:', error);
@@ -369,6 +428,8 @@ class SQLiteDataService {
         symptoms: string;
         mood: string;
         is_ovulation: number;
+        mood_valence: number;
+        mood_tags: string;
       }[];
 
       const dailyData: { [date: string]: DailyData } = {};
@@ -380,7 +441,9 @@ class SQLiteDataService {
           flowLevel: row.flow_level,
           symptoms: JSON.parse(row.symptoms),
           mood: row.mood,
-          isOvulation: row.is_ovulation === 1
+          isOvulation: row.is_ovulation === 1,
+          moodValence: row.mood_valence ?? 0,
+          moodTags: parseMoodTags(row.mood_tags),
         };
       });
 
@@ -610,6 +673,13 @@ export class DataService {
 
   static async saveManyDailyData(data: { [date: string]: DailyData }): Promise<void> {
     return sqliteDataService.saveManyDailyData(data);
+  }
+
+  static async saveMoodData(
+    dateKey: string,
+    mood: { mood: string; moodValence: number; moodTags: MoodTag[] }
+  ): Promise<void> {
+    return sqliteDataService.saveMoodData(dateKey, mood);
   }
 
   static async getTodayData(dateKey: string): Promise<DailyData | null> {

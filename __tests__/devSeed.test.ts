@@ -43,11 +43,22 @@ describe('generateDemoDailyData', () => {
     }
   });
 
-  it('sets a mood on every generated day', () => {
+  it('sets mood detail on every generated day', () => {
     const data = generateDemoDailyData({ days: 30, endDate: END });
     for (const day of Object.values(data)) {
       expect(day.mood).not.toBe('');
       expect(day.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      expect(day.moodValence).toBeGreaterThanOrEqual(1);
+      expect(day.moodValence).toBeLessThanOrEqual(5);
+
+      expect(day.moodTags!.length).toBeGreaterThanOrEqual(1);
+      expect(day.moodTags!.length).toBeLessThanOrEqual(3);
+      // The legacy mood column mirrors the primary (first) tag.
+      expect(day.mood).toBe(day.moodTags![0].id);
+      for (const tag of day.moodTags!) {
+        expect([1, 2, 3]).toContain(tag.level);
+      }
     }
   });
 

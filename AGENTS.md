@@ -32,7 +32,7 @@ app/                    expo-router screens
   (tabs)/insights.tsx   Cycle + fertility stats from DataService
   (tabs)/settings.tsx   Preferences, backup UI, Developer section (__DEV__)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
-components/             CustomDialog (+ demo)
+components/             CustomDialog (+ demo), MoodPicker (faces + tags)
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady
 services/               DataService (SQLite owner), BackupService,
@@ -146,6 +146,12 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   columns.
 - Bulk writes go through `DataService.saveManyDailyData` (single transaction).
   Keep `BackupService.restoreFromBackup` on that path.
+- Mood detail is additive: `mood_valence` (1-5, 0 = unset) and `mood_tags`
+  (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
+  so the calendar and insights keep working; extend the `getMoodEmoji` map in
+  `app/(tabs)/insights.tsx` when adding mood ids. The Track mood picker
+  auto-saves mood-only via `DataService.saveMoodData` so unsaved
+  period/symptom edits are never overwritten.
 
 **Dates**
 - Day keys are **local-time** `YYYY-MM-DD` from

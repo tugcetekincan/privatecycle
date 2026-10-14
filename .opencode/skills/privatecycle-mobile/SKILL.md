@@ -111,7 +111,7 @@ Notes:
 - Flows select by `id:`, which maps to React Native `testID` on Android. Keep
   testIDs stable (see the `privatecycle-verify` skill for the naming scheme).
 - Long screens need `scrollUntilVisible` before tapping elements below the
-  fold; `track-mood-*` and `track-save-button` are examples.
+  fold; `track-save-button` and `track-symptom-*` are examples.
 - `takeScreenshot:` writes to `~/.maestro/tests/<timestamp>/<flow>/takeScreenshot/`.
   Copy the file into `artifacts/screenshots/` when you need it as evidence.
 - First build on a fresh checkout takes ~20 min (`npx expo run:android

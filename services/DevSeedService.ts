@@ -1,4 +1,5 @@
 import { DataService, DailyData } from './DataService';
+import { MoodTag, MoodTagLevel } from './MoodTags';
 
 /**
  * Deterministic demo-data generator for development and automated tests.
@@ -40,7 +41,16 @@ const SYMPTOM_POOL = [
   'breastache',
 ] as const;
 
-const MOOD_POOL = ['calm', 'happy', 'calm', 'happy', 'anxious', 'irritated', 'sad'] as const;
+const MOOD_TAG_POOL = [
+  'happy',
+  'calm',
+  'energetic',
+  'tired',
+  'low',
+  'anxious',
+  'irritable',
+  'overwhelmed',
+] as const;
 
 /** Small, fast, deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
@@ -100,14 +110,24 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
       if (rng() < 0.08) symptoms.push(SYMPTOM_POOL[Math.floor(rng() * SYMPTOM_POOL.length)]);
     }
 
-    const mood = MOOD_POOL[Math.floor(rng() * MOOD_POOL.length)];
+    // Mood: 1-3 feeling tags with a strength level, plus an overall valence.
+    const tagCount = 1 + (rng() < 0.5 ? 1 : 0) + (rng() < 0.25 ? 1 : 0);
+    const moodTags: MoodTag[] = [];
+    while (moodTags.length < tagCount) {
+      const id = MOOD_TAG_POOL[Math.floor(rng() * MOOD_TAG_POOL.length)];
+      if (moodTags.some((tag) => tag.id === id)) continue;
+      moodTags.push({ id, level: (1 + Math.floor(rng() * 3)) as MoodTagLevel });
+    }
+    const moodValence = 1 + Math.floor(rng() * 5);
 
     data[dateKey] = {
       date: dateKey,
       isPeriod,
       flowLevel: isPeriod ? (flowByOffset.get(offset) ?? 'medium') : '',
       symptoms: [...new Set(symptoms)],
-      mood,
+      mood: moodTags[0].id,
+      moodValence,
+      moodTags,
       isOvulation,
     };
   }
