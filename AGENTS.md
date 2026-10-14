@@ -148,10 +148,12 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   Keep `BackupService.restoreFromBackup` on that path.
 - Mood detail is additive: `mood_valence` (1-5, 0 = unset) and `mood_tags`
   (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
-  so the calendar and insights keep working; extend the `getMoodEmoji` map in
-  `app/(tabs)/insights.tsx` when adding mood ids. The Track mood picker
-  auto-saves mood-only via `DataService.saveMoodData` so unsaved
-  period/symptom edits are never overwritten.
+  so the calendar and insights keep working. Feeling ids/labels live in
+  `MOOD_OPTIONS` (`services/MoodTags.ts`); the phase summary and trend series
+  are pure helpers in `services/MoodInsights.ts` whose phase thresholds mirror
+  `AnalyticsService.getCyclePhase`. The Track mood picker auto-saves mood-only
+  via `DataService.saveMoodData` so unsaved period/symptom edits are never
+  overwritten.
 
 **Dates**
 - Day keys are **local-time** `YYYY-MM-DD` from

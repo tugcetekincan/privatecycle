@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
-import { MoodTag, MoodValue, MOOD_TAG_MAX_LEVEL, cycleMoodTag, removeMoodTag } from '@/services/MoodTags';
+import { MoodTag, MoodValue, MOOD_OPTIONS, MOOD_TAG_MAX_LEVEL, cycleMoodTag, removeMoodTag } from '@/services/MoodTags';
 
 /**
  * Mix 1 mood picker: an optional one-tap overall face (valence 1-5) plus
@@ -30,17 +30,6 @@ const MOOD_VALENCES = [
   { value: 3, icon: '😐', label: 'Okay' },
   { value: 4, icon: '🙂', label: 'Good' },
   { value: 5, icon: '😄', label: 'Great' },
-];
-
-export const MOOD_OPTIONS = [
-  { id: 'happy', label: 'Happy', icon: '😊' },
-  { id: 'calm', label: 'Calm', icon: '😌' },
-  { id: 'energetic', label: 'Energetic', icon: '⚡' },
-  { id: 'tired', label: 'Tired', icon: '😴' },
-  { id: 'low', label: 'Low', icon: '😔' },
-  { id: 'anxious', label: 'Anxious', icon: '😰' },
-  { id: 'irritable', label: 'Irritable', icon: '😤' },
-  { id: 'overwhelmed', label: 'Overwhelmed', icon: '😩' },
 ];
 
 interface MoodPickerProps {

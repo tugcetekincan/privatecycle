@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import { computeFertilityForecast, FertilityForecast } from './FertilityService';
-import { formatDateKey } from './dateKey';
+import { addDays, formatDateKey } from './dateKey';
+import { buildMoodSeries, summarizeMoodByPhase, MoodDay, MOOD_SERIES_DAYS } from './MoodInsights';
 import { MoodTag, parseMoodTags, serializeMoodTags } from './MoodTags';
 
 export interface DailyData {
@@ -551,20 +552,37 @@ class SQLiteDataService {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      // Get mood counts using SQL
-      const moodCountsResult = await db.getAllAsync(`
-        SELECT mood, COUNT(*) as count
+      // Mood detail: every day with valence or feeling tags feeds the phase
+      // summary; the last 60 calendar days feed the valence trend chart.
+      const moodRows = await db.getAllAsync(`
+        SELECT date, is_period, mood_valence, mood_tags
         FROM daily_data
-        WHERE mood != ''
-        GROUP BY mood
-        ORDER BY count DESC
-        LIMIT 5
-      `) as { mood: string; count: number }[];
+        WHERE mood_valence > 0 OR mood_tags != '[]'
+        ORDER BY date
+      `) as { date: string; is_period: number; mood_valence: number; mood_tags: string }[];
 
-      const moodTrends = moodCountsResult.map(row => ({
-        mood: row.mood,
-        count: row.count
+      const moodDays: MoodDay[] = moodRows.map(row => ({
+        date: row.date,
+        valence: row.mood_valence ?? 0,
+        tags: parseMoodTags(row.mood_tags),
       }));
+
+      const today = new Date();
+      const seriesStartKey = formatDateKey(addDays(today, -(MOOD_SERIES_DAYS - 1)));
+      const seriesRows = await db.getAllAsync(
+        'SELECT date, is_period, mood_valence FROM daily_data WHERE date >= ? ORDER BY date',
+        [seriesStartKey]
+      ) as { date: string; is_period: number; mood_valence: number }[];
+
+      const seriesByDate = new Map(
+        seriesRows.map(row => [
+          row.date,
+          { valence: row.mood_valence ?? 0, isPeriod: row.is_period === 1 },
+        ] as const)
+      );
+
+      const moodSeries = buildMoodSeries(seriesByDate, today);
+      const moodPhases = summarizeMoodByPhase(moodDays, periodStarts);
 
       return {
         averageCycle,
@@ -572,7 +590,8 @@ class SQLiteDataService {
         nextPeriodIn,
         totalPeriods: periodStarts.length,
         commonSymptoms,
-        moodTrends,
+        moodSeries,
+        moodPhases,
       };
     } catch (error) {
       console.error('Error calculating insights:', error);
@@ -582,7 +601,8 @@ class SQLiteDataService {
         nextPeriodIn: 0,
         totalPeriods: 0,
         commonSymptoms: [],
-        moodTrends: [],
+        moodSeries: [],
+        moodPhases: [],
       };
     }
   }

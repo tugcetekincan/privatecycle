@@ -97,7 +97,8 @@ Naming convention: `area-element`, kebab-case.
 - Insights: `insights-avg-cycle`, `insights-last-period`,
   `insights-next-period`, `insights-total-periods`,
   `insights-fertility-card`, `insights-recorded-ovulation`,
-  `insights-next-ovulation`, `insights-fertile-window`
+  `insights-next-ovulation`, `insights-fertile-window`,
+  `insights-mood-trend`, `insights-mood-phase-{phase}`, `insights-mood-empty`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
   `settings-dev-reset`, `settings-darkmode-switch`
@@ -117,7 +118,7 @@ selectors so flows don't break when copy changes.
 4. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
 5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
    Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
-   (stats + fertility from seeded data), Settings,
+   (stats, fertility, mood trend + phase rows from seeded data), Settings,
 6. reloads and asserts persistence (including mood valence/strength from the
    DB), screenshots along the way,
 7. fails on page errors / console errors, then kills the whole process tree.

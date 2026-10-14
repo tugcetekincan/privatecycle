@@ -1,20 +1,107 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   SafeAreaView,
+  Dimensions,
 } from 'react-native';
+import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
 import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
 import { FertilityForecast } from '@/services/FertilityService';
+import { MoodSeriesPoint, PhaseMoodSummary, MOOD_SERIES_DAYS } from '@/services/MoodInsights';
+import { MOOD_OPTIONS } from '@/services/MoodTags';
 import { daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
 
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
 const OVULATION_COLOR = '#009688';
+
+const { width: screenWidth } = Dimensions.get('window');
+
+const VALENCE_FACES: { [value: number]: string } = {
+  1: '😞',
+  2: '😕',
+  3: '😐',
+  4: '🙂',
+  5: '😄',
+};
+
+const PHASE_LABELS: { [phase: string]: string } = {
+  menstrual: 'Menstrual',
+  follicular: 'Follicular',
+  ovulation: 'Ovulation',
+  luteal: 'Luteal',
+};
+
+function moodLabel(id: string): string {
+  return (
+    MOOD_OPTIONS.find((option) => option.id === id)?.label ??
+    id.charAt(0).toUpperCase() + id.slice(1)
+  );
+}
+
+function levelDots(averageLevel: number): string {
+  return '●'.repeat(Math.min(3, Math.max(1, Math.round(averageLevel))));
+}
+
+/**
+ * Daily valence over the last `MOOD_SERIES_DAYS` days: period days are shaded,
+ * one dot per logged day. Pure SVG so no chart dependency is needed.
+ */
+function MoodTrendChart({
+  series,
+  width,
+  color,
+}: {
+  series: MoodSeriesPoint[];
+  width: number;
+  color: string;
+}) {
+  const height = 96;
+  const padY = 12;
+  const slot = series.length > 1 ? width / (series.length - 1) : width;
+  const x = (index: number) => (series.length > 1 ? index * slot : width / 2);
+  const y = (valence: number) => padY + ((5 - valence) / 4) * (height - padY * 2);
+
+  const logged = series
+    .map((point, index) => ({ ...point, index }))
+    .filter((point) => point.valence > 0);
+
+  return (
+    <Svg width={width} height={height}>
+      {series.map((point, index) =>
+        point.isPeriod ? (
+          <Rect
+            key={point.date}
+            x={x(index) - slot / 2}
+            y={0}
+            width={slot}
+            height={height}
+            fill={color}
+            fillOpacity={0.14}
+          />
+        ) : null
+      )}
+      {logged.length > 1 && (
+        <Polyline
+          points={logged.map((point) => `${x(point.index)},${y(point.valence)}`).join(' ')}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
+      {logged.map((point) => (
+        <Circle key={point.date} cx={x(point.index)} cy={y(point.valence)} r={3} fill={color} />
+      ))}
+    </Svg>
+  );
+}
 
 export default function InsightsTab() {
   const { theme } = useTheme();
@@ -24,7 +111,8 @@ export default function InsightsTab() {
     nextPeriodIn: 0,
     totalPeriods: 0,
     commonSymptoms: [] as Array<{symptom: string, count: number}>,
-    moodTrends: [] as Array<{mood: string, count: number}>,
+    moodSeries: [] as MoodSeriesPoint[],
+    moodPhases: [] as PhaseMoodSummary[],
   });
   const [fertility, setFertility] = useState<FertilityForecast | null>(null);
 
@@ -56,21 +144,6 @@ export default function InsightsTab() {
     return emojiMap[symptom] || '💊';
   };
 
-  const getMoodEmoji = (mood: string) => {
-    const emojiMap: { [key: string]: string } = {
-      happy: '😊',
-      sad: '😢',
-      anxious: '😰',
-      irritated: '😤',
-      calm: '😌',
-      energetic: '⚡',
-      tired: '😴',
-      low: '😔',
-      overwhelmed: '😩',
-    };
-    return emojiMap[mood] || '😐';
-  };
-
   const formatShortDate = (dateKey: string) => {
     return parseDateKey(dateKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
@@ -85,6 +158,8 @@ export default function InsightsTab() {
 
   const currentCycleOvulation = fertility?.currentCycleOvulation ?? null;
   const nextCycleForecast = fertility?.cycles[0] ?? null;
+  const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
+  const chartWidth = screenWidth - 80;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -197,35 +272,58 @@ export default function InsightsTab() {
           )}
         </View>
 
-        {/* Mood Trends */}
+        {/* Mood & Cycle */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mood Patterns</Text>
-          {stats.moodTrends.length > 0 ? (
-            <View style={styles.moodsList}>
-              {stats.moodTrends.map((item, index) => (
-                <View key={index} style={styles.moodItem}>
-                  <Text style={styles.moodEmoji}>
-                    {getMoodEmoji(item.mood)}
-                  </Text>
-                  <View style={styles.moodInfo}>
-                    <Text style={styles.moodName}>
-                      {item.mood.charAt(0).toUpperCase() + item.mood.slice(1)}
-                    </Text>
-                    <View style={styles.moodBar}>
-                      <View 
-                        style={[
-                          styles.moodBarFill, 
-                          { width: `${(item.count / Math.max(...stats.moodTrends.map(m => m.count))) * 100}%` }
-                        ]} 
-                      />
+          <Text style={styles.cardTitle}>Mood & Cycle</Text>
+          {valenceDays >= 5 && (
+            <>
+              <View testID="insights-mood-trend" style={styles.trendWrap}>
+                <MoodTrendChart
+                  series={stats.moodSeries}
+                  width={chartWidth}
+                  color={theme.colors.primary}
+                />
+              </View>
+              <Text style={styles.trendCaption}>
+                Last {MOOD_SERIES_DAYS} days · shaded days are period days
+              </Text>
+            </>
+          )}
+          {stats.moodPhases.length > 0 ? (
+            <View style={styles.phaseList}>
+              {stats.moodPhases.map((entry) => (
+                <View
+                  key={entry.phase}
+                  testID={`insights-mood-phase-${entry.phase}`}
+                  style={styles.phaseRow}>
+                  <View style={styles.phaseMain}>
+                    <Text style={styles.phaseName}>{PHASE_LABELS[entry.phase]}</Text>
+                    <View style={styles.phaseScoreWrap}>
+                      {entry.averageValence !== null && (
+                        <Text style={styles.phaseFace}>
+                          {VALENCE_FACES[Math.min(5, Math.max(1, Math.round(entry.averageValence)))]}
+                        </Text>
+                      )}
+                      <Text style={styles.phaseScore}>
+                        {entry.averageValence !== null ? entry.averageValence.toFixed(1) : '—'}
+                      </Text>
                     </View>
-                    <Text style={styles.moodCount}>{item.count} days</Text>
                   </View>
+                  <Text style={styles.phaseDetail}>
+                    {entry.topTags.length > 0
+                      ? entry.topTags
+                          .map((tag) => `${moodLabel(tag.id)} ${levelDots(tag.averageLevel)}`)
+                          .join(' · ') + ' · '
+                      : ''}
+                    {entry.days === 1 ? '1 day' : `${entry.days} days`}
+                  </Text>
                 </View>
               ))}
             </View>
           ) : (
-            <Text style={styles.noDataText}>Track your moods to see trends!</Text>
+            <Text testID="insights-mood-empty" style={styles.noDataText}>
+              Track your moods to see your cycle patterns!
+            </Text>
           )}
         </View>
 
@@ -379,39 +477,49 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginLeft: 8,
     minWidth: 20,
   },
-  moodsList: {
-    gap: 15,
-  },
-  moodItem: {
-    flexDirection: 'row',
+  trendWrap: {
     alignItems: 'center',
   },
-  moodEmoji: {
-    fontSize: 24,
-    marginRight: 15,
+  trendCaption: {
+    fontSize: 11,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 16,
   },
-  moodInfo: {
-    flex: 1,
+  phaseList: {
+    gap: 14,
   },
-  moodName: {
-    fontSize: 16,
+  phaseRow: {
+    gap: 3,
+  },
+  phaseMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  phaseName: {
+    fontSize: 15,
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 5,
   },
-  moodBar: {
-    height: 6,
-    backgroundColor: theme.colors.border,
-    borderRadius: 3,
-    marginBottom: 5,
+  phaseScoreWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  moodBarFill: {
-    height: '100%',
-    backgroundColor: theme.colors.warning,
-    borderRadius: 3,
-    minWidth: 10,
+  phaseFace: {
+    fontSize: 16,
   },
-  moodCount: {
-    fontSize: 12,
+  phaseScore: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    minWidth: 28,
+    textAlign: 'right',
+  },
+  phaseDetail: {
+    fontSize: 13,
     color: theme.colors.textSecondary,
   },
   tipsList: {

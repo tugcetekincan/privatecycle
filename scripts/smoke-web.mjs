@@ -251,7 +251,21 @@ try {
   }
   await page.getByTestId('insights-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('insights-next-ovulation').waitFor({ state: 'visible', timeout: 15_000 });
+
+  // Mood & Cycle: seeded valence/tags must produce the trend and phase rows.
+  await page.getByTestId('insights-mood-trend').waitFor({ state: 'visible', timeout: 15_000 });
+  const moodPhaseRows = await page.locator('[data-testid^="insights-mood-phase-"]').count();
+  log(`insights: mood phase rows = ${moodPhaseRows}`);
+  if (moodPhaseRows < 2) {
+    failures.push(`expected at least 2 mood phase rows, got ${moodPhaseRows}`);
+  }
+
+  // The app scrolls inside a fixed-height ScrollView, so a fullPage capture
+  // only sees the top. A taller viewport renders the whole Insights screen.
+  await page.setViewportSize({ width: 420, height: 1700 });
+  await page.waitForTimeout(300);
   await page.screenshot({ path: shot('05-insights'), fullPage: true });
+  await page.setViewportSize({ width: 420, height: 900 });
 
   // --- Settings: dev tools, theme toggle, export button present. ---
   await page.getByTestId('tab-settings').click();

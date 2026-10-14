@@ -52,6 +52,10 @@ const MOOD_TAG_POOL = [
   'overwhelmed',
 ] as const;
 
+// Valence-matched pools so demo feelings cluster where you would expect them.
+const POSITIVE_MOOD_TAGS = ['happy', 'calm', 'energetic'] as const;
+const NEGATIVE_MOOD_TAGS = ['tired', 'low', 'anxious', 'irritable', 'overwhelmed'] as const;
+
 /** Small, fast, deterministic PRNG (mulberry32). */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -74,10 +78,12 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
   // endDate (0 = endDate, negative = earlier).
   const periodDays = new Set<number>();
   const ovulationDays = new Set<number>();
+  const periodStarts: number[] = [];
   const flowByOffset = new Map<number, string>();
   let cursor = -days + 6;
   while (cursor <= 0) {
     const start = cursor;
+    periodStarts.push(start);
     const length = 4 + Math.floor(rng() * 3);
     const end = Math.min(cursor + length, 1); // clamp so today can be a period day
     for (let offset = cursor; offset < end; offset++) {
@@ -110,15 +116,28 @@ export function generateDemoDailyData(options: DemoDataOptions = {}): Record<str
       if (rng() < 0.08) symptoms.push(SYMPTOM_POOL[Math.floor(rng() * SYMPTOM_POOL.length)]);
     }
 
-    // Mood: 1-3 feeling tags with a strength level, plus an overall valence.
+    // Mood: valence follows the cycle (lower during the period, higher around
+    // the fertile window, mid in the luteal phase) with small jitter, so demo
+    // insights have a realistic shape. Tags come from a valence-matched pool.
+    let lastStart = periodStarts[0];
+    for (const start of periodStarts) {
+      if (start <= offset) lastStart = start;
+    }
+    const daysSinceStart = offset - lastStart;
+    const baseValence =
+      daysSinceStart < 0 ? 3 : daysSinceStart <= 5 ? 2 : daysSinceStart <= 16 ? 4 : 3;
+    const jitter = rng() < 0.3 ? (rng() < 0.5 ? -1 : 1) : 0;
+    const moodValence = Math.max(1, Math.min(5, baseValence + jitter));
+
+    const tagPool =
+      moodValence <= 2 ? NEGATIVE_MOOD_TAGS : moodValence >= 4 ? POSITIVE_MOOD_TAGS : MOOD_TAG_POOL;
     const tagCount = 1 + (rng() < 0.5 ? 1 : 0) + (rng() < 0.25 ? 1 : 0);
     const moodTags: MoodTag[] = [];
     while (moodTags.length < tagCount) {
-      const id = MOOD_TAG_POOL[Math.floor(rng() * MOOD_TAG_POOL.length)];
+      const id = tagPool[Math.floor(rng() * tagPool.length)];
       if (moodTags.some((tag) => tag.id === id)) continue;
       moodTags.push({ id, level: (1 + Math.floor(rng() * 3)) as MoodTagLevel });
     }
-    const moodValence = 1 + Math.floor(rng() * 5);
 
     data[dateKey] = {
       date: dateKey,

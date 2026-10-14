@@ -22,6 +22,24 @@ export interface MoodValue {
   tags: MoodTag[];
 }
 
+export interface MoodOption {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+/** Canonical feeling list shared by the picker and the insights summary. */
+export const MOOD_OPTIONS: MoodOption[] = [
+  { id: 'happy', label: 'Happy', icon: '😊' },
+  { id: 'calm', label: 'Calm', icon: '😌' },
+  { id: 'energetic', label: 'Energetic', icon: '⚡' },
+  { id: 'tired', label: 'Tired', icon: '😴' },
+  { id: 'low', label: 'Low', icon: '😔' },
+  { id: 'anxious', label: 'Anxious', icon: '😰' },
+  { id: 'irritable', label: 'Irritable', icon: '😤' },
+  { id: 'overwhelmed', label: 'Overwhelmed', icon: '😩' },
+];
+
 function clampLevel(level: number): MoodTagLevel {
   if (!Number.isFinite(level) || level < 1) return 1;
   if (level > MOOD_TAG_MAX_LEVEL) return MOOD_TAG_MAX_LEVEL;
