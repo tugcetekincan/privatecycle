@@ -38,12 +38,12 @@ hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
 services/               DataService (SQLite owner), BackupService,
                         AnalyticsService, DevSeedService, FertilityService
                         (pure ovulation/fertile-window forecast), devGlobals
-scripts/                web harness (see below), debug probe
+scripts/                web harness (see below), debug probe,
+                        release-version.mjs (per-commit release version)
 __tests__/              Jest suites
 maestro/                on-device smoke flow
 .opencode/skills/       agent runbooks (keep updated)
-.github/workflows/      ci.yml (per-push verify + APK artifact),
-                        android-release.yml (tag-triggered signed APK)
+.github/workflows/      ci.yml (per-push verify + versioned release)
 plugins/withAndroidSigning.js   Expo config plugin for release signing
 ```
 
@@ -54,6 +54,7 @@ plugins/withAndroidSigning.js   Expo config plugin for release signing
 | `npm ci` | install exact deps (use after pulling changes) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Jest unit suite (`jest-expo` preset) |
+| `node scripts/release-version.mjs` | version the next push to `main` releases |
 | `npm run smoke:web` | headless end-to-end + screenshots (~1–3 min) |
 | `npm run dev:web` | interactive app at http://localhost:8082 |
 | `npm run debug:web` | headless probe: console, failed requests, DB check |
@@ -89,8 +90,9 @@ the current branch. Commit messages are one-liners — imperative and scoped
 (`fix: …`, `feat: …`, `test: …`, `docs: …`), no body; the details belong in
 the diff and the report. Don't leave verified work sitting uncommitted or
 unpushed — once the user says yes, land it promptly. If the user has
-explicitly pre-authorized committing, the round trip can be skipped. Tags and
-releases always need explicit approval regardless — see
+explicitly pre-authorized committing, the round trip can be skipped. Releases
+are automatic (every pushed commit), but manually deleting, retagging or
+overwriting a published release still needs explicit approval — see
 `privatecycle-release`.
 
 ## The verification ladder
@@ -185,7 +187,8 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
 - Do not edit `node_modules/`, `.expo/`, `artifacts/`, `android/`, `ios/`.
-- Tags and releases always need explicit approval (`privatecycle-release`).
+- Deleting or overwriting published releases/tags needs explicit approval
+  (`privatecycle-release`); the per-push releases themselves are automatic.
 
 ## Definition of done
 
@@ -206,37 +209,42 @@ A change is done when:
 ## CI
 
 Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then
-two signed release APKs (arm64-v8a, release keystore) published to rolling
-pre-releases, downloadable straight from the Releases page; workflow
-artifacts are not used:
+builds two signed release APKs (arm64-v8a, release keystore) and attaches
+both to **one versioned GitHub Release** — the Releases page is the download
+source; workflow artifacts are not used:
 
-- `ci-latest` → `PrivateCycle.apk` — stable identity;
-- `nightly` → `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`,
-  installable next to the stable app to test with imported real data.
+- `PrivateCycle.apk` — stable identity;
+- `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`, installable
+  next to the stable app to test with imported real data.
 
-Each publish also refreshes the release title with the build commit and UTC
-date (e.g. `PrivateCycle (Nightly) · caa4d80 · 2026-10-13`), so the Releases
-page shows which build is current without opening it.
+The version comes from `scripts/release-version.mjs`, which analyzes the
+conventional commits since the previous release tag: `feat:` bumps minor, a
+`!` in the header or a `BREAKING CHANGE:` footer bumps major, everything else
+bumps patch — so every released push advances the version, and rerunning CI
+for an already-released commit reuses it. The version is stamped into both
+APKs as `versionName` (`APP_VERSION` via `app.config.js`; Settings → About
+reads it back) and used as the release tag.
 
-Every build stamps a build-time `versionCode` (unix minutes, wired through
-`ANDROID_VERSION_CODE` in `app.config.js`), so each APK is installable over
-the previous one — updater apps that compare versionCodes rely on this.
+Every build also stamps a build-time `versionCode` (unix minutes, wired
+through `ANDROID_VERSION_CODE` in `app.config.js`), so each APK is
+installable over the previous one — updater apps that compare versionCodes
+rely on this.
 
 `workflow_dispatch` re-runs it on demand; pushes that only touch markdown,
 `artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
-cancelled. Cold builds are ~15 min; warm builds reuse cross-run caches
-(Gradle home, `native-libs-v3`, `app-build-v1`, ccache) and are much faster.
-Cache keys are versioned — **bump the version suffix when the cached paths
-change**, because GitHub's cache entries are immutable and an old key would
-keep restoring the old layout. Versioned release publishing stays tag-only
-(see below).
+cancelled — the cancelled commits are simply folded into the next release
+(window and bump both come from git history). Cold builds are ~15 min; warm
+builds reuse cross-run caches (Gradle home, `native-libs-v3`, `app-build-v1`,
+ccache) and are much faster. Cache keys are versioned — **bump the version
+suffix when the cached paths change**, because GitHub's cache entries are
+immutable and an old key would keep restoring the old layout.
 
 ## Releases
 
-Tag-driven: `git tag vX.Y.Z && git push origin vX.Y.Z` triggers
-`.github/workflows/android-release.yml` (signed APK published on GitHub
-Releases, changelog generated from commits). Run the full verification ladder
-and bump `expo.version` in `app.json` first. Details and secrets:
+Automatic: every push to `main` that CI does not skip publishes `vX.Y.Z`
+with both APKs (see "CI" above). Run the full verification ladder before
+pushing — a push is a release. Manually pushing `v*` tags no longer triggers
+anything; don't. Bump rules, verification and recovery details:
 `privatecycle-release` skill.
 
 ## Environment & gotchas
@@ -249,16 +257,17 @@ and bump `expo.version` in `app.json` first. Details and secrets:
 - CI needs `./gradlew generateCodegenArtifactsFromSchema` before
   `assembleRelease` (New Arch header-only TurboModules); don't remove that
   step. `ci.yml` skips it only when the restored caches already contain every
-  codegen dir (see the guard step); `android-release.yml` always runs it.
+  codegen dir (see the guard step).
 - `arm64-v8a` only in CI releases (speed), so x86 devices need a local build.
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
 - `@react-native-community/datetimepicker` has no web implementation — the
   Track screen renders an `<input type="date">` on web instead.
 - **Three installable identities.** Stable `com.ncan.privatecycle` (release
-  APK / `ci-latest`), local dev `com.ncan.privatecycle.dev` ("PrivateCycle
-  Dev", blue icon, debug-signed dev client, `npm run android:dev`), and
-  nightly `com.ncan.privatecycle.nightly` ("PrivateCycle Nightly", amber
-  icon, release-signed, downloadable from the `nightly` pre-release). They
+  APK from the newest release), local dev `com.ncan.privatecycle.dev`
+  ("PrivateCycle Dev", blue icon, debug-signed dev client,
+  `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
+  ("PrivateCycle Nightly", amber icon, release-signed, attached to every
+  release). They
   coexist on one device with separate data sandboxes — import a backup
   exported from the stable app to test with realistic data. `android/`
   targets one identity at a time: `android:dev` refuses to run when it was

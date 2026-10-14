@@ -1,15 +1,40 @@
 ---
 name: PrivateCycle Release
-description: Cut a PrivateCycle release — version bump, pre-flight checks, tagging, and what the GitHub Actions workflow does. Use when asked to ship, release, tag a version, or check release health.
+description: Shipping PrivateCycle — the automatic per-commit release pipeline, conventional-commit version rules, pre-flight checks, and verifying or fixing a published release. Use when asked to ship, release, tag a version, or check release health.
 ---
 
 # PrivateCycle releases
 
-Releases are tag-driven: pushing a `v*` tag runs
-`.github/workflows/android-release.yml`, which builds a signed APK and creates
-a GitHub Release with an auto-generated changelog.
+Releases are **automatic**: every push to `main` that CI does not skip
+publishes a GitHub Release `vX.Y.Z` with both APKs attached —
 
-## Pre-flight (all must pass)
+- `PrivateCycle.apk` — stable identity (`com.ncan.privatecycle`);
+- `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`, installs
+  alongside the stable app for testing with imported real data.
+
+`.github/workflows/ci.yml` is the only release path. Manual `v*` tags no
+longer trigger builds (the workflow creates the tag itself via
+`gh release create`), so do not push them.
+
+## Version bump rules
+
+`scripts/release-version.mjs` derives the version from the conventional
+commits since the previous release tag:
+
+- `feat: …` → minor (`v1.1.0` → `v1.2.0`);
+- `feat!:` / `fix(scope)!:` / a `BREAKING CHANGE:` footer → major (`v2.0.0`);
+- everything else — `fix:`, `ci:`, `docs:`, `chore:`, non-conventional —
+  patch (`v1.1.1`).
+
+Merge commits are ignored. Reruns reuse the version when the commit is
+already released, and a version already tagged on another commit is skipped
+in favour of the next patch. Print what the next push will release:
+
+```sh
+node scripts/release-version.mjs
+```
+
+## Pre-flight (all must pass before pushing)
 
 ```sh
 npm ci
@@ -18,49 +43,50 @@ npm test
 npm run smoke:web
 ```
 
-Review `artifacts/screenshots/` — a release should not ship with visible
-breakage that smoke didn't assert.
-
-## Version bump
-
-Update `expo.version` in `app.json` (currently `1.0.0`). Versions are not
-wired to the tag automatically; keep them intentional. Commit the bump before
-tagging.
-
-## Tag and push
-
-```sh
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-Do not push tags unless the user explicitly asks — tagging publishes a public
+Review `artifacts/screenshots/`. A push to `main` is a release, so treat
+pre-flight as the release gate. Pushes that only touch `**.md`,
+`.opencode/**`, `artifacts/**` or `maestro/**` are skipped by CI and do not
 release.
 
 ## What CI does
 
-1. `npx expo prebuild --platform android`
-2. `./gradlew generateCodegenArtifactsFromSchema` (required for New
-   Architecture TurboModule headers — see CI comments)
-3. decodes the keystore from `ANDROID_KEYSTORE_BASE64`
-4. `assembleRelease` for `arm64-v8a` only, no Gradle build cache
-5. uploads `dist/PrivateCycle-<tag>.apk` to a GitHub Release
-6. changelog = commits since the previous tag (`git log prev..tag`)
+1. checkout with full history; compute the version
+2. typecheck + Jest
+3. prebuild + `assembleRelease` (arm64-v8a) for the stable identity
+4. prebuild + `assembleRelease` for the nightly identity
+5. `gh release create` `vX.Y.Z` with both APKs and a changelog (commits since
+   the previous release); a rerun edits the release and re-uploads instead.
+
+Both APKs are stamped with the version (`versionName`, via `APP_VERSION`)
+and a monotonically increasing `versionCode` (unix minutes, via
+`ANDROID_VERSION_CODE`), so updater apps (Obtainium etc.) see every release.
 
 Required repository secrets: `ANDROID_KEYSTORE_BASE64`,
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 
-## After the release
+## After a push
 
-- Verify the APK asset exists on the release page and the changelog looks sane.
-- If the build fails, read the failing step in Actions — the usual suspects are
-  codegen ordering and dependency alignment when expo/RN versions changed.
+- Check the Actions run; the job summary links the published release.
+- On the release: both assets present, changelog sane, version matches the
+  bump level the commits imply.
+- Usual build failures: codegen ordering and dependency alignment when
+  expo/RN versions changed.
+
+## Fixing a release
+
+- Bad assets or notes: re-run that workflow run (Actions → the run →
+  Re-run) — it republishes the same version and clobbers the assets.
+- Wrong version, or a release that should not exist: deleting or re-tagging
+  a published release (`gh release delete vX.Y.Z --cleanup-tag`) is
+  destructive and needs explicit user approval; then re-run CI for the
+  commit again.
+- The old rolling `ci-latest` / `nightly` prereleases are retired;
+  `releases/latest` and the per-version tags are the download surface now.
 
 ## Version notes
 
-- `app.json` `version` is displayed nowhere in the UI except About (which is
-  currently hardcoded "Version 1.0.0" in `app/(tabs)/settings.tsx`) — update it
-  when bumping, or better, read it from `expo-constants` if you touch that
-  screen.
-- Backup format version (`BackupService.BACKUP_VERSION`) is independent of app
-  version. Bump it only when the backup JSON shape changes.
+- Settings → About reads the real version via `expo-constants`: CI stamps
+  `APP_VERSION` into the config, and `app.json`'s `version` is the
+  local/fallback value.
+- Backup format version (`BackupService.BACKUP_VERSION`) is independent of
+  the app version. Bump it only when the backup JSON shape changes.

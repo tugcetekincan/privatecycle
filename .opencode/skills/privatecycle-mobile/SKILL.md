@@ -51,7 +51,7 @@ has its own applicationId and data sandbox, so they coexist on one device:
 | Icon tint | pink | blue | amber |
 | Signed with | release key (CI) | debug key | release key (CI) |
 | JS source | embedded | Metro (dev client) | embedded |
-| How to get it | `ci-latest` release | `npm run android:dev` | `nightly` release |
+| How to get it | newest release | `npm run android:dev` | same release as stable |
 
 Local dev builds:
 
@@ -61,9 +61,9 @@ npm run android:dev            # build + install + start Metro (dev client)
 ```
 
 For testing features against imported real data **without a local build**,
-download `PrivateCycle-Nightly.apk` from the rolling `nightly` pre-release
-(rebuilt on every push to `main`). Export a backup from the stable app
-(share sheet → Files), then import it in the nightly app via
+download `PrivateCycle-Nightly.apk` from the newest release
+(`releases/latest`, rebuilt on every push to `main`). Export a backup from
+the stable app (share sheet → Files), then import it in the nightly app via
 Settings → Import Backup. On the emulator
 `adb push backup.json /sdcard/Download/` also works.
 
@@ -77,8 +77,9 @@ Settings → Import Backup. On the emulator
 - Switching back to the base identity locally:
   `npm run prebuild:android` then `npm run android` (or plain
   `npx expo run:android` after regenerating).
-- Release sanity check: the tagged GitHub Actions workflow builds the APK
-  (`android-release.yml`). Don't reproduce that locally unless debugging CI.
+- Release sanity check: CI builds both APKs and publishes the versioned
+  release on every push (`ci.yml`); don't reproduce that locally unless
+  debugging CI.
 
 ## Screenshots and inspection
 
