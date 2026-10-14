@@ -5,8 +5,8 @@
  *   dev     - "PrivateCycle Dev": debug-signed dev client for local work
  *             (Metro, fast refresh). See scripts/android-dev.sh.
  *   nightly - "PrivateCycle Nightly": release build published by CI on every
- *             push to main (rolling `nightly` pre-release), standalone with
- *             the JS bundle embedded.
+ *             push to main as part of the versioned release (standing next to
+ *             the stable APK), standalone with the JS bundle embedded.
  *
  * Each variant has its own applicationId, so it coexists with the stable app
  * (and with the other variants) and has a separate data sandbox — importing
@@ -59,8 +59,26 @@ const withVersionCode = (config) => {
   };
 };
 
+/**
+ * CI stamps APP_VERSION (the release version derived from the conventional
+ * commits, e.g. `1.1.3`) so the APK's versionName matches the GitHub release
+ * it ships in — Settings -> About reads it back via expo-constants. Local
+ * builds keep app.json's version.
+ */
+const withVersion = (config) => {
+  const raw = process.env.APP_VERSION;
+  if (!raw) {
+    return config;
+  }
+  const version = raw.trim();
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error(`Invalid APP_VERSION: ${raw}`);
+  }
+  return { ...config, version };
+};
+
 module.exports = ({ config }) => {
-  const base = withVersionCode(config);
+  const base = withVersion(withVersionCode(config));
 
   if (!variant) {
     return base;

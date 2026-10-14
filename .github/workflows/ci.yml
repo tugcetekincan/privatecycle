@@ -1,12 +1,15 @@
 name: CI
 
-# Per-commit verification + signed APKs.
+# Per-commit verification + a versioned release.
 #
-# Pushes to main run typecheck, Jest, then two signed release APKs:
-#  - stable identity (com.ncan.privatecycle) -> rolling `ci-latest` prerelease
-#  - nightly identity (com.ncan.privatecycle.nightly) -> rolling `nightly`
-#    prerelease; installs next to the stable app for testing with real data
-# Versioned release publishing stays tag-only in android-release.yml.
+# Every push to main runs typecheck, Jest, then builds two signed release
+# APKs and attaches both to one GitHub Release named after the version
+# derived from the conventional commits since the previous release
+# (scripts/release-version.mjs):
+#  - PrivateCycle.apk - stable identity (com.ncan.privatecycle)
+#  - PrivateCycle-Nightly.apk - com.ncan.privatecycle.nightly, installs next
+#    to the stable app for testing with imported real data
+# Rerunning CI for an already-released commit republishes its version.
 #
 # Caches (see steps below for the reasoning):
 #  - native-libs-v2: Gradle/CMake outputs of autolinked libraries and the
@@ -27,7 +30,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # publish the rolling ci-latest pre-release
+  contents: write # publish the versioned release
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -56,6 +59,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: the release version (tags + commits since the last
+          # release) and the changelog are derived from git.
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -71,6 +78,17 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      # The version this commit will release as: conventional-commit bumps
+      # over the commits since the previous release tag. Stamped into both
+      # APKs below and used as the release tag after the builds succeed.
+      - name: Compute release version
+        id: version
+        run: |
+          git fetch --tags --force origin
+          VERSION=$(node scripts/release-version.mjs)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: v$VERSION"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -133,6 +151,8 @@ jobs:
             native-libs-v3-${{ runner.os }}-
 
       - name: Prebuild Android project
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           # Build-time versionCode (unix minutes): every APK must install over
           # the previous one, and updaters compare versionCodes.
@@ -200,24 +220,14 @@ jobs:
             -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
             -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
 
-      # Publishes the APK to a rolling pre-release so it is downloadable from
-      # the Releases page directly; workflow artifacts are not used. This is a
-      # moving build (`ci-latest`), not a versioned release. The title carries
-      # the build sha + date so staleness is visible at a glance.
-      - name: Publish rolling CI release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Stage the stable APK while android/ still holds it: the nightly
+      # prebuild below wipes the directory. Both assets are uploaded to one
+      # versioned release after the nightly build; workflow artifacts are not
+      # used.
+      - name: Stage stable APK
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle.apk
-          TITLE="Latest CI build · ${GITHUB_SHA:0:7} · $(date -u '+%Y-%m-%d')"
-          NOTES="Rolling prerelease of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
-          if gh release view ci-latest >/dev/null 2>&1; then
-            gh release edit ci-latest --title "$TITLE" --notes "$NOTES"
-          else
-            gh release create ci-latest --prerelease --title "$TITLE" \
-              --notes "$NOTES" --target "$GITHUB_SHA"
-          fi
-          gh release upload ci-latest PrivateCycle.apk --clobber
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk dist/PrivateCycle.apk
 
       # Snapshot the stable build outputs while android/ still holds them: the
       # nightly prebuild below wipes the directory, and the implicit cache save
@@ -244,6 +254,8 @@ jobs:
       # codegen must be re-applied; ccache and the Gradle home keep this
       # second build cheap.
       - name: Prebuild nightly variant
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
           export ANDROID_VERSION_CODE=$(($(date +%s) / 60))
           APP_VARIANT=nightly npx expo prebuild --platform android --clean --no-install
@@ -273,20 +285,57 @@ jobs:
             -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
             -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
 
-      - name: Publish rolling nightly release
+      - name: Stage nightly APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk dist/PrivateCycle-Nightly.apk
+
+      # Both APKs built, so this commit becomes a public release. Re-resolve
+      # the version right before publishing: it reuses this commit's tag on a
+      # rerun, and skips versions another commit has claimed meanwhile.
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk PrivateCycle-Nightly.apk
-          TITLE="PrivateCycle (Nightly) · ${GITHUB_SHA:0:7} · $(date -u '+%Y-%m-%d')"
-          NOTES="Nightly of \`main\` at \`${GITHUB_SHA:0:7}\` ($(date -u '+%Y-%m-%d %H:%M UTC'))."
-          if gh release view nightly >/dev/null 2>&1; then
-            gh release edit nightly --title "$TITLE" --notes "$NOTES"
-          else
-            gh release create nightly --prerelease --title "$TITLE" \
-              --notes "$NOTES" --target "$GITHUB_SHA"
+          git fetch --tags --force origin
+          VERSION=$(node scripts/release-version.mjs)
+          TAG="v$VERSION"
+          echo "$VERSION" > dist/version.txt
+
+          BUILT_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$VERSION" != "$BUILT_VERSION" ]; then
+            echo "::warning::APKs carry v$BUILT_VERSION but this release is v$VERSION (stale rerun)"
           fi
-          gh release upload nightly PrivateCycle-Nightly.apk --clobber
+
+          PREV_TAG=$(git describe --tags --match 'v*' --abbrev=0 HEAD^ 2>/dev/null || true)
+          {
+            echo "Stable \`PrivateCycle.apk\` and nightly \`PrivateCycle-Nightly.apk\` (installs alongside the stable app, \`com.ncan.privatecycle.nightly\`) are both built from this version."
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log --no-merges --pretty=format:'- %h %s — %an' "$PREV_TAG..HEAD"
+            else
+              git log --no-merges --pretty=format:'- %h %s — %an' HEAD
+            fi
+            echo
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+              echo
+            fi
+            echo "_Built from \`${GITHUB_SHA:0:7}\` on $(date -u '+%Y-%m-%d %H:%M UTC')._"
+          } > changelog.md
+          echo "----- changelog preview -----"
+          cat changelog.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file changelog.md
+            gh release upload "$TAG" dist/PrivateCycle.apk dist/PrivateCycle-Nightly.apk --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --notes-file changelog.md \
+              dist/PrivateCycle.apk dist/PrivateCycle-Nightly.apk
+          fi
+          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
 
       - name: Cache diagnostics
         if: always()
@@ -302,11 +351,14 @@ jobs:
 
       - name: Job summary
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [ -f dist/version.txt ]; then
+            VERSION=$(cat dist/version.txt)
+          fi
           {
             echo "## CI"
             echo ""
             echo "- Commit: \`${GITHUB_SHA:0:7}\`"
-            echo "- Stable APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/ci-latest"
-            echo "- Nightly APK: https://github.com/${GITHUB_REPOSITORY}/releases/tag/nightly"
+            echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"
             echo "- Trigger: \`${GITHUB_EVENT_NAME}\`"
           } >> "$GITHUB_STEP_SUMMARY"
