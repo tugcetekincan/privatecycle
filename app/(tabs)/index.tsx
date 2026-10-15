@@ -15,6 +15,8 @@ import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Dr
 import { DataService, DailyData } from '@/services/DataService';
 import { FertilityForecast } from '@/services/FertilityService';
 import { addDays, daysBetween, parseDateKey } from '@/services/dateKey';
+import { MoodValue, primaryMoodId } from '@/services/MoodTags';
+import MoodPicker from '@/components/MoodPicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
@@ -39,14 +41,6 @@ const SYMPTOMS = [
   { id: 'fatigue', label: 'Fatigue', icon: '😴' },
   { id: 'backache', label: 'Back Pain', icon: '😖' },
   { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
-];
-
-const MOODS = [
-  { id: 'happy', label: 'Happy', icon: '😊', color: '#4caf50' },
-  { id: 'sad', label: 'Sad', icon: '😢', color: '#2196f3' },
-  { id: 'anxious', label: 'Anxious', icon: '😰', color: '#ff9800' },
-  { id: 'calm', label: 'Calm', icon: '😌', color: '#9c27b0' },
-  { id: 'irritated', label: 'Irritated', icon: '😤', color: '#f44336' },
 ];
 
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
@@ -83,6 +77,8 @@ export default function CalendarTab() {
     data: DailyData | null;
   } | null>(null);
   const [editingData, setEditingData] = useState<DailyData | null>(null);
+  const [moodSaved, setMoodSaved] = useState(false);
+  const moodSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const nextMonthAnim = useRef(new Animated.Value(screenWidth)).current;
@@ -91,6 +87,13 @@ export default function CalendarTab() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+    },
+    []
+  );
 
   useEffect(() => {
     const newHeight = getCalendarHeight(currentDate);
@@ -173,6 +176,8 @@ export default function CalendarTab() {
       symptoms: [],
       mood: '',
       isOvulation: false,
+      moodValence: 0,
+      moodTags: [],
     });
     setModalVisible(true);
   };
@@ -206,6 +211,33 @@ export default function CalendarTab() {
         ? editingData.symptoms.filter(id => id !== symptomId)
         : [...editingData.symptoms, symptomId]
     });
+  };
+
+  // Mood auto-saves on every tap (same picker as Track), while the rest of the
+  // modal still goes through the explicit Save button.
+  const handleModalMoodChange = async (next: MoodValue) => {
+    if (!editingData) return;
+    const dateKey = editingData.date;
+
+    setEditingData({
+      ...editingData,
+      mood: primaryMoodId(next.tags),
+      moodValence: next.valence,
+      moodTags: next.tags,
+    });
+    setMoodSaved(true);
+    if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+    moodSavedTimer.current = setTimeout(() => setMoodSaved(false), 2000);
+
+    try {
+      await DataService.saveMoodData(dateKey, {
+        mood: primaryMoodId(next.tags),
+        moodValence: next.valence,
+        moodTags: next.tags,
+      });
+    } catch (error) {
+      console.error('Error auto-saving mood:', error);
+    }
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -685,6 +717,16 @@ export default function CalendarTab() {
             </View>
 
             <ScrollView style={styles.modalScrollView}>
+              {/* Mood (auto-saves on every tap, same picker as Track) */}
+              <MoodPicker
+                valence={editingData?.moodValence || 0}
+                tags={editingData?.moodTags || []}
+                saved={moodSaved}
+                onChange={handleModalMoodChange}
+                testIDPrefix="day-modal-mood"
+                compact
+              />
+
               {/* Period Tracking */}
               <View style={styles.modalCard}>
                 <Text style={styles.modalCardTitle}>Period</Text>
@@ -774,37 +816,6 @@ export default function CalendarTab() {
                         editingData?.symptoms.includes(symptom.id) && styles.symptomTextSelected,
                       ]}>
                         {symptom.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Mood */}
-              <View style={styles.modalCard}>
-                <Text style={styles.modalCardTitle}>Mood</Text>
-                <View style={styles.moodGrid}>
-                  {MOODS.map(mood => (
-                    <TouchableOpacity
-                      key={mood.id}
-                      testID={`day-modal-mood-${mood.id}`}
-                      style={[
-                        styles.moodChip,
-                        editingData?.mood === mood.id && [
-                          styles.moodChipSelected,
-                          { backgroundColor: mood.color },
-                        ],
-                      ]}
-                      onPress={() => editingData && setEditingData({
-                        ...editingData,
-                        mood: editingData.mood === mood.id ? '' : mood.id,
-                      })}>
-                      <Text style={styles.moodEmoji}>{mood.icon}</Text>
-                      <Text style={[
-                        styles.moodText,
-                        editingData?.mood === mood.id && styles.moodTextSelected,
-                      ]}>
-                        {mood.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1237,34 +1248,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   symptomTextSelected: {
     color: theme.colors.white,
     fontWeight: '500',
-  },
-  moodGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-  },
-  moodChip: {
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: theme.colors.secondary,
-    margin: 5,
-    minWidth: 70,
-  },
-  moodChipSelected: {
-    backgroundColor: theme.colors.primary,
-  },
-  moodEmoji: {
-    fontSize: 24,
-    marginBottom: 5,
-  },
-  moodText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  moodTextSelected: {
-    color: theme.colors.white,
   },
   modalFooter: {
     padding: 20,

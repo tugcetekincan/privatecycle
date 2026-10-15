@@ -151,9 +151,9 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   so the calendar and insights keep working. Feeling ids/labels live in
   `MOOD_OPTIONS` (`services/MoodTags.ts`); the phase summary and trend series
   are pure helpers in `services/MoodInsights.ts` whose phase thresholds mirror
-  `AnalyticsService.getCyclePhase`. The Track mood picker auto-saves mood-only
-  via `DataService.saveMoodData` so unsaved period/symptom edits are never
-  overwritten.
+  `AnalyticsService.getCyclePhase`. The mood picker (Track and the calendar
+  day modal) auto-saves mood-only via `DataService.saveMoodData` so unsaved
+  period/symptom edits are never overwritten.
 
 **Dates**
 - Day keys are **local-time** `YYYY-MM-DD` from

@@ -38,9 +38,20 @@ interface MoodPickerProps {
   /** Show the transient "✓ Saved" indicator (auto-save feedback). */
   saved?: boolean;
   onChange: (next: MoodValue) => void;
+  /** testID prefix; the calendar day modal uses `day-modal-mood`. */
+  testIDPrefix?: string;
+  /** Smaller card title, for embedding in the day modal. */
+  compact?: boolean;
 }
 
-export default function MoodPicker({ valence, tags, saved, onChange }: MoodPickerProps) {
+export default function MoodPicker({
+  valence,
+  tags,
+  saved,
+  onChange,
+  testIDPrefix = 'mood',
+  compact = false,
+}: MoodPickerProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
@@ -60,9 +71,9 @@ export default function MoodPicker({ valence, tags, saved, onChange }: MoodPicke
   return (
     <View style={styles.card}>
       <View style={styles.titleRow}>
-        <Text style={styles.cardTitle}>Mood</Text>
+        <Text style={[styles.cardTitle, compact && styles.cardTitleCompact]}>Mood</Text>
         {saved && (
-          <Text testID="mood-saved" style={styles.savedPill}>
+          <Text testID={`${testIDPrefix}-saved`} style={styles.savedPill}>
             ✓ Saved
           </Text>
         )}
@@ -75,7 +86,7 @@ export default function MoodPicker({ valence, tags, saved, onChange }: MoodPicke
           return (
             <TouchableOpacity
               key={face.value}
-              testID={`mood-valence-${face.value}`}
+              testID={`${testIDPrefix}-valence-${face.value}`}
               accessibilityRole="button"
               accessibilityLabel={`Overall mood: ${face.label}`}
               accessibilityState={{ selected }}
@@ -102,7 +113,7 @@ export default function MoodPicker({ valence, tags, saved, onChange }: MoodPicke
           return (
             <View key={option.id} style={styles.chipWrapper}>
               <TouchableOpacity
-                testID={`mood-tag-${option.id}`}
+                testID={`${testIDPrefix}-tag-${option.id}`}
                 accessibilityRole="button"
                 accessibilityLabel={
                   selected ? `${option.label}, strength ${tag!.level} of 3` : option.label
@@ -135,7 +146,7 @@ export default function MoodPicker({ valence, tags, saved, onChange }: MoodPicke
               </TouchableOpacity>
               {selected && (
                 <TouchableOpacity
-                  testID={`mood-tag-${option.id}-clear`}
+                  testID={`${testIDPrefix}-tag-${option.id}-clear`}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${option.label}`}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -175,6 +186,9 @@ const createStyles = (theme: any) =>
       fontSize: 20,
       fontWeight: '600',
       color: theme.colors.text,
+    },
+    cardTitleCompact: {
+      fontSize: 18,
     },
     savedPill: {
       fontSize: 12,

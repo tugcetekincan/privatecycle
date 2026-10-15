@@ -218,11 +218,25 @@ try {
   await page.getByTestId(`calendar-day-${sampleDay}`).click();
   await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('day-modal-ovulation-toggle').waitFor({ state: 'visible', timeout: 15_000 });
+
+  // Mood in the day modal is the same auto-saving picker as Track.
+  await page.getByTestId('day-modal-mood-tag-calm').click();
+  await page.getByTestId('day-modal-mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
   // The modal slides in from the bottom; let the animation finish so the
   // screenshot actually captures the sheet.
   await page.waitForTimeout(600);
   await page.screenshot({ path: shot('04-calendar-day-modal') });
   await page.getByTestId('day-modal-close').click();
+
+  const modalMoodTags = await page.evaluate(async (dateKey) => {
+    const data = await __privatecycle.DataService.getTodayData(dateKey);
+    return (data?.moodTags ?? []).map((tag) => tag.id);
+  }, sampleDay);
+  if (!modalMoodTags.includes('calm')) {
+    failures.push(
+      `day-modal mood auto-save did not persist (tags: ${JSON.stringify(modalMoodTags)})`
+    );
+  }
 
   const recordedOvulationCount = await page
     .locator('[data-testid^="calendar-ovulation-recorded-"]')

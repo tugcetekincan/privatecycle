@@ -88,12 +88,15 @@ Naming convention: `area-element`, kebab-case.
   `calendar-fertile-window`, `calendar-fertility-empty`, `day-modal`,
   `day-modal-close`, `day-modal-period-toggle`, `day-modal-flow-{id}`,
   `day-modal-ovulation-toggle`, `day-modal-ovulation-hint`,
-  `day-modal-symptom-{id}`, `day-modal-mood-{id}`, `day-modal-save`
+  `day-modal-symptom-{id}`, `day-modal-mood-valence-{1..5}`,
+  `day-modal-mood-tag-{id}`, `day-modal-mood-tag-{id}-clear`,
+  `day-modal-mood-saved`, `day-modal-save`
 - Track: `track-date-card`, `track-period-toggle`, `track-ovulation-toggle`,
   `track-flow-{id}`, `track-symptom-{id}`, `track-save-button`, `track-has-data`
-- Mood picker (`components/MoodPicker.tsx`, Track for now): `mood-valence-{1..5}`,
-  `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`. Mood auto-saves, so
-  there is no track-level mood save button.
+- Mood picker (`components/MoodPicker.tsx`, used by Track and the day modal):
+  `mood-valence-{1..5}`, `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`;
+  the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves in both
+  places, so there is no mood save button anywhere.
 - Insights: `insights-avg-cycle`, `insights-last-period`,
   `insights-next-period`, `insights-total-periods`,
   `insights-fertility-card`, `insights-recorded-ovulation`,
