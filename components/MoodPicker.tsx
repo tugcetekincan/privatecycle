@@ -79,7 +79,7 @@ export default function MoodPicker({
         )}
       </View>
 
-      <Text style={styles.sectionLabel}>The day, overall</Text>
+      <Text style={styles.sectionLabel}>THE DAY, OVERALL</Text>
       <View style={styles.facesRow}>
         {MOOD_VALENCES.map((face) => {
           const selected = valence === face.value;
@@ -104,7 +104,7 @@ export default function MoodPicker({
 
       <View style={styles.divider} />
 
-      <Text style={styles.sectionLabel}>Feelings — tap again for strength</Text>
+      <Text style={styles.sectionLabel}>FEELINGS — TAP AGAIN FOR STRENGTH</Text>
       <View style={styles.chipsWrap}>
         {MOOD_OPTIONS.map((option) => {
           const tag = tags.find((t) => t.id === option.id);
@@ -200,7 +200,6 @@ const createStyles = (theme: any) =>
       fontWeight: '600',
       color: theme.colors.textSecondary,
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
       marginTop: 16,
       marginBottom: 10,
     },

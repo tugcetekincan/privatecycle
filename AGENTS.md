@@ -184,13 +184,17 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
 - Platform differences belong either behind `Platform.OS` checks with a web
   fallback (see `track.tsx` date input and `BackupService`) or in
   platform-specific files.
+- Write uppercase headings as literal strings, never with
+  `textTransform: 'uppercase'`: React Native Android applies the transform
+  with the device locale, so Turkish devices render dotted İ (`FEELİNGS`).
 - Dev-only UI/logic is wrapped in `__DEV__`.
 
 **Tests**
 - Put pure logic in services so it can be tested without a database.
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
-  determinism, date keys, dialog component. Extend rather than duplicate.
+  determinism, date keys, dialog + mood picker components, mood tags/insights,
+  fertility forecast. Extend rather than duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
