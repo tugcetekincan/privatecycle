@@ -332,6 +332,100 @@ try {
       log('note: no period days sampled in current month');
     }
   }
+
+  // --- Clearing a day's data must remove its row and its day mark. ---
+  // A day in the next month has no seeded data, so it starts clean. Prefer a
+  // day outside predicted period spans so the grey "No Period" mark is
+  // actually visible when the day has data.
+  await page.getByTestId('tab-calendar').click();
+  await page.getByTestId('calendar-next-month').click();
+  const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const nextMonthLabel =
+    `${nextMonth.toLocaleDateString('en-US', { month: 'long' })} ${nextMonth.getFullYear()}`;
+  await page.waitForFunction(
+    (label) =>
+      document.querySelector('[data-testid="calendar-month-label"]')?.textContent === label,
+    nextMonthLabel,
+    { timeout: 15_000 }
+  );
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const predictedKeys = new Set();
+  const forecast = await page.evaluate(() => __privatecycle.DataService.getFertilityForecast());
+  for (const start of forecast.futurePeriodStarts) {
+    const startDate = new Date(`${start}T12:00:00`);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      predictedKeys.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    }
+  }
+  const monthKey = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}`;
+  let clearedKey = `${monthKey}-10`;
+  for (let day = 1; day <= 28; day++) {
+    const candidate = `${monthKey}-${pad(day)}`;
+    if (!predictedKeys.has(candidate)) {
+      clearedKey = candidate;
+      break;
+    }
+  }
+
+  const clearedCell = page.getByTestId(`calendar-day-${clearedKey}`);
+  const dayRow = () =>
+    page.evaluate(async (key) => {
+      const all = await __privatecycle.DataService.getAllDailyData();
+      return all[key] ?? null;
+    }, clearedKey);
+  const cellBackground = () =>
+    clearedCell.evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  const backgroundBefore = await cellBackground();
+
+  // Enter a symptom and save: the day must now have a row.
+  await clearedCell.click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-symptom-cramps').click();
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('dialog-button-ok').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  const enteredRow = await dayRow();
+  if (!enteredRow || !enteredRow.symptoms.includes('cramps')) {
+    failures.push(`clearing flow: saved day has no row with the symptom (${clearedKey})`);
+  }
+  const backgroundMarked = await cellBackground();
+  if (backgroundMarked === backgroundBefore) {
+    failures.push(
+      `clearing flow: day with data shows no calendar mark (${backgroundBefore} unchanged)`
+    );
+  }
+  // Let the day-modal slide-out animation finish before capturing.
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: shot('07-calendar-day-marked'), fullPage: true });
+
+  // Clear the symptom and save: the row and the day mark must disappear.
+  await clearedCell.click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-symptom-cramps').click();
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('dialog-button-ok').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  const leftoverRow = await dayRow();
+  if (leftoverRow) {
+    failures.push(`clearing flow: empty day row still in the DB: ${JSON.stringify(leftoverRow)}`);
+  }
+  const backgroundCleared = await cellBackground();
+  if (backgroundCleared !== backgroundBefore) {
+    failures.push(
+      `clearing flow: day mark did not return to its clean state ` +
+        `(${backgroundBefore} -> ${backgroundCleared})`
+    );
+  }
+  // Let the day-modal slide-out animation finish before capturing.
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: shot('08-calendar-day-cleared'), fullPage: true });
+  log(
+    `calendar clearing flow OK (mark ${backgroundBefore} -> ${backgroundMarked} -> ${backgroundCleared})`
+  );
 } catch (error) {
   failures.push(`smoke run threw: ${error.message}`);
   console.error(expoLog.split('\n').slice(-25).join('\n'));
