@@ -146,6 +146,11 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   columns.
 - Bulk writes go through `DataService.saveManyDailyData` (single transaction).
   Keep `BackupService.restoreFromBackup` on that path.
+- A day with nothing tracked has **no row**: `saveTodayData`, `saveMoodData`
+  and `saveManyDailyData` delete/skip fully cleared days (see `dayHasContent`),
+  and migration v4 removes the empty rows older versions left behind. The
+  calendar's grey "No Period" mark and Track's "Has Data" badge follow row
+  presence, so never re-add an empty-row upsert.
 - Mood detail is additive: `mood_valence` (1-5, 0 = unset) and `mood_tags`
   (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
   so the calendar and insights keep working. Feeling ids/labels live in

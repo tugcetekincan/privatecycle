@@ -122,9 +122,11 @@ selectors so flows don't break when copy changes.
 5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
    Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
    (stats, fertility, mood trend + phase rows from seeded data), Settings,
-6. reloads and asserts persistence (including mood valence/strength from the
+6. saves a symptom on a clean next-month day, then clears it and asserts the
+   row and the grey day mark both disappear,
+7. reloads and asserts persistence (including mood valence/strength from the
    DB), screenshots along the way,
-7. fails on page errors / console errors, then kills the whole process tree.
+8. fails on page errors / console errors, then kills the whole process tree.
 
 Both scripts fail fast if their ports are occupied and kill Expo's process
 group on exit. If a run is interrupted, verify ports are free:
