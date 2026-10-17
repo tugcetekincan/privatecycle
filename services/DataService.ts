@@ -25,6 +25,21 @@ export interface PeriodData {
   moods: { [date: string]: string };
 }
 
+/**
+ * Whether a day holds anything worth keeping. A fully cleared day must have
+ * no row at all: empty rows used to linger and kept the calendar's grey
+ * "No Period" mark (and Track's "Has Data" badge) alive after the user had
+ * deleted the data back out.
+ */
+export const dayHasContent = (data: DailyData): boolean =>
+  data.isPeriod ||
+  data.isOvulation ||
+  (data.flowLevel ?? '') !== '' ||
+  (data.symptoms?.length ?? 0) > 0 ||
+  (data.mood ?? '') !== '' ||
+  (data.moodValence ?? 0) > 0 ||
+  (data.moodTags?.length ?? 0) > 0;
+
 /* ---------------------------------------------------------------------------
  * Schema migrations
  *
@@ -98,6 +113,25 @@ const MIGRATIONS: Migration[] = [
       // Overall valence (1-5, 0 = not set) and multi-select feeling tags.
       await addColumnIfMissing(db, 'daily_data', 'mood_valence', 'INTEGER NOT NULL DEFAULT 0');
       await addColumnIfMissing(db, 'daily_data', 'mood_tags', "TEXT NOT NULL DEFAULT '[]'");
+    },
+  },
+  {
+    version: 4,
+    name: 'remove_empty_day_rows',
+    up: async (db) => {
+      // Older versions kept a row for every saved day, even after the user
+      // cleared it. Those empty rows made the calendar keep its grey
+      // "No Period" mark; a day with nothing tracked should have no row.
+      await db.runAsync(
+        `DELETE FROM daily_data
+         WHERE is_period = 0
+           AND is_ovulation = 0
+           AND flow_level = ''
+           AND symptoms = '[]'
+           AND mood = ''
+           AND mood_valence = 0
+           AND mood_tags = '[]'`
+      );
     },
   },
 ];
@@ -272,6 +306,14 @@ class SQLiteDataService {
         throw new Error('Database connection is null');
       }
 
+      // Clearing every field deletes the day's row instead of leaving an
+      // empty one behind (see dayHasContent).
+      if (!dayHasContent(data)) {
+        await db.runAsync('DELETE FROM daily_data WHERE date = ?', [dateKey]);
+        console.log('Removed empty day for date:', dateKey);
+        return;
+      }
+
       const symptoms = JSON.stringify(data.symptoms || []);
       const flowLevel = data.flowLevel || '';
       const mood = data.mood || '';
@@ -327,6 +369,7 @@ class SQLiteDataService {
 
     await db.withTransactionAsync(async () => {
       for (const [dateKey, day] of entries) {
+        if (!dayHasContent(day)) continue; // no content -> no row
         await db.runAsync(
           `INSERT OR REPLACE INTO daily_data
            (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags, is_ovulation)
@@ -350,7 +393,8 @@ class SQLiteDataService {
    * Update only the mood fields for a day (valence + tags + legacy primary
    * mood id). Used by the mood picker's auto-save so period/symptom edits a
    * user has in progress are never overwritten. Creates the row if the day
-   * has no data yet.
+   * has no data yet, and removes it again when the mood is cleared and
+   * nothing else remains.
    */
   async saveMoodData(
     dateKey: string,
@@ -374,6 +418,25 @@ class SQLiteDataService {
           serializeMoodTags(mood.moodTags || [])
         ]
       );
+
+      // Clearing the mood may leave a row with nothing else in it; drop it so
+      // the day stops looking tracked (calendar mark, Track "Has Data" badge).
+      const moodIsEmpty =
+        !mood.mood && !(mood.moodValence ?? 0) && (mood.moodTags?.length ?? 0) === 0;
+      if (moodIsEmpty) {
+        await db.runAsync(
+          `DELETE FROM daily_data
+           WHERE date = ?
+             AND is_period = 0
+             AND is_ovulation = 0
+             AND flow_level = ''
+             AND symptoms = '[]'
+             AND mood = ''
+             AND mood_valence = 0
+             AND mood_tags = '[]'`,
+          [dateKey]
+        );
+      }
     } catch (error) {
       console.error('Error saving mood data for date', dateKey, ':', error);
       throw error;

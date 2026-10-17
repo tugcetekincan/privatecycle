@@ -235,6 +235,9 @@ export default function CalendarTab() {
         moodValence: next.valence,
         moodTags: next.tags,
       });
+      // Clearing a mood can remove the day's row entirely; reload so the
+      // calendar's day marks are up to date when the modal closes.
+      await loadData();
     } catch (error) {
       console.error('Error auto-saving mood:', error);
     }

@@ -119,7 +119,8 @@ export default function TrackTab() {
         moodValence: next.valence,
         moodTags: next.tags,
       });
-      setHasDayData(true);
+      // Clearing the mood can remove the day's row; keep the badge truthful.
+      setHasDayData((await DataService.getTodayData(dateKey)) !== null);
     } catch (error) {
       console.error('Error auto-saving mood:', error);
     }
