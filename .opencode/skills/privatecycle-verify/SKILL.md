@@ -82,6 +82,7 @@ Naming convention: `area-element`, kebab-case.
 - Tabs: `tab-calendar`, `tab-track`, `tab-insights`, `tab-settings`
 - Calendar: `calendar-prev-month`, `calendar-next-month`,
   `calendar-month-label`, `calendar-day-YYYY-MM-DD`,
+  `calendar-today-YYYY-MM-DD`, `calendar-today-caption`,
   `calendar-ovulation-recorded-YYYY-MM-DD`,
   `calendar-ovulation-predicted-YYYY-MM-DD`, `calendar-fertility-card`,
   `calendar-recorded-ovulation`, `calendar-next-ovulation`,

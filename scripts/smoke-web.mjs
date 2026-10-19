@@ -156,6 +156,16 @@ try {
   const monthPrefix = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const periodCell = page.locator(`[data-testid^="calendar-day-${monthPrefix}-"]`);
 
+  // The today marker must render even when today also carries other state
+  // fills (the seeded data usually makes today a recorded period day), and the
+  // current month spells today out in the caption under the month title.
+  const todayKey = `${monthPrefix}-${String(today.getDate()).padStart(2, '0')}`;
+  await page
+    .getByTestId(`calendar-today-${todayKey}`)
+    .waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('calendar-today-caption').waitFor({ state: 'visible', timeout: 15_000 });
+  log('calendar: today marker and caption rendered');
+
   // --- Track flow: toggle period, pick flow/symptom/mood, save, dismiss dialog. ---
   await page.getByTestId('tab-track').click();
   await page.getByTestId('track-save-button').waitFor({ state: 'visible', timeout: 30_000 });

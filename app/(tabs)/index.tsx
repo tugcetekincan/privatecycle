@@ -482,7 +482,6 @@ export default function CalendarTab() {
           style={[
             styles.dayCell,
             isFertile && styles.fertileWindowDay,
-            isToday && styles.today,
             isPeriod && [styles.periodDay, periodBorderRadius],
             isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
             isPredicted && [styles.predictedDay, predictedBorderRadius],
@@ -490,19 +489,22 @@ export default function CalendarTab() {
           ]}
           onPress={() => handleDayPress(dayDate)}
           activeOpacity={0.7}>
+          {/* Today: a surface-coloured cutout disc with a blue ring around the
+              number. The disc separates today from any cell fill (period
+              pink, predicted purple, fertile teal, no-period gray); the blue
+              is the app's dedicated today color (see the Track screen badge)
+              and is otherwise unused in the calendar. */}
+          {isToday && <View testID={`calendar-today-${dayKey}`} style={styles.todayMarker} />}
           <Text
             style={[
               styles.dayText,
-              isToday && styles.todayText,
               isPeriod && styles.periodText,
               isNoPeriod && styles.noPeriodText,
               isPredicted && styles.predictedText,
+              isToday && styles.todayText,
             ]}>
             {day}
           </Text>
-          {isToday && (
-            <View style={styles.todayIndicator} />
-          )}
           {isOvulation && (
             <View testID={`calendar-ovulation-recorded-${dayKey}`} style={styles.ovulationDot} />
           )}
@@ -541,6 +543,10 @@ export default function CalendarTab() {
 
   const currentCycleOvulation = forecast?.currentCycleOvulation ?? null;
   const nextCycleForecast = forecast?.cycles[0] ?? null;
+  const now = new Date();
+  const isViewingCurrentMonth =
+    currentDate.getFullYear() === now.getFullYear() &&
+    currentDate.getMonth() === now.getMonth();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -563,6 +569,16 @@ export default function CalendarTab() {
             <ChevronRight size={24} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
+
+        {/* On the current month, spell today out under the title so it is
+            unambiguous at a glance; other months keep the calendar compact. */}
+        {isViewingCurrentMonth && (
+          <Text testID="calendar-today-caption" style={styles.todayCaption}>
+            <Text style={styles.todayCaptionLabel}>Today</Text>
+            {' · '}
+            {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </Text>
+        )}
 
         {/* Calendar */}
         <Animated.View style={[styles.calendarContainer, { height: heightAnim }]} {...panResponder.panHandlers}>
@@ -615,7 +631,7 @@ export default function CalendarTab() {
             <Text style={styles.legendText}>Fertile window</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.accent }]} />
+            <View style={[styles.legendDot, styles.legendTodayDot]} />
             <Text style={styles.legendText}>Today</Text>
           </View>
         </View>
@@ -843,6 +859,10 @@ export default function CalendarTab() {
   );
 }
 
+// The app's dedicated "today" blue (same as the Track screen's Today badge);
+// the dark theme uses a lighter step so it contrasts with the dark cutout disc.
+const todayAccent = (theme: any) => (theme.isDark ? '#1e88e5' : theme.colors.today);
+
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
@@ -875,6 +895,16 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: theme.colors.text,
+  },
+  todayCaption: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    paddingBottom: 8,
+  },
+  todayCaptionLabel: {
+    color: todayAccent(theme),
+    fontWeight: '600',
   },
   calendarContainer: {
     marginHorizontal: 15,
@@ -929,12 +959,20 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 16,
     color: theme.colors.text,
   },
-  today: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: 18,
+  todayMarker: {
+    position: 'absolute',
+    top: 3,
+    left: '50%',
+    marginLeft: -15,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: todayAccent(theme),
+    backgroundColor: theme.colors.surface,
   },
   todayText: {
-    color: theme.colors.white,
+    color: todayAccent(theme),
     fontWeight: 'bold',
   },
   periodDay: {
@@ -978,6 +1016,11 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   legendFertileDot: {
     backgroundColor: theme.isDark ? 'rgba(0, 150, 136, 0.45)' : 'rgba(0, 150, 136, 0.2)',
+  },
+  legendTodayDot: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: todayAccent(theme),
   },
   fertilityValue: {
     fontSize: 16,
@@ -1106,16 +1149,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   clickableDay: {
     opacity: 0.9,
-  },
-  todayIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    left: '50%',
-    marginLeft: -3,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.accent,
   },
   modalOverlay: {
     flex: 1,
