@@ -13,6 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Heart, Droplets, Calendar, ChevronDown, Egg } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { MoodTag, MoodValue, primaryMoodId } from '@/services/MoodTags';
+import { SYMPTOMS } from '@/services/Symptoms';
 import MoodPicker from '@/components/MoodPicker';
 import { useTheme } from '@/hooks/useTheme';
 import { useDialog } from '@/hooks/useDialog';
@@ -21,16 +22,6 @@ const FLOW_LEVELS = [
   { id: 'light', label: 'Light', color: '#ffcccb' },
   { id: 'medium', label: 'Medium', color: '#ff6b6b' },
   { id: 'heavy', label: 'Heavy', color: '#dc143c' },
-];
-
-const SYMPTOMS = [
-  { id: 'cramps', label: 'Cramps', icon: '😣' },
-  { id: 'headache', label: 'Headache', icon: '🤕' },
-  { id: 'bloating', label: 'Bloating', icon: '😵' },
-  { id: 'mood', label: 'Mood Changes', icon: '😢' },
-  { id: 'fatigue', label: 'Fatigue', icon: '😴' },
-  { id: 'backache', label: 'Back Pain', icon: '😖' },
-  { id: 'breastache', label: 'Breast Pain', icon: '🤱' },
 ];
 
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
