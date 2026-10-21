@@ -29,7 +29,7 @@ app/                    expo-router screens
   _layout.tsx           providers, migration gate, dev-seed gate, dev globals
   (tabs)/index.tsx      Calendar (month grid, day modal, period + fertility forecast)
   (tabs)/track.tsx      Daily logging (period/ovulation/flow/symptoms/mood)
-  (tabs)/insights.tsx   Cycle + fertility stats from DataService
+  (tabs)/insights.tsx   Cycle/fertility stats, symptom patterns by phase, phase tips
   (tabs)/settings.tsx   Preferences, backup UI, Developer section (__DEV__)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo), MoodPicker (faces + tags)
@@ -37,7 +37,10 @@ hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady
 services/               DataService (SQLite owner), BackupService,
                         AnalyticsService, DevSeedService, FertilityService
-                        (pure ovulation/fertile-window forecast), devGlobals
+                        (pure ovulation/fertile-window forecast),
+                        CyclePhaseTips (phase tips + current phase),
+                        SymptomInsights (symptom/phase math), Symptoms
+                        (shared catalog), devGlobals
 scripts/                web harness (see below), debug probe,
                         release-version.mjs (per-commit release version)
 __tests__/              Jest suites
@@ -199,7 +202,8 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, dialog + mood picker components, mood tags/insights,
-  fertility forecast. Extend rather than duplicate.
+  fertility forecast, cycle phase tips, symptom patterns. Extend rather than
+  duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.

@@ -284,9 +284,35 @@ try {
     failures.push(`expected at least 2 mood phase rows, got ${moodPhaseRows}`);
   }
 
+  await page.getByTestId('insights-phase-tips-card').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('insights-current-phase-badge').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('insights-phase-tab-follicular').click();
+  await page.waitForTimeout(200);
+  const follicularTitle = await page.getByTestId('insights-phase-summary-title').textContent();
+  if (follicularTitle !== 'Follicular Phase') {
+    failures.push(`phase selector did not switch to follicular (got "${follicularTitle}")`);
+  }
+  await page.getByTestId('insights-phase-tab-menstrual').click();
+  await page.waitForTimeout(200);
+
+  await page.getByTestId('insights-symptom-patterns-card').waitFor({ state: 'visible', timeout: 15_000 });
+  const symptomRows = await page.locator('[data-testid^="insights-symptom-row-"]').count();
+  log(`insights: symptom pattern rows = ${symptomRows}`);
+  if (symptomRows < 2) {
+    failures.push(`expected at least 2 symptom pattern rows, got ${symptomRows}`);
+  }
+  const crampRate = (await page.getByTestId('insights-symptom-rate-cramps').textContent())?.trim();
+  if (!crampRate || !/^\d+%$/.test(crampRate)) {
+    failures.push(`cramps rate missing or malformed: "${crampRate}"`);
+  }
+  const crampSegments = await page.locator('[data-testid^="insights-symptom-segment-cramps-"]').count();
+  if (crampSegments < 1) {
+    failures.push('cramps phase bar has no phase segments');
+  }
+
   // The app scrolls inside a fixed-height ScrollView, so a fullPage capture
   // only sees the top. A taller viewport renders the whole Insights screen.
-  await page.setViewportSize({ width: 420, height: 1700 });
+  await page.setViewportSize({ width: 420, height: 2300 });
   await page.waitForTimeout(300);
   await page.screenshot({ path: shot('05-insights'), fullPage: true });
   await page.setViewportSize({ width: 420, height: 900 });

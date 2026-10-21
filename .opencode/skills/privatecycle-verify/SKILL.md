@@ -102,7 +102,13 @@ Naming convention: `area-element`, kebab-case.
   `insights-next-period`, `insights-total-periods`,
   `insights-fertility-card`, `insights-recorded-ovulation`,
   `insights-next-ovulation`, `insights-fertile-window`,
-  `insights-mood-trend`, `insights-mood-phase-{phase}`, `insights-mood-empty`
+  `insights-mood-trend`, `insights-mood-phase-{phase}`, `insights-mood-empty`,
+  `insights-symptom-patterns-card`, `insights-symptom-row-{id}`,
+  `insights-symptom-rate-{id}`, `insights-symptom-bar-{id}`,
+  `insights-symptom-segment-{id}-{phase}`,
+  `insights-phase-tips-card`, `insights-current-phase-badge`,
+  `insights-phase-tab-{phase}`, `insights-phase-tip-{category}`,
+  `insights-phase-summary-title`, `insights-phase-no-data`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
   `settings-dev-reset`, `settings-darkmode-switch`

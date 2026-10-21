@@ -3,6 +3,7 @@ import { computeFertilityForecast, FertilityForecast } from './FertilityService'
 import { addDays, formatDateKey } from './dateKey';
 import { buildMoodSeries, summarizeMoodByPhase, MoodDay, MOOD_SERIES_DAYS } from './MoodInsights';
 import { MoodTag, parseMoodTags, serializeMoodTags } from './MoodTags';
+import { summarizeSymptomPatterns, SymptomDay } from './SymptomInsights';
 
 export interface DailyData {
   date: string;
@@ -591,29 +592,37 @@ class SQLiteDataService {
         nextPeriodIn = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       }
 
-      // Get symptom counts using SQL
-      const symptomCountsResult = await db.getAllAsync(`
-        SELECT symptoms
+      // Symptom patterns: the raw day list is grouped by cycle phase in a pure
+      // helper so the chart shows when symptoms occur, not just how often.
+      const trackedDaysResult = await db.getFirstAsync(
+        'SELECT COUNT(*) as count FROM daily_data'
+      ) as { count: number } | null;
+      const trackedDays = trackedDaysResult?.count ?? 0;
+
+      const symptomRows = await db.getAllAsync(`
+        SELECT date, symptoms
         FROM daily_data
         WHERE symptoms != '[]'
-      `) as { symptoms: string }[];
+        ORDER BY date
+      `) as { date: string; symptoms: string }[];
 
-      const symptomCounts: { [key: string]: number } = {};
-      symptomCountsResult.forEach(row => {
+      const symptomDays: SymptomDay[] = [];
+      for (const row of symptomRows) {
         try {
-          const symptoms = JSON.parse(row.symptoms);
-          symptoms.forEach((symptom: string) => {
-            symptomCounts[symptom] = (symptomCounts[symptom] || 0) + 1;
-          });
-        } catch (e) {
-          console.error('Error parsing symptoms:', e);
+          const parsed = JSON.parse(row.symptoms);
+          if (Array.isArray(parsed)) {
+            symptomDays.push({ date: row.date, symptoms: parsed });
+          }
+        } catch (error) {
+          console.error('Error parsing symptoms:', error);
         }
-      });
+      }
 
-      const commonSymptoms = Object.entries(symptomCounts)
-        .map(([symptom, count]) => ({ symptom, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+      const symptomPatterns = summarizeSymptomPatterns(
+        symptomDays,
+        periodStarts,
+        trackedDays
+      ).patterns;
 
       // Mood detail: every day with valence or feeling tags feeds the phase
       // summary; the last 60 calendar days feed the valence trend chart.
@@ -652,9 +661,11 @@ class SQLiteDataService {
         lastPeriodLength,
         nextPeriodIn,
         totalPeriods: periodStarts.length,
-        commonSymptoms,
         moodSeries,
         moodPhases,
+        periodStarts,
+        symptomPatterns,
+        trackedDays,
       };
     } catch (error) {
       console.error('Error calculating insights:', error);
@@ -663,9 +674,11 @@ class SQLiteDataService {
         lastPeriodLength: 0,
         nextPeriodIn: 0,
         totalPeriods: 0,
-        commonSymptoms: [],
         moodSeries: [],
         moodPhases: [],
+        periodStarts: [],
+        symptomPatterns: [],
+        trackedDays: 0,
       };
     }
   }
