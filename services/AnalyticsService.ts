@@ -1,4 +1,5 @@
 import * as SQLite from 'expo-sqlite';
+import { buildCycleModel, phaseForDateInWindows } from './CycleModel';
 
 export interface CycleAnalytics {
   averageCycleLength: number;
@@ -37,40 +38,40 @@ class SQLiteAnalyticsService {
     return this.db;
   }
 
-  async getCyclePhase(date: string): Promise<'menstrual' | 'follicular' | 'ovulation' | 'luteal'> {
+  /**
+   * Load the shared cycle model. Phases and the calendar forecast both derive
+   * from this, so recorded ovulation days and the personal luteal length move
+   * the two views together.
+   */
+  private async loadCycleModel() {
     const db = await this.getDatabase();
-    
-    // Find the most recent period start before or on this date
-    const lastPeriodResult = await db.getFirstAsync(`
-      WITH period_starts AS (
-        SELECT date
-        FROM daily_data
-        WHERE is_period = 1
-        AND date <= ?
-        AND NOT EXISTS (
-          SELECT 1 FROM daily_data prev
-          WHERE prev.date = DATE(daily_data.date, '-1 day')
-          AND prev.is_period = 1
-        )
-        ORDER BY date DESC
-        LIMIT 1
+
+    const periodStarts = await db.getAllAsync(`
+      SELECT date
+      FROM daily_data
+      WHERE is_period = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM daily_data prev
+        WHERE prev.date = DATE(daily_data.date, '-1 day')
+        AND prev.is_period = 1
       )
-      SELECT date FROM period_starts
-    `, [date]) as { date: string } | null;
+      ORDER BY date
+    `) as { date: string }[];
 
-    if (!lastPeriodResult) {
-      return 'follicular'; // Default if no period data
-    }
+    const ovulationDays = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
+    ) as { date: string }[];
 
-    const daysSinceLastPeriod = Math.floor(
-      (new Date(date).getTime() - new Date(lastPeriodResult.date).getTime()) / (1000 * 60 * 60 * 24)
-    );
+    return buildCycleModel({
+      periodStarts: periodStarts.map((row) => row.date),
+      ovulationDays: ovulationDays.map((row) => row.date),
+      today: new Date(),
+    });
+  }
 
-    // Determine phase based on typical cycle
-    if (daysSinceLastPeriod <= 5) return 'menstrual';
-    if (daysSinceLastPeriod <= 13) return 'follicular';
-    if (daysSinceLastPeriod <= 16) return 'ovulation';
-    return 'luteal';
+  async getCyclePhase(date: string): Promise<'menstrual' | 'follicular' | 'ovulation' | 'luteal'> {
+    const model = await this.loadCycleModel();
+    return phaseForDateInWindows(date, model.windows) ?? 'follicular';
   }
 
   async getDetailedCycleAnalytics(): Promise<CycleAnalytics> {
@@ -88,6 +89,15 @@ class SQLiteAnalyticsService {
       )
       ORDER BY date
     `) as { date: string }[];
+
+    const ovulationRows = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
+    ) as { date: string }[];
+    const cycleModel = buildCycleModel({
+      periodStarts: periodStarts.map((row) => row.date),
+      ovulationDays: ovulationRows.map((row) => row.date),
+      today: new Date(),
+    });
 
     // Calculate cycle lengths and variability
     const cycleLengths: number[] = [];
@@ -148,7 +158,7 @@ class SQLiteAnalyticsService {
     };
 
     for (const day of allDailyData) {
-      const phase = await this.getCyclePhase(day.date);
+      const phase = phaseForDateInWindows(day.date, cycleModel.windows) ?? 'follicular';
       
       // Count symptoms
       try {

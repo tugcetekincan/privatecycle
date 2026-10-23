@@ -533,6 +533,17 @@ export default function CalendarTab() {
   const styles = createStyles(theme);
 
   const currentCycleOvulation = forecast?.currentCycleOvulation ?? null;
+  const recordedOvulationDays =
+    forecast?.ovulationDays.filter((day) => day <= formatDateKey(new Date())) ?? [];
+  const lastRecordedOvulation = recordedOvulationDays.length
+    ? recordedOvulationDays[recordedOvulationDays.length - 1]
+    : null;
+  // The grid marks every recorded ovulation; show the same latest mark in the
+  // card when the open cycle has no record of its own.
+  const recordedOvulation = currentCycleOvulation ?? lastRecordedOvulation;
+  const recordedOvulationLabel = currentCycleOvulation
+    ? 'Recorded ovulation'
+    : 'Last recorded ovulation';
   const nextCycleForecast = forecast?.cycles[0] ?? null;
   const now = new Date();
   const isViewingCurrentMonth =
@@ -658,13 +669,17 @@ export default function CalendarTab() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Fertility Forecast</Text>
           <View testID="calendar-fertility-card" style={styles.card}>
-            {currentCycleOvulation || nextCycleForecast ? (
+            {recordedOvulation || nextCycleForecast ? (
               <View style={styles.predictionInfo}>
-                {currentCycleOvulation && (
-                  <View style={styles.predictionInfoItem}>
-                    <Text style={styles.predictionInfoLabel}>Recorded ovulation</Text>
+                {recordedOvulation && (
+                  <View
+                    style={[
+                      styles.predictionInfoItem,
+                      !nextCycleForecast && styles.predictionInfoItemLast,
+                    ]}>
+                    <Text style={styles.predictionInfoLabel}>{recordedOvulationLabel}</Text>
                     <Text testID="calendar-recorded-ovulation" style={styles.fertilityValue}>
-                      {formatShortDate(currentCycleOvulation)}
+                      {formatShortDate(recordedOvulation)}
                     </Text>
                   </View>
                 )}

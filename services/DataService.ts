@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-import { computeFertilityForecast, FertilityForecast } from './FertilityService';
-import { addDays, formatDateKey } from './dateKey';
+import { computeFertilityForecast, FertilityForecast, predictPeriodStarts } from './FertilityService';
+import { addDays, daysBetween, formatDateKey, parseDateKey } from './dateKey';
 import { buildMoodSeries, summarizeMoodByPhase, MoodDay, MOOD_SERIES_DAYS } from './MoodInsights';
 import { MoodTag, parseMoodTags, serializeMoodTags } from './MoodTags';
 import { summarizeSymptomPatterns, SymptomDay } from './SymptomInsights';
@@ -249,6 +249,14 @@ class SQLiteDataService {
     return rows.map(row => row.date);
   }
 
+  /** Recorded ovulation days, ascending. */
+  private async queryOvulationDays(db: SQLite.SQLiteDatabase): Promise<string[]> {
+    const rows = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
+    ) as { date: string }[];
+    return rows.map(row => row.date);
+  }
+
   async getPeriodData(): Promise<PeriodData> {
     try {
       const db = await this.ensureInitialized();
@@ -256,10 +264,8 @@ class SQLiteDataService {
       const periodsResult = await db.getAllAsync(
         'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
       ) as { date: string }[];
-      
-      const ovulationResult = await db.getAllAsync(
-        'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
-      ) as { date: string }[];
+
+      const ovulationDays = await this.queryOvulationDays(db);
       
       const symptomsResult = await db.getAllAsync(
         "SELECT date, symptoms FROM daily_data WHERE symptoms != '[]' ORDER BY date"
@@ -270,7 +276,6 @@ class SQLiteDataService {
       ) as { date: string; mood: string }[];
 
       const periods = periodsResult.map(row => row.date);
-      const ovulationDays = ovulationResult.map(row => row.date);
       
       const symptoms: { [date: string]: string[] } = {};
       symptomsResult.forEach(row => {
@@ -524,6 +529,9 @@ class SQLiteDataService {
       const db = await this.ensureInitialized();
       
       const periodStarts = await this.queryPeriodStarts(db);
+      const ovulationDays = await this.queryOvulationDays(db);
+      const today = new Date();
+      const todayKey = formatDateKey(today);
       
       // Calculate average cycle length
       let averageCycle = 28;
@@ -577,19 +585,13 @@ class SQLiteDataService {
         }
       }
 
-      // Calculate next period prediction
+      // Calculate next period prediction. Use the same first prediction as the
+      // calendar (local day keys) instead of mixing UTC-parsed dates with local
+      // midnight, which was a day off in negative-offset timezones.
       let nextPeriodIn = 0;
-      if (periodStarts.length > 0) {
-        const lastPeriodStart = new Date(periodStarts[periodStarts.length - 1]);
-        const nextPredicted = new Date(lastPeriodStart);
-        nextPredicted.setDate(nextPredicted.getDate() + averageCycle);
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        nextPredicted.setHours(0, 0, 0, 0);
-        
-        const diffTime = nextPredicted.getTime() - today.getTime();
-        nextPeriodIn = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const nextPredicted = predictPeriodStarts(periodStarts)[0];
+      if (nextPredicted) {
+        nextPeriodIn = daysBetween(parseDateKey(todayKey), parseDateKey(nextPredicted));
       }
 
       // Symptom patterns: the raw day list is grouped by cycle phase in a pure
@@ -639,7 +641,6 @@ class SQLiteDataService {
         tags: parseMoodTags(row.mood_tags),
       }));
 
-      const today = new Date();
       const seriesStartKey = formatDateKey(addDays(today, -(MOOD_SERIES_DAYS - 1)));
       const seriesRows = await db.getAllAsync(
         'SELECT date, is_period, mood_valence FROM daily_data WHERE date >= ? ORDER BY date',
@@ -654,7 +655,7 @@ class SQLiteDataService {
       );
 
       const moodSeries = buildMoodSeries(seriesByDate, today);
-      const moodPhases = summarizeMoodByPhase(moodDays, periodStarts);
+      const moodPhases = summarizeMoodByPhase(moodDays, periodStarts, ovulationDays);
 
       return {
         averageCycle,
@@ -691,13 +692,11 @@ class SQLiteDataService {
     try {
       const db = await this.ensureInitialized();
       const periodStarts = await this.queryPeriodStarts(db);
-      const ovulationResult = await db.getAllAsync(
-        'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
-      ) as { date: string }[];
+      const ovulationDays = await this.queryOvulationDays(db);
 
       return computeFertilityForecast({
         periodStarts,
-        ovulationDays: ovulationResult.map(row => row.date),
+        ovulationDays,
         today: new Date(),
       });
     } catch (error) {

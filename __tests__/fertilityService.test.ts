@@ -3,6 +3,7 @@ import {
   computeFertilityForecast,
   predictPeriodStarts,
 } from '@/services/FertilityService';
+import { buildCycleModel, phaseForDateInWindows } from '@/services/CycleModel';
 import { addDays, daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
 
 /** Local-midnight day key offset from a start key. */
@@ -169,5 +170,80 @@ describe('computeFertilityForecast', () => {
     expect(forecast.cycles).toEqual([]);
     expect(forecast.currentCycleOvulation).toBeNull();
     expect(forecast.stats.averageCycleLength).toBe(28);
+  });
+});
+
+describe('cycle windows', () => {
+  // 30-day cycles: Jan 5 -> Feb 4 -> Mar 6 (predicted).
+  const starts = ['2026-01-05', '2026-02-04'];
+
+  it('aligns the ovulation phase with a 12-day luteal forecast', () => {
+    // Jan 23 -> Feb 4 = 12 days, so Mar 6 minus 12 = Feb 22.
+    const model = buildCycleModel({
+      periodStarts: starts,
+      ovulationDays: ['2026-01-23'],
+      today: parseDateKey('2026-02-04'),
+    });
+
+    expect(model.averageLutealLength).toBe(12);
+    const open = model.windows.find((window) => window.start === '2026-02-04');
+    expect(open?.ovulationDate).toBe('2026-02-22');
+    expect(open?.ovulationRecorded).toBe(false);
+    expect(phaseForDateInWindows('2026-02-21', model.windows)).toBe('follicular');
+    expect(phaseForDateInWindows('2026-02-22', model.windows)).toBe('ovulation');
+    expect(phaseForDateInWindows('2026-02-24', model.windows)).toBe('ovulation');
+    expect(phaseForDateInWindows('2026-02-25', model.windows)).toBe('luteal');
+  });
+
+  it('aligns the ovulation phase with a 17-day luteal forecast', () => {
+    const model = buildCycleModel({
+      periodStarts: starts,
+      ovulationDays: ['2026-01-18'], // 17 days before Feb 4
+      today: parseDateKey('2026-02-04'),
+    });
+
+    expect(model.averageLutealLength).toBe(17);
+    expect(phaseForDateInWindows('2026-02-16', model.windows)).toBe('follicular');
+    expect(phaseForDateInWindows('2026-02-17', model.windows)).toBe('ovulation');
+  });
+
+  it('uses a recorded ovulation in the open cycle', () => {
+    const model = buildCycleModel({
+      periodStarts: starts,
+      ovulationDays: ['2026-01-23', '2026-02-22'],
+      today: parseDateKey('2026-03-01'),
+    });
+
+    const open = model.windows.find((window) => window.start === '2026-02-04');
+    expect(open?.ovulationRecorded).toBe(true);
+    expect(model.currentCycleOvulation).toBe('2026-02-22');
+    expect(phaseForDateInWindows('2026-02-22', model.windows)).toBe('ovulation');
+  });
+
+  it('ignores future-dated ovulation marks for the open cycle', () => {
+    const model = buildCycleModel({
+      periodStarts: starts,
+      ovulationDays: ['2026-01-23', '2026-02-28'],
+      today: parseDateKey('2026-02-10'),
+    });
+
+    const open = model.windows.find((window) => window.start === '2026-02-04');
+    expect(open?.ovulationRecorded).toBe(false);
+    expect(open?.ovulationDate).toBe('2026-02-22');
+    expect(model.currentCycleOvulation).toBeNull();
+  });
+
+  it('keeps every forecast ovulation inside its ovulation phase', () => {
+    const periodStarts = ['2026-01-05', '2026-02-02', '2026-03-01'];
+    const ovulationDays = ['2026-01-17', '2026-02-15'];
+    const today = parseDateKey('2026-03-02');
+
+    const forecast = computeFertilityForecast({ periodStarts, ovulationDays, today });
+    const model = buildCycleModel({ periodStarts, ovulationDays, today });
+
+    expect(forecast.cycles.length).toBeGreaterThan(0);
+    for (const cycle of forecast.cycles) {
+      expect(phaseForDateInWindows(cycle.ovulationDate, model.windows)).toBe('ovulation');
+    }
   });
 });

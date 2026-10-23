@@ -22,6 +22,16 @@ describe('phaseForDate', () => {
   it('uses the most recent start at or before the day', () => {
     expect(phaseForDate('2026-07-02', ['2026-06-01', '2026-06-29'])).toBe('menstrual');
   });
+
+  it('uses recorded luteal lengths instead of fixed day-14 thresholds', () => {
+    const starts = ['2026-05-01', '2026-05-31']; // 30-day cycle
+    const ovulations = ['2026-05-21']; // 10-day luteal -> ovulation Jun 20
+
+    expect(phaseForDate('2026-06-17', starts, ovulations)).toBe('follicular');
+    expect(phaseForDate('2026-06-20', starts, ovulations)).toBe('ovulation');
+    expect(phaseForDate('2026-06-21', starts, ovulations)).toBe('ovulation');
+    expect(phaseForDate('2026-06-23', starts, ovulations)).toBe('luteal');
+  });
 });
 
 describe('summarizeMoodByPhase', () => {
@@ -68,6 +78,15 @@ describe('summarizeMoodByPhase', () => {
     );
     expect(summary).toHaveLength(1);
     expect(summary[0].phase).toBe('luteal');
+  });
+
+  it('groups a predicted-ovulation day as ovulation using recorded luteal lengths', () => {
+    const summary = summarizeMoodByPhase(
+      [{ date: '2026-06-20', valence: 4, tags: [] }],
+      ['2026-05-01', '2026-05-31'],
+      ['2026-05-21']
+    );
+    expect(summary.map((entry) => entry.phase)).toEqual(['ovulation']);
   });
 });
 

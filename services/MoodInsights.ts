@@ -2,17 +2,18 @@
  * Pure math for the Insights "Mood & Cycle" section: grouping mood detail by
  * cycle phase and building the 60-day valence series for the trend chart.
  *
- * Phase thresholds intentionally mirror `AnalyticsService.getCyclePhase`
- * (menstrual ≤ 5 days since the last period start, follicular ≤ 13,
- * ovulation ≤ 16, luteal beyond) — keep the two consistent.
+ * Phases come from the shared cycle model in `CycleModel.ts` — the same
+ * ovulation/fertile-window dates the calendar forecast uses — so the Insights
+ * phase buckets cannot drift from the calendar's ovulation dates.
  */
 
+import type { CyclePhase } from './CycleModel';
+import { buildCycleModel, PHASE_ORDER, phaseForDateInWindows } from './CycleModel';
 import { MoodTag } from './MoodTags';
-import { addDays, daysBetween, formatDateKey, parseDateKey } from './dateKey';
+import { addDays, formatDateKey, parseDateKey } from './dateKey';
 
-export type CyclePhase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal';
-
-export const PHASE_ORDER: CyclePhase[] = ['menstrual', 'follicular', 'ovulation', 'luteal'];
+export type { CyclePhase } from './CycleModel';
+export { PHASE_ORDER } from './CycleModel';
 
 /** How many days the valence trend chart covers. */
 export const MOOD_SERIES_DAYS = 60;
@@ -50,26 +51,28 @@ export interface PhaseMoodSummary {
 }
 
 /**
- * Cycle phase for a day. `periodStarts` must be sorted ascending (as the
- * period-start queries return them). Returns null for days before every
- * recorded period start.
+ * Cycle phase for a day. `periodStarts` and `ovulationDays` must be sorted
+ * ascending (as the database queries return them). Returns null for days that
+ * no recorded or predicted cycle covers.
+ *
+ * Prefer building one model with `buildCycleModel` and reusing
+ * `phaseForDateInWindows` when classifying many days.
  */
-export function phaseForDate(date: string, periodStarts: string[]): CyclePhase | null {
-  let lastStart: string | null = null;
-  for (const start of periodStarts) {
-    if (start > date) break;
-    lastStart = start;
-  }
-  if (!lastStart) return null;
-
-  const daysSince = daysBetween(parseDateKey(lastStart), parseDateKey(date));
-  if (daysSince <= 5) return 'menstrual';
-  if (daysSince <= 13) return 'follicular';
-  if (daysSince <= 16) return 'ovulation';
-  return 'luteal';
+export function phaseForDate(
+  date: string,
+  periodStarts: string[],
+  ovulationDays: string[] = []
+): CyclePhase | null {
+  const model = buildCycleModel({ periodStarts, ovulationDays, today: parseDateKey(date) });
+  return phaseForDateInWindows(date, model.windows);
 }
 
-export function summarizeMoodByPhase(days: MoodDay[], periodStarts: string[]): PhaseMoodSummary[] {
+export function summarizeMoodByPhase(
+  days: MoodDay[],
+  periodStarts: string[],
+  ovulationDays: string[] = []
+): PhaseMoodSummary[] {
+  const model = buildCycleModel({ periodStarts, ovulationDays, today: new Date() });
   const accumulators = new Map<
     CyclePhase,
     {
@@ -84,7 +87,7 @@ export function summarizeMoodByPhase(days: MoodDay[], periodStarts: string[]): P
     const hasMood = day.valence > 0 || day.tags.length > 0;
     if (!hasMood) continue;
 
-    const phase = phaseForDate(day.date, periodStarts);
+    const phase = phaseForDateInWindows(day.date, model.windows);
     if (!phase) continue;
 
     let acc = accumulators.get(phase);

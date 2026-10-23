@@ -163,6 +163,17 @@ export default function InsightsTab() {
   const styles = createStyles(theme);
 
   const currentCycleOvulation = fertility?.currentCycleOvulation ?? null;
+  const recordedOvulationDays =
+    fertility?.ovulationDays.filter((day) => day <= formatDateKey(new Date())) ?? [];
+  const lastRecordedOvulation = recordedOvulationDays.length
+    ? recordedOvulationDays[recordedOvulationDays.length - 1]
+    : null;
+  // The calendar grid marks every recorded ovulation; show the same latest mark
+  // here when the open cycle has no record of its own.
+  const recordedOvulation = currentCycleOvulation ?? lastRecordedOvulation;
+  const recordedOvulationLabel = currentCycleOvulation
+    ? 'Recorded ovulation'
+    : 'Last recorded ovulation';
   const nextCycleForecast = fertility?.cycles[0] ?? null;
   const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
   const chartWidth = screenWidth - 80;
@@ -222,13 +233,13 @@ export default function InsightsTab() {
         {/* Fertility */}
         <View testID="insights-fertility-card" style={styles.card}>
           <Text style={styles.cardTitle}>Fertility</Text>
-          {currentCycleOvulation || nextCycleForecast ? (
+          {recordedOvulation || nextCycleForecast ? (
             <View style={styles.fertilityRows}>
-              {currentCycleOvulation && (
+              {recordedOvulation && (
                 <View style={styles.fertilityRow}>
-                  <Text style={styles.fertilityLabel}>Recorded ovulation</Text>
+                  <Text style={styles.fertilityLabel}>{recordedOvulationLabel}</Text>
                   <Text testID="insights-recorded-ovulation" style={styles.fertilityValue}>
-                    {formatShortDate(currentCycleOvulation)}
+                    {formatShortDate(recordedOvulation)}
                   </Text>
                 </View>
               )}

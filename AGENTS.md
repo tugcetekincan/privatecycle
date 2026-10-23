@@ -36,8 +36,9 @@ components/             CustomDialog (+ demo), MoodPicker (faces + tags)
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady
 services/               DataService (SQLite owner), BackupService,
-                        AnalyticsService, DevSeedService, FertilityService
-                        (pure ovulation/fertile-window forecast),
+                        AnalyticsService, DevSeedService, CycleModel
+                        (shared cycle windows, ovulation + phase math),
+                        FertilityService (forecast built on CycleModel),
                         CyclePhaseTips (phase tips + current phase),
                         SymptomInsights (symptom/phase math), Symptoms
                         (shared catalog), devGlobals
@@ -158,22 +159,27 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
   so the calendar and insights keep working. Feeling ids/labels live in
   `MOOD_OPTIONS` (`services/MoodTags.ts`); the phase summary and trend series
-  are pure helpers in `services/MoodInsights.ts` whose phase thresholds mirror
-  `AnalyticsService.getCyclePhase`. The mood picker (Track and the calendar
-  day modal) auto-saves mood-only via `DataService.saveMoodData` so unsaved
-  period/symptom edits are never overwritten.
+  are pure helpers in `services/MoodInsights.ts`. Phases come from the shared
+  cycle model (`services/CycleModel.ts`), the same source as the calendar's
+  ovulation dates — never reintroduce fixed day-14 thresholds. The mood picker
+  (Track and the calendar day modal) auto-saves mood-only via
+  `DataService.saveMoodData` so unsaved period/symptom edits are never
+  overwritten.
 
 **Dates**
 - Day keys are **local-time** `YYYY-MM-DD` from
   `DataService.formatDateKey`. Never use `toISOString().split('T')[0]` for day
   keys — it shifts dates in negative-offset timezones. `__tests__/dataService.test.ts`
   guards this.
-- Period-start detection lives in SQL (`DATE(date, '-1 day')`) and in
-  `AnalyticsService.getCyclePhase`; keep both consistent if you touch them.
-- Ovulation/fertile-window forecasting is pure math in
-  `services/FertilityService.ts` (day helpers in `services/dateKey.ts`),
-  exposed through `DataService.getFertilityForecast()`. Recorded ovulation
-  beats the prediction for the cycle it belongs to.
+- Period-start detection lives in SQL (`DATE(date, '-1 day')`); the shared
+  cycle model (`CycleModel.buildCycleModel`) must consume that same ascending
+  list so the calendar and Insights stay aligned.
+- Ovulation/fertile-window forecasting and cycle phases are pure math in
+  `services/CycleModel.ts` (day helpers in `services/dateKey.ts`), exposed
+  through `DataService.getFertilityForecast()`. Recorded ovulation beats the
+  prediction for the cycle it belongs to. The Insights phase buckets derive
+  from the same model, so calendar and insights cannot disagree about an
+  ovulation date.
 
 **Backups**
 - `BackupData` JSON is a public interface: users keep these files. Only add
@@ -202,8 +208,8 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, dialog + mood picker components, mood tags/insights,
-  fertility forecast, cycle phase tips, symptom patterns. Extend rather than
-  duplicate.
+  fertility forecast + cycle phases, cycle phase tips, symptom patterns.
+  Extend rather than duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
