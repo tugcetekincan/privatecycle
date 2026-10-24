@@ -6,7 +6,7 @@
  * Kept pure of SQLite/Expo so it is directly unit-testable.
  */
 
-import { CyclePhase, PHASE_ORDER } from './MoodInsights';
+import { buildCycleModel, CyclePhase, PHASE_ORDER, phaseForDateInWindows } from './CycleModel';
 import { daysBetween, parseDateKey } from './dateKey';
 
 export { CyclePhase, PHASE_ORDER };
@@ -213,23 +213,20 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
 };
 
 /**
- * Determines cycle phase from elapsed days since the start of the last period.
- * Mirrors `AnalyticsService.getCyclePhase` and `MoodInsights.phaseForDate`.
- */
-export function determineCyclePhase(daysSince: number): CyclePhase {
-  if (daysSince <= 5) return 'menstrual';
-  if (daysSince <= 13) return 'follicular';
-  if (daysSince <= 16) return 'ovulation';
-  return 'luteal';
-}
-
-/**
- * Calculates current cycle day and phase for `todayDateKey` given sorted `periodStarts`.
+ * Calculates current cycle day and phase for `todayDateKey` given sorted
+ * `periodStarts` and `ovulationDays`.
+ *
+ * The phase comes from the shared cycle model (`CycleModel.ts`), the same
+ * source as the calendar's forecast and the Insights phase buckets, so a
+ * recorded ovulation or a personal luteal length moves this card too. It does
+ * not use fixed day thresholds.
+ *
  * Returns null if no recorded period start occurred on or before today.
  */
 export function getCurrentPhaseStatus(
   todayDateKey: string,
-  periodStarts: string[]
+  periodStarts: string[],
+  ovulationDays: string[] = []
 ): CurrentPhaseStatus | null {
   if (!periodStarts || periodStarts.length === 0) return null;
 
@@ -240,11 +237,15 @@ export function getCurrentPhaseStatus(
   }
   if (!lastStart) return null;
 
-  const daysSince = daysBetween(parseDateKey(lastStart), parseDateKey(todayDateKey));
+  const today = parseDateKey(todayDateKey);
+  const model = buildCycleModel({ periodStarts, ovulationDays, today });
+  const phase = phaseForDateInWindows(todayDateKey, model.windows);
+  if (!phase) return null;
+
+  const daysSince = daysBetween(parseDateKey(lastStart), today);
   if (daysSince < 0) return null;
 
   const cycleDay = daysSince + 1;
-  const phase = determineCyclePhase(daysSince);
 
   return {
     phase,

@@ -1,29 +1,9 @@
 import {
   CYCLE_PHASE_TIPS,
-  determineCyclePhase,
   getCurrentPhaseStatus,
   PHASE_ORDER,
   PhaseTipCategory,
 } from '@/services/CyclePhaseTips';
-
-describe('determineCyclePhase', () => {
-  it.each([
-    [0, 'menstrual'],
-    [1, 'menstrual'],
-    [5, 'menstrual'],
-    [6, 'follicular'],
-    [10, 'follicular'],
-    [13, 'follicular'],
-    [14, 'ovulation'],
-    [15, 'ovulation'],
-    [16, 'ovulation'],
-    [17, 'luteal'],
-    [25, 'luteal'],
-    [32, 'luteal'],
-  ] as const)('daysSince=%d -> %s', (daysSince, expectedPhase) => {
-    expect(determineCyclePhase(daysSince)).toBe(expectedPhase);
-  });
-});
 
 describe('getCurrentPhaseStatus', () => {
   it('returns null when no period starts are recorded', () => {
@@ -74,9 +54,37 @@ describe('getCurrentPhaseStatus', () => {
     const periodStarts = ['2026-08-01', '2026-08-29', '2026-09-26', '2026-11-01'];
     const status = getCurrentPhaseStatus('2026-10-20', periodStarts);
     expect(status).toEqual({
-      phase: 'luteal',
+      // The next recorded start (Nov 1) anchors ovulation on Oct 18, so the
+      // shared model keeps today inside the ovulation phase.
+      phase: 'ovulation',
       cycleDay: 25,
       daysSinceLastPeriod: 24,
+    });
+  });
+
+  it('follows the predicted ovulation for a longer cycle instead of fixed day-17 cutoffs', () => {
+    // 30-day cycles put ovulation on day 17, so the ovulation phase still
+    // covers cycle day 18. Fixed thresholds used to call this luteal.
+    const status = getCurrentPhaseStatus('2026-10-18', ['2026-09-01', '2026-10-01']);
+    expect(status).toEqual({
+      phase: 'ovulation',
+      cycleDay: 18,
+      daysSinceLastPeriod: 17,
+    });
+  });
+
+  it('uses a recorded ovulation day for the current cycle', () => {
+    // The prediction would put ovulation on Oct 17; the recorded mark on
+    // Oct 18 keeps the ovulation phase through Oct 20.
+    const status = getCurrentPhaseStatus(
+      '2026-10-20',
+      ['2026-09-01', '2026-10-01'],
+      ['2026-10-18']
+    );
+    expect(status).toEqual({
+      phase: 'ovulation',
+      cycleDay: 20,
+      daysSinceLastPeriod: 19,
     });
   });
 });

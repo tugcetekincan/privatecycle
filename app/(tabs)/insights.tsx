@@ -128,6 +128,7 @@ export default function InsightsTab() {
     moodSeries: [] as MoodSeriesPoint[],
     moodPhases: [] as PhaseMoodSummary[],
     periodStarts: [] as string[],
+    ovulationDays: [] as string[],
     symptomPatterns: [] as SymptomPattern[],
     trackedDays: 0,
   });
@@ -179,7 +180,11 @@ export default function InsightsTab() {
   const chartWidth = screenWidth - 80;
 
   const todayKey = formatDateKey(new Date());
-  const currentStatus = getCurrentPhaseStatus(todayKey, stats.periodStarts);
+  const currentStatus = getCurrentPhaseStatus(
+    todayKey,
+    stats.periodStarts,
+    stats.ovulationDays
+  );
   const activePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
   const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
 

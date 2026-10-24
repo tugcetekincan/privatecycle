@@ -2,12 +2,17 @@
  * Pure math for the Insights "Symptom Patterns" section: how often each
  * symptom was logged and how those days split across cycle phases.
  *
- * Phases come from `MoodInsights.phaseForDate`, which shares the thresholds
- * used by AnalyticsService and the phase tips. Kept free of SQLite/Expo so it
- * is unit-testable.
+ * Phases come from the shared cycle model, including recorded ovulation days,
+ * so they match the calendar forecast and the phase tips. Kept free of
+ * SQLite/Expo so it is unit-testable.
  */
 
-import { CyclePhase, PHASE_ORDER, phaseForDate } from './MoodInsights';
+import {
+  buildCycleModel,
+  CyclePhase,
+  PHASE_ORDER,
+  phaseForDateInWindows,
+} from './CycleModel';
 
 export interface SymptomDay {
   date: string;
@@ -42,6 +47,13 @@ export interface SymptomPatternSummary {
   unphasedDays: number;
 }
 
+export interface SymptomPatternOptions {
+  /** Maximum number of patterns to return. Default 4. */
+  limit?: number;
+  /** Recorded ovulation days, ascending; they override the prediction. */
+  ovulationDays?: string[];
+}
+
 const emptyPhaseDays = (): SymptomPhaseDays => ({
   menstrual: 0,
   follicular: 0,
@@ -59,8 +71,10 @@ export function summarizeSymptomPatterns(
   days: SymptomDay[],
   periodStarts: string[],
   trackedDays: number,
-  limit = 4
+  options: SymptomPatternOptions = {}
 ): SymptomPatternSummary {
+  const { limit = 4, ovulationDays = [] } = options;
+  const model = buildCycleModel({ periodStarts, ovulationDays, today: new Date() });
   const totals = new Map<
     string,
     { days: number; phaseDays: SymptomPhaseDays; phasedDays: number; unphasedDays: number }
@@ -70,7 +84,7 @@ export function summarizeSymptomPatterns(
     const symptoms = [...new Set(day.symptoms)].filter(Boolean);
     if (symptoms.length === 0) continue;
 
-    const phase = phaseForDate(day.date, periodStarts);
+    const phase = phaseForDateInWindows(day.date, model.windows);
     for (const id of symptoms) {
       let entry = totals.get(id);
       if (!entry) {

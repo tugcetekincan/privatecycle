@@ -623,7 +623,8 @@ class SQLiteDataService {
       const symptomPatterns = summarizeSymptomPatterns(
         symptomDays,
         periodStarts,
-        trackedDays
+        trackedDays,
+        { ovulationDays }
       ).patterns;
 
       // Mood detail: every day with valence or feeling tags feeds the phase
@@ -665,6 +666,7 @@ class SQLiteDataService {
         moodSeries,
         moodPhases,
         periodStarts,
+        ovulationDays,
         symptomPatterns,
         trackedDays,
       };
@@ -678,6 +680,7 @@ class SQLiteDataService {
         moodSeries: [],
         moodPhases: [],
         periodStarts: [],
+        ovulationDays: [],
         symptomPatterns: [],
         trackedDays: 0,
       };

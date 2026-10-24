@@ -48,8 +48,26 @@ describe('summarizeSymptomPatterns', () => {
   });
 
   it('caps the result at the requested limit', () => {
-    const summary = summarizeSymptomPatterns(days, periodStarts, 10, 2);
+    const summary = summarizeSymptomPatterns(days, periodStarts, 10, { limit: 2 });
     expect(summary.patterns.map((pattern) => pattern.id)).toEqual(['cramps', 'headache']);
+  });
+
+  it('splits phases using recorded ovulation days', () => {
+    // A recorded ovulation on Jun 20 moves the ovulation phase from the
+    // predicted Jun 14-16 to Jun 20-22 for the June cycle.
+    const summary = summarizeSymptomPatterns(
+      [{ date: '2026-06-22', symptoms: ['headache'] }],
+      periodStarts,
+      10,
+      { ovulationDays: ['2026-06-20'] }
+    );
+
+    expect(summary.patterns[0].phaseDays).toEqual({
+      menstrual: 0,
+      follicular: 0,
+      ovulation: 1,
+      luteal: 0,
+    });
   });
 
   it('keeps rates but leaves the phase split empty without period starts', () => {
