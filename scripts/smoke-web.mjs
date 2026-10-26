@@ -43,6 +43,10 @@ const consoleErrors = [];
 const consoleAll = [];
 const pageErrors = [];
 
+// Keep the directory in sync with this run: stale screenshots from an older
+// flow are confusing when reviewing the artifacts.
+fs.rmSync(SHOT_DIR, { recursive: true, force: true });
+
 function log(msg) {
   console.log(`[smoke] ${msg}`);
 }
@@ -462,6 +466,108 @@ try {
   log(
     `calendar clearing flow OK (mark ${backgroundBefore} -> ${backgroundMarked} -> ${backgroundCleared})`
   );
+
+  // --- Private calendar: PIN setup, save, lock, wrong PIN, reload guard. ---
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('settings-private-calendar').waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+
+  // Deterministic start: the browser context is fresh, but a previous run in
+  // the same context could have left a PIN or private entries behind.
+  await page.evaluate(async () => {
+    await __privatecycle.PrivateAccessService.reset();
+    await __privatecycle.DataService.clearIntimateData();
+  });
+
+  await page.getByTestId('settings-private-calendar').click();
+  await page.getByTestId('private-pin-setup-input').waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+  await page.screenshot({ path: shot('09-private-setup'), fullPage: true });
+  await page.getByTestId('private-pin-setup-input').fill('1234');
+  await page.getByTestId('private-pin-setup-confirm').fill('1234');
+  await page.getByTestId('private-pin-setup-submit').click();
+  await page.getByTestId('private-calendar').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId(`private-day-${todayKey}`).waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+
+  await page.getByTestId(`private-day-${todayKey}`).click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-day-activity').click();
+  await page.getByTestId('private-protection-protected').click();
+  await page.getByTestId('private-note-input').fill('smoke test');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: shot('10-private-day-modal') });
+  await page.getByTestId('private-day-save').click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.getByTestId(`private-day-logged-${todayKey}`).waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+
+  const privateCount = (await page.getByTestId('private-month-count').textContent())?.trim();
+  if (privateCount !== '1') {
+    failures.push(`private calendar count: expected 1, got ${privateCount}`);
+  }
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: shot('11-private-calendar'), fullPage: true });
+
+  await page.getByTestId('private-change-pin').click();
+  await page.getByTestId('private-change-pin-modal').waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: shot('12-private-change-pin') });
+  await page.getByTestId('private-change-pin-close').click();
+  await page.getByTestId('private-change-pin-modal').waitFor({
+    state: 'hidden',
+    timeout: 15_000,
+  });
+
+  await page.getByTestId('private-lock').click();
+  await page.getByTestId('private-pin-input').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: shot('13-private-locked'), fullPage: true });
+
+  await page.getByTestId('private-pin-input').fill('0000');
+  await page.getByTestId('private-pin-unlock').click();
+  await page.getByTestId('private-pin-error').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-pin-input').fill('1234');
+  await page.getByTestId('private-pin-unlock').click();
+  await page.getByTestId(`private-day-logged-${todayKey}`).waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+
+  // A direct reload of /private must show the gate, not the calendar.
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('private-pin-input').waitFor({ state: 'visible', timeout: 180_000 });
+  await page.getByTestId('private-pin-input').fill('1234');
+  await page.getByTestId('private-pin-unlock').click();
+  await page.getByTestId(`private-day-logged-${todayKey}`).waitFor({
+    state: 'visible',
+    timeout: 30_000,
+  });
+
+  const persistedPrivate = await page.evaluate(async (key) => {
+    const all = await __privatecycle.DataService.getIntimateData();
+    return all[key] ?? null;
+  }, todayKey);
+  if (
+    !persistedPrivate ||
+    persistedPrivate.protection !== 'protected' ||
+    persistedPrivate.note !== 'smoke test'
+  ) {
+    failures.push(
+      `private calendar persistence: ${JSON.stringify(persistedPrivate)}`
+    );
+  }
+  log('private calendar flow OK');
 } catch (error) {
   failures.push(`smoke run threw: ${error.message}`);
   console.error(expoLog.split('\n').slice(-25).join('\n'));

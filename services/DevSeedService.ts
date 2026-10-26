@@ -174,7 +174,7 @@ export async function seedDemoData(
   return { days: Object.keys(data).length, skipped: false };
 }
 
-/** Delete all tracking data (demo helper; does not touch backups). */
+/** Delete all tracking data, including private calendar entries; backups and the PIN are untouched. */
 export async function resetDemoData(): Promise<void> {
   await DataService.clearAllData();
 }

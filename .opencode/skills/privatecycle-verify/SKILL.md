@@ -57,7 +57,9 @@ Dev-only globals (web, `__DEV__` only — `services/devGlobals.ts`):
 await __privatecycle.DataService.getAllDailyData()
 await __privatecycle.DataService.getInsights()
 await __privatecycle.DataService.getFertilityForecast()
+await __privatecycle.DataService.getIntimateData()
 await __privatecycle.BackupService.createBackup()
+await __privatecycle.PrivateAccessService.reset()
 await __privatecycle.generateDemoDailyData({ endDate: new Date() })
 ```
 
@@ -111,7 +113,23 @@ Naming convention: `area-element`, kebab-case.
   `insights-phase-summary-title`, `insights-phase-no-data`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
-  `settings-dev-reset`, `settings-darkmode-switch`
+  `settings-dev-reset`, `settings-darkmode-switch`,
+  `settings-private-calendar`
+- Private calendar gate: `private-gate-close`, `private-pin-setup-input`,
+  `private-pin-setup-confirm`, `private-pin-setup-submit`,
+  `private-pin-input`, `private-pin-unlock`, `private-pin-forgot`,
+  `private-pin-error`, `private-pin-reset`
+- Private calendar: `private-calendar`, `private-prev-month`,
+  `private-next-month`, `private-month-label`, `private-day-YYYY-MM-DD`,
+  `private-day-logged-YYYY-MM-DD`, `private-month-count`,
+  `private-last-logged`, `private-lock`, `private-close`,
+  `private-backup-switch`, `private-change-pin`, `private-clear-data`,
+  `private-day-modal`, `private-day-close`, `private-day-activity`,
+  `private-protection-{protected|unprotected|na}`, `private-note-input`,
+  `private-day-save`, `private-day-delete`, `private-change-pin-modal`,
+  `private-change-pin-current`, `private-change-pin-new`,
+  `private-change-pin-confirm`, `private-change-pin-save`,
+  `private-change-pin-close`, `private-change-pin-error`
 - Dialog: `dialog`, `dialog-title`, `dialog-message`,
   `dialog-button-{text-slug}` (e.g. `dialog-button-ok`)
 
@@ -129,11 +147,16 @@ selectors so flows don't break when copy changes.
 5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
    Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
    (stats, fertility, mood trend + phase rows from seeded data), Settings,
-6. saves a symptom on a clean next-month day, then clears it and asserts the
+6. reloads and asserts persistence (including mood valence/strength from the
+   DB),
+7. saves a symptom on a clean next-month day, then clears it and asserts the
    row and the grey day mark both disappear,
-7. reloads and asserts persistence (including mood valence/strength from the
-   DB), screenshots along the way,
-8. fails on page errors / console errors, then kills the whole process tree.
+8. opens the private calendar from Settings → Privacy (resets the PIN via
+   `__privatecycle.PrivateAccessService.reset()` first), creates PIN `1234`,
+   logs today with protection + a note, screenshots the setup/day modal/
+   calendar/change-PIN/lock screens, locks, checks a wrong PIN, unlocks,
+   reloads `/private` and asserts the gate reappears and the entry survives,
+9. fails on page errors / console errors, then kills the whole process tree.
 
 Both scripts fail fast if their ports are occupied and kill Expo's process
 group on exit. If a run is interrupted, verify ports are free:
@@ -164,8 +187,9 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 ## Unit tests
 
 `npm test` runs Jest (`jest-expo` preset). Existing coverage: backup envelope
-and validation, bulk restore, seed generator determinism, date-key formatting,
-fertility forecast math, dialog component. Native/Expo modules are mocked in
-`jest.setup.js`; add mocks there rather than in individual test files. Tests
-live in `__tests__/`. Prefer extraction of pure logic (like `DevSeedService`)
-so it can be tested without the DB.
+and validation, bulk restore, private calendar backup inclusion/preservation,
+seed generator determinism, date-key formatting, fertility forecast math,
+dialog component, private-access PIN hashing/lockout and intimacy summaries.
+Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
+in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
+logic (like `DevSeedService`) so it can be tested without the DB.

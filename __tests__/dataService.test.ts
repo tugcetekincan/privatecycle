@@ -1,4 +1,4 @@
-import { DataService, dayHasContent, DailyData } from '@/services/DataService';
+import { DataService, dayHasContent, normalizeProtection, DailyData } from '@/services/DataService';
 
 describe('DataService.formatDateKey', () => {
   it('formats local dates as zero-padded YYYY-MM-DD', () => {
@@ -10,6 +10,21 @@ describe('DataService.formatDateKey', () => {
     // A date constructed from local parts must round-trip through the key.
     const date = new Date(2026, 5, 15, 23, 59, 59);
     expect(DataService.formatDateKey(date)).toBe('2026-06-15');
+  });
+});
+
+describe('normalizeProtection', () => {
+  it('keeps known protection methods', () => {
+    expect(normalizeProtection('')).toBe('');
+    expect(normalizeProtection('protected')).toBe('protected');
+    expect(normalizeProtection('unprotected')).toBe('unprotected');
+    expect(normalizeProtection('na')).toBe('na');
+  });
+
+  it('falls back for unknown or non-string values', () => {
+    expect(normalizeProtection('other')).toBe('');
+    expect(normalizeProtection(null)).toBe('');
+    expect(normalizeProtection(1)).toBe('');
   });
 });
 

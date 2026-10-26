@@ -1,0 +1,92 @@
+# Private calendar on-device flow.
+#
+# Targets the dev app variant (com.ncan.privatecycle.dev). It handles both a
+# fresh install (PIN setup) and an existing PIN (unlock with 1234); use
+# `adb shell pm clear com.ncan.privatecycle.dev` and reopen the dev client if a
+# different PIN was set.
+#
+# Run: npm run e2e:mobile    (= ~/.maestro/bin/maestro test maestro/)
+#
+# This flow verifies that the PIN is stored by SecureStore, the gate re-locks,
+# and the unlocked calendar renders. It deliberately leaves the private
+# calendar open so the native screenshot/FLAG_SECURE protection can be checked
+# with `adb exec-out screencap -p > /tmp/private.png`.
+appId: com.ncan.privatecycle.dev
+---
+- stopApp
+- launchApp
+
+# Dev-client onboarding (fresh installs) and the cold-start JS bundle.
+- extendedWaitUntil:
+    visible: 'Continue|Period Calendar'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: 'Continue'
+    commands:
+      - tapOn: 'Continue'
+- runFlow:
+    when:
+      visible: 'Reload'
+    commands:
+      - pressKey: Back
+- extendedWaitUntil:
+    visible: 'Period Calendar'
+    timeout: 90000
+
+- tapOn:
+    id: 'tab-settings'
+- assertVisible: 'Settings'
+- tapOn:
+    id: 'settings-private-calendar'
+
+# Clean state should show setup. Keep the unlock branch so a developer can
+# rerun the flow without clearing state manually.
+- runFlow:
+    when:
+      visible:
+        id: 'private-pin-setup-input'
+    commands:
+      - tapOn:
+          id: 'private-pin-setup-input'
+      - inputText: '1234'
+      - hideKeyboard
+      - tapOn:
+          id: 'private-pin-setup-confirm'
+      - inputText: '1234'
+      - hideKeyboard
+      - tapOn:
+          id: 'private-pin-setup-submit'
+- runFlow:
+    when:
+      visible:
+        id: 'private-pin-input'
+    commands:
+      - tapOn:
+          id: 'private-pin-input'
+      - inputText: '1234'
+      - hideKeyboard
+      - tapOn:
+          id: 'private-pin-unlock'
+
+- extendedWaitUntil:
+    visible:
+      id: 'private-calendar'
+    timeout: 30000
+- assertVisible: 'Intimacy'
+
+# Lock, then prove the PIN is required again.
+- tapOn:
+    id: 'private-lock'
+- assertVisible:
+    id: 'private-pin-input'
+- tapOn:
+    id: 'private-pin-input'
+- inputText: '1234'
+- hideKeyboard
+- tapOn:
+    id: 'private-pin-unlock'
+- extendedWaitUntil:
+    visible:
+      id: 'private-calendar'
+    timeout: 30000

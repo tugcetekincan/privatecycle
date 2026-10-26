@@ -30,7 +30,8 @@
       "./plugins/withAndroidSigning",
       "@react-native-community/datetimepicker",
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      "expo-secure-store"
     ],
     "androidStatusBar": {
       "barStyle": "dark-content",

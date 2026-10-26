@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { DataService } from './DataService';
 import { BackupService } from './BackupService';
+import { PrivateAccessService } from './PrivateAccessService';
 import { generateDemoDailyData, seedDemoData, resetDemoData } from './DevSeedService';
 
 /**
@@ -18,6 +19,7 @@ export function installDevGlobals(): void {
   (globalThis as any).__privatecycle = {
     DataService,
     BackupService,
+    PrivateAccessService,
     seedDemoData,
     resetDemoData,
     generateDemoDailyData,

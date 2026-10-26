@@ -3,13 +3,16 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DataService, DailyData } from './DataService';
+import { DataService, DailyData, IntimateData } from './DataService';
+import { PrivateAccessService } from './PrivateAccessService';
 
 export interface BackupData {
   version: string;
   timestamp: number;
   data: {
     dailyData: { [date: string]: DailyData };
+    /** Present only when the user opted into including the private calendar. */
+    intimateData?: IntimateData;
   };
   metadata: {
     totalDays: number;
@@ -17,6 +20,10 @@ export interface BackupData {
       start: string | null;
       end: string | null;
     };
+    /** True when this file contains the private intimacy calendar. */
+    includesPrivateData?: boolean;
+    /** Number of private days in the file, when included. */
+    privateDays?: number;
   };
 }
 
@@ -103,12 +110,27 @@ export class BackupService {
     try {
       const dailyData = await DataService.getAllDailyData();
       const dates = Object.keys(dailyData).sort();
-      
+
+      // Private calendar data is opt-in and excluded by default. A failure to
+      // read the preference must not break normal cycle backups.
+      let intimateData: IntimateData | undefined;
+      try {
+        if (await PrivateAccessService.isBackupEnabled()) {
+          const loaded = await DataService.getIntimateData();
+          if (Object.keys(loaded).length > 0) {
+            intimateData = loaded;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking private backup preference:', error);
+      }
+
       const backupData: BackupData = {
         version: this.BACKUP_VERSION,
         timestamp: Date.now(),
         data: {
           dailyData,
+          ...(intimateData ? { intimateData } : {}),
         },
         metadata: {
           totalDays: dates.length,
@@ -116,6 +138,12 @@ export class BackupService {
             start: dates.length > 0 ? dates[0] : null,
             end: dates.length > 0 ? dates[dates.length - 1] : null,
           },
+          ...(intimateData
+            ? {
+                includesPrivateData: true,
+                privateDays: Object.keys(intimateData).length,
+              }
+            : {}),
         },
       };
 
@@ -226,11 +254,16 @@ export class BackupService {
 
       await this.restoreFromBackup(backupData);
 
+      const privateDays = backupData.data.intimateData
+        ? Object.keys(backupData.data.intimateData).length
+        : 0;
       const stats = {
         version: backupData.version,
         timestamp: new Date(backupData.timestamp).toLocaleString(),
         totalDays: backupData.metadata.totalDays,
         dateRange: backupData.metadata.dateRange,
+        includesPrivateData: backupData.data.intimateData !== undefined,
+        privateDays,
       };
 
       return { 
@@ -246,8 +279,15 @@ export class BackupService {
 
   static async restoreFromBackup(backupData: BackupData): Promise<void> {
     try {
-      await DataService.clearAllData();
+      await DataService.clearDailyData();
       await DataService.saveManyDailyData(backupData.data.dailyData);
+
+      // Old backups predate the private calendar. Keep the device's private
+      // log when the file has no private section; when it does, replace it.
+      if (backupData.data.intimateData !== undefined) {
+        await DataService.clearIntimateData();
+        await DataService.saveManyIntimateData(backupData.data.intimateData);
+      }
     } catch (error) {
       console.error('Error restoring from backup:', error);
       throw error;
@@ -255,8 +295,9 @@ export class BackupService {
   }
 
   static validateBackupData(data: any): data is BackupData {
-    return Boolean(
-      data &&
+    if (
+      !(
+        data &&
         typeof data.version === 'string' &&
         typeof data.timestamp === 'number' &&
         data.data &&
@@ -264,7 +305,48 @@ export class BackupService {
         data.data.dailyData !== null &&
         data.metadata &&
         typeof data.metadata.totalDays === 'number'
-    );
+      )
+    ) {
+      return false;
+    }
+
+    if (data.data.intimateData !== undefined) {
+      if (
+        !data.data.intimateData ||
+        typeof data.data.intimateData !== 'object' ||
+        Array.isArray(data.data.intimateData)
+      ) {
+        return false;
+      }
+
+      for (const day of Object.values(data.data.intimateData)) {
+        if (!day || typeof day !== 'object') return false;
+        const entry = day as { date?: unknown; protection?: unknown; note?: unknown };
+        if (
+          typeof entry.date !== 'string' ||
+          typeof entry.protection !== 'string' ||
+          typeof entry.note !== 'string'
+        ) {
+          return false;
+        }
+      }
+    }
+
+    if (
+      data.metadata.includesPrivateData !== undefined &&
+      typeof data.metadata.includesPrivateData !== 'boolean'
+    ) {
+      return false;
+    }
+
+    if (
+      data.metadata.privateDays !== undefined &&
+      typeof data.metadata.privateDays !== 'number'
+    ) {
+      return false;
+    }
+
+    return true;
   }
 
   static async getLocalBackups(): Promise<Array<{ name: string; path: string; size: number; date: Date }>> {

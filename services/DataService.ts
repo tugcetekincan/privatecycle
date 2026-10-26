@@ -27,6 +27,30 @@ export interface PeriodData {
 }
 
 /**
+ * Private intimacy log. This intentionally lives in its own table instead of
+ * being folded into `daily_data`: the main calendar, insights, seed data and
+ * backup envelope must not read it unless the user explicitly opts in.
+ */
+export type ProtectionMethod = '' | 'protected' | 'unprotected' | 'na';
+
+export interface IntimateDay {
+  date: string;
+  protection: ProtectionMethod;
+  note: string;
+}
+
+export interface IntimateData {
+  [date: string]: IntimateDay;
+}
+
+const PROTECTION_METHODS: ProtectionMethod[] = ['', 'protected', 'unprotected', 'na'];
+
+export const normalizeProtection = (value: unknown): ProtectionMethod =>
+  typeof value === 'string' && (PROTECTION_METHODS as string[]).includes(value)
+    ? (value as ProtectionMethod)
+    : '';
+
+/**
  * Whether a day holds anything worth keeping. A fully cleared day must have
  * no row at all: empty rows used to linger and kept the calendar's grey
  * "No Period" mark (and Track's "Has Data" badge) alive after the user had
@@ -133,6 +157,23 @@ const MIGRATIONS: Migration[] = [
            AND mood_valence = 0
            AND mood_tags = '[]'`
       );
+    },
+  },
+  {
+    version: 5,
+    name: 'intimate_data',
+    up: async (db) => {
+      // A row means activity was logged for that local day. `activity` is kept
+      // explicit so a future "no activity" marker can be added without a
+      // breaking table rewrite; today every saved row sets it to 1.
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS intimate_data (
+          date TEXT PRIMARY KEY,
+          activity INTEGER NOT NULL DEFAULT 1,
+          protection TEXT NOT NULL DEFAULT '',
+          note TEXT NOT NULL DEFAULT ''
+        );
+      `);
     },
   },
 ];
@@ -524,6 +565,77 @@ class SQLiteDataService {
     }
   }
 
+  /** Private log, keyed by local day. Never merge this into `daily_data`. */
+  async getIntimateData(): Promise<IntimateData> {
+    try {
+      const db = await this.ensureInitialized();
+      const rows = await db.getAllAsync(
+        `SELECT date, protection, note
+         FROM intimate_data
+         WHERE activity = 1
+         ORDER BY date`
+      ) as { date: string; protection: string; note: string }[];
+
+      const data: IntimateData = {};
+      rows.forEach(row => {
+        data[row.date] = {
+          date: row.date,
+          protection: normalizeProtection(row.protection),
+          note: row.note ?? '',
+        };
+      });
+      return data;
+    } catch (error) {
+      console.error('Error loading private calendar data:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Save one private day. The presence of a row is what marks activity; a
+   * cleared day must use `deleteIntimateDay` instead so the calendar doesn't
+   * show an empty mark. Do not log protection/note contents here.
+   */
+  async saveIntimateDay(day: IntimateDay): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      await db.runAsync(
+        `INSERT OR REPLACE INTO intimate_data (date, activity, protection, note)
+         VALUES (?, 1, ?, ?)`,
+        [day.date, normalizeProtection(day.protection), day.note ?? '']
+      );
+    } catch (error) {
+      console.error('Error saving private calendar entry:', error);
+      throw error;
+    }
+  }
+
+  async deleteIntimateDay(dateKey: string): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      await db.runAsync('DELETE FROM intimate_data WHERE date = ?', [dateKey]);
+    } catch (error) {
+      console.error('Error deleting private calendar entry:', error);
+      throw error;
+    }
+  }
+
+  async saveManyIntimateData(data: IntimateData): Promise<void> {
+    const entries = Object.entries(data);
+    if (entries.length === 0) return;
+
+    const db = await this.ensureInitialized();
+    await db.withTransactionAsync(async () => {
+      for (const [dateKey, day] of entries) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO intimate_data (date, activity, protection, note)
+           VALUES (?, 1, ?, ?)`,
+          [dateKey, normalizeProtection(day.protection), day.note ?? '']
+        );
+      }
+    });
+  }
+
   async getInsights() {
     try {
       const db = await this.ensureInitialized();
@@ -708,10 +820,38 @@ class SQLiteDataService {
     }
   }
 
-  async clearAllData(): Promise<void> {
+  /**
+   * Restore replaces cycle data and private data independently: an older
+   * backup without an `intimateData` section must not silently erase the
+   * private log the user still has on this device.
+   */
+  async clearDailyData(): Promise<void> {
     try {
       const db = await this.ensureInitialized();
       await db.runAsync('DELETE FROM daily_data');
+    } catch (error) {
+      console.error('Error clearing daily data:', error);
+      throw error;
+    }
+  }
+
+  async clearIntimateData(): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      await db.runAsync('DELETE FROM intimate_data');
+    } catch (error) {
+      console.error('Error clearing private calendar data:', error);
+      throw error;
+    }
+  }
+
+  async clearAllData(): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      await db.withTransactionAsync(async () => {
+        await db.runAsync('DELETE FROM daily_data');
+        await db.runAsync('DELETE FROM intimate_data');
+      });
     } catch (error) {
       console.error('Error clearing data:', error);
       throw error;
@@ -786,6 +926,30 @@ export class DataService {
 
   static async getAllDailyData(): Promise<{ [date: string]: DailyData }> {
     return sqliteDataService.getAllDailyData();
+  }
+
+  static async getIntimateData(): Promise<IntimateData> {
+    return sqliteDataService.getIntimateData();
+  }
+
+  static async saveIntimateDay(day: IntimateDay): Promise<void> {
+    return sqliteDataService.saveIntimateDay(day);
+  }
+
+  static async deleteIntimateDay(dateKey: string): Promise<void> {
+    return sqliteDataService.deleteIntimateDay(dateKey);
+  }
+
+  static async saveManyIntimateData(data: IntimateData): Promise<void> {
+    return sqliteDataService.saveManyIntimateData(data);
+  }
+
+  static async clearDailyData(): Promise<void> {
+    return sqliteDataService.clearDailyData();
+  }
+
+  static async clearIntimateData(): Promise<void> {
+    return sqliteDataService.clearIntimateData();
   }
 
   static async getInsights() {

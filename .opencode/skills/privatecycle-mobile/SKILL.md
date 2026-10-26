@@ -96,7 +96,10 @@ data on device; the `?seed` URL mechanism is web-only.
 
 `maestro/smoke.yaml` covers launch → tabs → track save → back to calendar,
 targeting the dev variant. Validated on the `privatecycle` AVD via
-`npm run e2e:mobile` (≈1 min). Run with:
+`npm run e2e:mobile` (≈1 min). `maestro/private-calendar.yaml` stops and
+relaunches the app, then covers the private calendar: PIN setup or unlock with
+`1234`, lock, re-unlock, and leaves the calendar open for the FLAG_SECURE check
+below. Run with:
 
 ```sh
 npm run e2e:mobile                      # = ~/.maestro/bin/maestro test maestro/
@@ -118,6 +121,12 @@ Notes:
   --variant release --no-bundler`); later builds are incremental. Use
   `ORG_GRADLE_PROJECT_reactNativeArchitectures=x86_64` to build only the
   emulator ABI.
+- The private calendar blocks screenshots and the recents preview on native
+  (`expo-screen-capture` + FLAG_SECURE). To check it, leave the calendar open
+  after `maestro/private-calendar.yaml`, run
+  `adb exec-out screencap -p > artifacts/screenshots/private-secure.png`, and
+  inspect the file: the app area should be black/blank. Web has no equivalent,
+  and the web smoke deliberately skips this check.
 
 ## Emulator (only on a KVM-capable machine)
 

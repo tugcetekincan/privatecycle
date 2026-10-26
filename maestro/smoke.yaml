@@ -14,6 +14,10 @@
 # inspect the tree with `~/.maestro/bin/maestro hierarchy`.
 appId: com.ncan.privatecycle.dev
 ---
+# Start from a fresh process so a previous flow (for example the private
+# calendar flow, which deliberately leaves its screen open) cannot leak its
+# route into this smoke run.
+- stopApp
 - launchApp
 
 # The dev client shows a one-time "developer menu" onboarding overlay shortly

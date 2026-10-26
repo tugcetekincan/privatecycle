@@ -24,7 +24,7 @@ The Private Cycle Tracker app includes comprehensive backup functionality to ens
 
 ### 📥 Import & Restore
 - **File Picker**: Choose backup files from your device
-- **Full Restore**: Replaces all current data with backup data
+- **Full Restore**: Replaces cycle data; private calendar entries are only replaced when the backup includes them
 - **Validation**: Ensures backup file integrity before importing
 - **Detailed Stats**: Shows backup information before restoration
 
@@ -65,7 +65,7 @@ The Private Cycle Tracker app includes comprehensive backup functionality to ens
 ### Importing Backups
 
 1. Tap **Import Backup**
-2. **⚠️ Warning**: This will replace ALL current data
+2. **⚠️ Warning**: This will replace your cycle data. Private calendar entries are only replaced if the backup includes them.
 3. Confirm the action
 4. Select the backup file (.json) from your device
 5. Review backup details and confirm restoration
@@ -86,9 +86,12 @@ The Private Cycle Tracker app includes comprehensive backup functionality to ens
 - ✅ Symptoms and mood entries
 - ✅ Flow level information
 - ✅ Complete date range
+- ✅ Optional private calendar entries, only when **Include in backups** is enabled inside Settings → Privacy → Private calendar
 - ✅ Metadata and version information
 
 ### What's NOT Included
+- ❌ Private calendar entries by default (the backup setting is off)
+- ❌ The private calendar PIN or the backup preference itself
 - ❌ App settings (theme, notifications)
 - ❌ Backup settings
 - ❌ Local backup files
@@ -110,6 +113,13 @@ Backup files are JSON formatted with the following structure:
         "symptoms": ["cramps", "bloating"],
         "mood": "irritated"
       }
+    },
+    "intimateData": {
+      "2023-01-04": {
+        "date": "2023-01-04",
+        "protection": "protected",
+        "note": "optional note"
+      }
     }
   },
   "metadata": {
@@ -117,10 +127,15 @@ Backup files are JSON formatted with the following structure:
     "dateRange": {
       "start": "2023-01-01",
       "end": "2023-12-31"
-    }
+    },
+    "includesPrivateData": true,
+    "privateDays": 1
   }
 }
 ```
+
+`intimateData`, `includesPrivateData` and `privateDays` are optional and are
+present only when the private calendar was included in the backup.
 
 ### Storage Locations
 - **Local Backups**: Stored in app's documents directory
@@ -132,6 +147,7 @@ Backup files are JSON formatted with the following structure:
 - 🔒 No data is sent to external servers
 - 🔒 Sharing is entirely under your control
 - 🔒 Backup files are not encrypted (consider using encrypted storage apps)
+- 🔒 Private calendar entries are excluded by default; when included, they are plain JSON like the rest of the backup. Store those files securely, and remember that turning the option off does not remove private data from backups you already exported.
 
 ## Best Practices
 

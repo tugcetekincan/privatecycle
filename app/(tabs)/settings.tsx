@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 const isWeb = Platform.OS === 'web';
 import { 
   Settings as SettingsIcon, 
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
+import { PrivateAccessService } from '@/services/PrivateAccessService';
 import { seedDemoData, resetDemoData } from '@/services/DevSeedService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
@@ -37,6 +39,7 @@ import { useDialog } from '@/hooks/useDialog';
 
 export default function SettingsTab() {
   const { theme, toggleTheme, isDark } = useTheme();
+  const router = useRouter();
   const { triggerAutoBackup } = useAutoBackup();
   const { 
     showSuccess, 
@@ -118,7 +121,7 @@ export default function SettingsTab() {
   const importBackup = async () => {
     showConfirm(
       'Import Backup',
-      'This will replace all your current data with the backup data. Are you sure you want to continue?',
+      'This will replace your cycle data with the backup data. Private calendar entries are only replaced if the backup includes them. Are you sure you want to continue?',
       async () => {
         setLoading(true);
         try {
@@ -127,7 +130,7 @@ export default function SettingsTab() {
             await loadBackupData();
             showSuccess(
               'Import Successful',
-              result.message + (result.stats ? `\n\nBackup Details:\n• Version: ${result.stats.version}\n• Date: ${result.stats.timestamp}\n• Days: ${result.stats.totalDays}` : '')
+              result.message + (result.stats ? `\n\nBackup Details:\n• Version: ${result.stats.version}\n• Date: ${result.stats.timestamp}\n• Days: ${result.stats.totalDays}\n• Private activity: ${result.stats.includesPrivateData ? 'included' : 'not included'}` : '')
             );
           } else {
             showError('Import Failed', result.message);
@@ -181,7 +184,7 @@ export default function SettingsTab() {
   const clearAllData = () => {
     showChoice(
       'Clear All Data',
-      'Are you sure you want to delete all your tracking data AND all backups? This action cannot be undone.\n\nConsider exporting a backup first!',
+      'Are you sure you want to delete all your tracking data, private calendar entries, and all backups? This action cannot be undone.\n\nPrivate entries are included in an exported backup only if you enabled "Include in backups" inside the private calendar.\n\nConsider exporting a backup first!',
       [
         {
           text: 'Export Backup First',
@@ -192,8 +195,9 @@ export default function SettingsTab() {
           onPress: async () => {
             try {
               await BackupService.clearAllData();
+              await PrivateAccessService.reset();
               await loadBackupData();
-              showSuccess('Success', 'All data and backups have been cleared.');
+              showSuccess('Success', 'All data, private activity, and backups have been cleared.');
             } catch (error) {
               showError('Error', 'Failed to clear all data');
             }
@@ -221,7 +225,7 @@ export default function SettingsTab() {
 
   // --- Developer helpers (__DEV__ only) ---
 
-  const loadDemoData = async () => {
+  const performLoadDemoData = async () => {
     try {
       const result = await seedDemoData({ force: true });
       await loadBackupData();
@@ -232,15 +236,27 @@ export default function SettingsTab() {
     }
   };
 
+  const loadDemoData = () => {
+    showConfirm(
+      'Load Demo Data',
+      'This replaces all current tracking data, including private calendar entries. Continue?',
+      performLoadDemoData,
+      undefined,
+      'Load',
+      'Cancel',
+      true
+    );
+  };
+
   const confirmResetDemoData = () => {
     showConfirm(
       'Reset Demo Data',
-      'This deletes all tracking data (backups are kept). Continue?',
+      'This deletes all tracking data and private calendar entries (backups and the private PIN are kept). Continue?',
       async () => {
         try {
           await resetDemoData();
           await loadBackupData();
-          showSuccess('Data Reset', 'All tracking data has been deleted.');
+          showSuccess('Data Reset', 'All tracking data and private activity have been deleted.');
         } catch (error) {
           console.error('Error resetting demo data:', error);
           showError('Error', 'Failed to reset data');
@@ -324,6 +340,22 @@ export default function SettingsTab() {
               </View>
             </View>
           </View>
+        </View>
+
+        {/* Privacy */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacy</Text>
+
+          <TouchableOpacity
+            testID="settings-private-calendar"
+            style={styles.button}
+            onPress={() => router.push('/private')}>
+            <Shield size={20} color={theme.colors.primary} />
+            <View style={styles.privateRowText}>
+              <Text style={styles.settingTitle}>Private calendar</Text>
+              <Text style={styles.settingSubtitle}>PIN-protected personal log</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Support */}
@@ -523,7 +555,7 @@ export default function SettingsTab() {
         <View style={styles.privacyCard}>
           <Text style={styles.privacyTitle}>🔒 Your Privacy Matters</Text>
           <Text style={styles.privacyText}>
-            All your data is stored locally on your device. We don't collect, share, or sync your personal information with any servers.
+            All your data is stored locally on your device. We don't collect, share, or sync your personal information with any servers. Private calendar entries are locked with a PIN and are only included in backups if you enable that inside the calendar.
           </Text>
         </View>
       </ScrollView>
@@ -656,6 +688,10 @@ const createStyles = (theme: any) => StyleSheet.create({
   buttonText: {
     fontSize: 16,
     color: theme.colors.text,
+    marginLeft: 15,
+  },
+  privateRowText: {
+    flex: 1,
     marginLeft: 15,
   },
   dangerButton: {
