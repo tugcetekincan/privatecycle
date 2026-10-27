@@ -12,7 +12,6 @@ import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
 import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
-import { FertilityForecast } from '@/services/FertilityService';
 import { MoodSeriesPoint, PhaseMoodSummary, MOOD_SERIES_DAYS } from '@/services/MoodInsights';
 import { MOOD_OPTIONS } from '@/services/MoodTags';
 import {
@@ -23,7 +22,7 @@ import {
 } from '@/services/CyclePhaseTips';
 import { SymptomPattern } from '@/services/SymptomInsights';
 import { symptomMeta } from '@/services/Symptoms';
-import { daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
+import { formatDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
 
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
@@ -132,16 +131,11 @@ export default function InsightsTab() {
     symptomPatterns: [] as SymptomPattern[],
     trackedDays: 0,
   });
-  const [fertility, setFertility] = useState<FertilityForecast | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<CyclePhase | null>(null);
 
   const loadInsights = useCallback(async () => {
-    const [data, ovulation] = await Promise.all([
-      DataService.getInsights(),
-      DataService.getFertilityForecast(),
-    ]);
+    const data = await DataService.getInsights();
     setStats(data);
-    setFertility(ovulation);
     setSelectedPhase(null);
   }, []);
 
@@ -151,31 +145,8 @@ export default function InsightsTab() {
     }, [loadInsights])
   );
 
-  const formatShortDate = (dateKey: string) => {
-    return parseDateKey(dateKey).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const daysUntilLabel = (dateKey: string) => {
-    const days = daysBetween(parseDateKey(formatDateKey(new Date())), parseDateKey(dateKey));
-    if (days <= 0) return 'today';
-    return days === 1 ? 'in 1 day' : `in ${days} days`;
-  };
-
   const styles = createStyles(theme);
 
-  const currentCycleOvulation = fertility?.currentCycleOvulation ?? null;
-  const recordedOvulationDays =
-    fertility?.ovulationDays.filter((day) => day <= formatDateKey(new Date())) ?? [];
-  const lastRecordedOvulation = recordedOvulationDays.length
-    ? recordedOvulationDays[recordedOvulationDays.length - 1]
-    : null;
-  // The calendar grid marks every recorded ovulation; show the same latest mark
-  // here when the open cycle has no record of its own.
-  const recordedOvulation = currentCycleOvulation ?? lastRecordedOvulation;
-  const recordedOvulationLabel = currentCycleOvulation
-    ? 'Recorded ovulation'
-    : 'Last recorded ovulation';
-  const nextCycleForecast = fertility?.cycles[0] ?? null;
   const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
   const chartWidth = screenWidth - 80;
 
@@ -233,45 +204,6 @@ export default function InsightsTab() {
             <Text style={styles.statLabel}>Total Tracked</Text>
             <Text style={styles.statUnit}>periods</Text>
           </View>
-        </View>
-
-        {/* Fertility */}
-        <View testID="insights-fertility-card" style={styles.card}>
-          <Text style={styles.cardTitle}>Fertility</Text>
-          {recordedOvulation || nextCycleForecast ? (
-            <View style={styles.fertilityRows}>
-              {recordedOvulation && (
-                <View style={styles.fertilityRow}>
-                  <Text style={styles.fertilityLabel}>{recordedOvulationLabel}</Text>
-                  <Text testID="insights-recorded-ovulation" style={styles.fertilityValue}>
-                    {formatShortDate(recordedOvulation)}
-                  </Text>
-                </View>
-              )}
-              {nextCycleForecast && (
-                <>
-                  <View style={styles.fertilityRow}>
-                    <Text style={styles.fertilityLabel}>Next ovulation</Text>
-                    <Text testID="insights-next-ovulation" style={styles.fertilityValue}>
-                      {formatShortDate(nextCycleForecast.ovulationDate)} ({daysUntilLabel(nextCycleForecast.ovulationDate)})
-                    </Text>
-                  </View>
-                  <View style={styles.fertilityRow}>
-                    <Text style={styles.fertilityLabel}>Fertile window</Text>
-                    <Text testID="insights-fertile-window" style={styles.fertilityValue}>
-                      {formatShortDate(nextCycleForecast.windowStart)} – {formatShortDate(nextCycleForecast.windowEnd)}
-                    </Text>
-                  </View>
-                </>
-              )}
-              <Text style={styles.fertilityNote}>
-                {fertility?.stats.basis === 'recorded' ? 'Personalized from your recorded cycles' : 'Estimated from a standard cycle'}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.noDataText}>Track your period to see fertility forecasts!</Text>
-          )}
-          <Text style={styles.fertilityDisclaimer}>Wellness estimate — not a contraceptive method.</Text>
         </View>
 
         {/* Symptom Patterns */}
@@ -914,33 +846,5 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: theme.colors.textSecondary,
-  },
-  fertilityRows: {
-    gap: 12,
-  },
-  fertilityRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  fertilityLabel: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-  fertilityValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: OVULATION_COLOR,
-  },
-  fertilityNote: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  fertilityDisclaimer: {
-    fontSize: 11,
-    color: theme.colors.textSecondary,
-    marginTop: 10,
-    fontStyle: 'italic',
   },
 });

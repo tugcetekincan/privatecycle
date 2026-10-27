@@ -154,6 +154,7 @@ try {
   // The seeded data must produce a fertility forecast card with predictions.
   await page.getByTestId('calendar-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('calendar-next-ovulation').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('calendar-fertile-window').waitFor({ state: 'visible', timeout: 15_000 });
 
   // Watermark: sample a period day from the current month if one exists.
   const today = new Date();
@@ -277,8 +278,10 @@ try {
   if (!(avgCycle >= 20 && avgCycle <= 40)) {
     failures.push(`insights avg cycle out of expected range: ${avgCycle}`);
   }
-  await page.getByTestId('insights-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
-  await page.getByTestId('insights-next-ovulation').waitFor({ state: 'visible', timeout: 15_000 });
+  // Fertility lives on the Calendar only; Insights must not repeat it.
+  if ((await page.getByTestId('insights-fertility-card').count()) > 0) {
+    failures.push('insights still renders the duplicate fertility card');
+  }
 
   // Mood & Cycle: seeded valence/tags must produce the trend and phase rows.
   await page.getByTestId('insights-mood-trend').waitFor({ state: 'visible', timeout: 15_000 });

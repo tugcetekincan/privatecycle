@@ -102,8 +102,6 @@ Naming convention: `area-element`, kebab-case.
   places, so there is no mood save button anywhere.
 - Insights: `insights-avg-cycle`, `insights-last-period`,
   `insights-next-period`, `insights-total-periods`,
-  `insights-fertility-card`, `insights-recorded-ovulation`,
-  `insights-next-ovulation`, `insights-fertile-window`,
   `insights-mood-trend`, `insights-mood-phase-{phase}`, `insights-mood-empty`,
   `insights-symptom-patterns-card`, `insights-symptom-row-{id}`,
   `insights-symptom-rate-{id}`, `insights-symptom-bar-{id}`,
@@ -146,7 +144,7 @@ selectors so flows don't break when copy changes.
 4. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
 5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
    Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
-   (stats, fertility, mood trend + phase rows from seeded data), Settings,
+   (stats, mood trend + phase rows from seeded data), Settings,
 6. reloads and asserts persistence (including mood valence/strength from the
    DB),
 7. saves a symptom on a clean next-month day, then clears it and asserts the

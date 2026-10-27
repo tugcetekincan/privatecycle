@@ -29,7 +29,7 @@ app/                    expo-router screens
   _layout.tsx           providers, migration gate, dev-seed gate, dev globals
   (tabs)/index.tsx      Calendar (month grid, day modal, period + fertility forecast)
   (tabs)/track.tsx      Daily logging (period/ovulation/flow/symptoms/mood)
-  (tabs)/insights.tsx   Cycle/fertility stats, symptom patterns by phase, phase tips
+  (tabs)/insights.tsx   Cycle stats, symptom patterns by phase, phase tips
   (tabs)/settings.tsx   Preferences, backup UI, Privacy section, Developer section (__DEV__)
   private/index.tsx     PIN-locked intimacy calendar (outside the tab bar)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
