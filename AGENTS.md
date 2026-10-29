@@ -144,6 +144,35 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   inspection from the console/Playwright. Production and native builds are
   unaffected.
 
+## Real-data previews (local export)
+
+Estimates and new UI are easiest to judge against a real history. `local-data/`
+is a gitignored drop box for a user export — the app's normal
+`cycle_backup_<timestamp>.json`, accepted by `BackupService.validateBackupData`.
+
+- Drop the newest export as `local-data/latest.json`. Other `*.json` files in
+  that folder are fine; `latest.json` is the convention agents and ad-hoc
+  scripts read. `cycle_backup_*.json` is ignored anywhere in the repo as a
+  safety net, but never commit it: it is personal health data.
+- Skip the Settings → Import file picker and load it through dev globals while
+  `npm run dev:web` is running (Playwright against :8082):
+
+  ```js
+  const backup = JSON.parse(fs.readFileSync('local-data/latest.json', 'utf8'));
+  await page.evaluate((data) => window.__privatecycle.BackupService.restoreFromBackup(data), backup);
+  await page.reload();
+  ```
+
+  Restore replaces the cycle data and, only when the file contains
+  `data.intimateData`, the private log; the PIN is untouched. That is
+  intended: the web DB becomes a copy of the exported device.
+- Go back to demo data with `__privatecycle.seedDemoData({ force: true })` or
+  Settings → Load Demo Data. Smoke runs and their screenshots keep using the
+  deterministic seed, never this file.
+- Prefer exporting **without** the private calendar unless the change needs
+  it, and don't copy the file into commits, fixtures or tracked screenshots.
+  `artifacts/` and `test-results/` are already ignored.
+
 ## Conventions
 
 **Data layer**

@@ -18,3 +18,7 @@ expo-env.d.ts
 /test-results
 /playwright-report
 *.log
+
+# Real user exports used for local preview only (never commit personal data)
+/local-data/
+cycle_backup_*.json
