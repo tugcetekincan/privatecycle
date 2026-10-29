@@ -16,11 +16,11 @@ current when the workflow changes. Deeper runbooks live in
 
 ## Stack
 
-- Expo SDK 53 / React Native 0.79.6, **New Architecture enabled**, TypeScript strict
-- `expo-router` v5 (file-based routes under `app/`), `@react-navigation` bottom tabs
+- Expo SDK 58 / React Native 0.88.1, **New Architecture (the only option since SDK 55)**, TypeScript strict
+- `expo-router` v8 (file-based routes under `app/`), `useFocusEffect` re-exported by `expo-router` (no direct `@react-navigation/*` imports)
 - `expo-sqlite` (wa-sqlite on web), AsyncStorage for preferences only
 - Playwright + Jest for verification; Maestro for device flows
-- Node 18 locally (CI uses Node 20)
+- Node 22 locally and in CI (SDK 58 requires >=22.13; npm runs with `legacy-peer-deps` — see `.npmrc`)
 
 ## Repository map
 
@@ -227,6 +227,11 @@ is a gitignored drop box for a user export — the app's normal
 - `BackupData` JSON is a public interface: users keep these files. Only add
   fields, keep old ones optional, bump `BACKUP_VERSION` for breaking shape
   changes, and extend `validateBackupData` (it must return a real boolean).
+- `BackupService` still imports the classic file API from
+  `expo-file-system/legacy`: SDK 54 replaced the module's default export with
+  the object-oriented `File`/`Directory` API. The legacy entry point still
+  ships in SDK 58, so migrating the backup folder code is a standalone
+  follow-up, not part of an SDK bump.
 - Restore is destructive: clear + bulk insert for cycle data. The private
   calendar is replaced only when the backup contains `data.intimateData`;
   otherwise the device's private log is preserved.
@@ -337,7 +342,7 @@ rely on this.
 `artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
 cancelled — the cancelled commits are simply folded into the next release
 (window and bump both come from git history). Cold builds are ~15 min; warm
-builds reuse cross-run caches (Gradle home, `native-libs-v3`, `app-build-v1`,
+builds reuse cross-run caches (Gradle home, `native-libs-v4`, `app-build-v2`,
 ccache) and are much faster. Cache keys are versioned — **bump the version
 suffix when the cached paths change**, because GitHub's cache entries are
 immutable and an old key would keep restoring the old layout.
@@ -379,8 +384,9 @@ anything; don't. Bump rules, verification and recovery details:
   targets one identity at a time: `android:dev` refuses to run when it was
   generated for another package, and `npm run prebuild:android` switches
   back. Details in the `privatecycle-mobile` skill.
-- This machine: Android SDK, platform-tools, NDK, CMake, Maestro and a
-  `privatecycle` AVD are installed. `npm run emulator:start` boots the emulator
-  headless (it re-execs through `sg kvm` when the session predates the group
-  change); `npm run e2e:mobile` runs the validated Maestro flow. Stop with
-  `adb emu kill`.
+- This machine: the Android SDK lives at
+  `/opt/homebrew/share/android-commandlinetools` (platform-tools, NDK, CMake,
+  build-tools), and Maestro is installed. There is **no AVD** and no local
+  emulator package — install one first or use a physical device over adb
+  (`npm run e2e:mobile` then runs the validated Maestro flow). `adb` must be
+  on PATH, e.g. `export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.

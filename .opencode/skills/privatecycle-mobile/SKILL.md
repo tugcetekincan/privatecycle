@@ -12,21 +12,21 @@ the user reported "only on the phone".
 
 ## Environment (this machine)
 
-Android CLI tools are installed at `~/Android/Sdk`:
+Android CLI tools are installed at
+`/opt/homebrew/share/android-commandlinetools` on this Mac:
 
 ```sh
-export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 adb version
 ```
 
 Maestro is installed at `~/.maestro/bin/maestro` (add `~/.maestro/bin` to PATH).
+Node 22 (`/opt/homebrew/opt/node@22/bin`) is required by SDK 58.
 
-An emulator **is available** on this machine: the SDK lives in `~/Android/Sdk`,
-the AVD is named `privatecycle`, and `npm run emulator:start` boots it headless.
-If the current session predates the `usermod -aG kvm`, the script re-executes
-itself through `sg kvm`, so a reboot is nice-to-have but not required. Stop the
-emulator with `adb emu kill`.
+There is **no AVD and no emulator package** on this machine, so the emulator
+section below only applies after installing them; a physical device over USB or
+wireless debugging is the normal path here.
 
 ## Physical device (USB or wireless debugging)
 
