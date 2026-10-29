@@ -14,6 +14,13 @@ cd "$(dirname "$0")/.."
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
+# Homebrew installs the SDK into its own prefix on macOS; fall back to it when
+# the Linux-style default is missing.
+if [ ! -d "$ANDROID_HOME/platform-tools" ] && [ -d /opt/homebrew/share/android-commandlinetools/platform-tools ]; then
+  export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+  export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+fi
+
 DEV_PACKAGE="com.ncan.privatecycle.dev"
 
 if [ ! -d android ]; then

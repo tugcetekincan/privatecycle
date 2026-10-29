@@ -2,10 +2,11 @@
 # Boot the PrivateCycle headless Android emulator and wait until it is ready.
 #
 # Prerequisites (one-time):
-#   sudo usermod -aG kvm $USER   # then reboot / log out and back in
-#   sdkmanager --install "emulator" "system-images;android-35;google_apis;x86_64"
+#   Linux: sudo usermod -aG kvm $USER   # then reboot / log out and back in
+#   sdkmanager --install "emulator" "system-images;android-36;google_apis;<abi>"
 #   echo no | avdmanager create avd -n privatecycle \
-#     -k "system-images;android-35;google_apis;x86_64" -d pixel_6
+#     -k "system-images;android-36;google_apis;<abi>" -d pixel_6
+# (<abi> is arm64-v8a on Apple Silicon, x86_64 elsewhere.)
 #
 # Usage: npm run emulator:start   (or AVD_NAME=other bash scripts/android-emulator.sh)
 set -euo pipefail
@@ -13,17 +14,28 @@ set -euo pipefail
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
+if [ ! -d "$ANDROID_HOME/platform-tools" ] && [ -d /opt/homebrew/share/android-commandlinetools/platform-tools ]; then
+  export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+  export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+fi
+
+# Apple Silicon needs the arm64-v8a system image; x86_64 images will not boot.
+SYSTEM_IMAGE_ARCH=x86_64
+[ "$(uname -m)" = "arm64" ] && SYSTEM_IMAGE_ARCH=arm64-v8a
+SYSTEM_IMAGE="system-images;android-36;google_apis;${SYSTEM_IMAGE_ARCH}"
+
 AVD_NAME="${AVD_NAME:-privatecycle}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
 
 if [ ! -x "$EMULATOR" ]; then
   echo "ERROR: emulator not installed at $EMULATOR" >&2
-  echo "Install with: sdkmanager --install 'emulator' 'system-images;android-35;google_apis;x86_64'" >&2
+  echo "Install with: sdkmanager --install 'emulator' '$SYSTEM_IMAGE'" >&2
   exit 1
 fi
 
-if [ ! -w /dev/kvm ]; then
+# macOS uses Hypervisor.framework (no /dev/kvm); the group dance is Linux-only.
+if [ "$(uname -s)" = "Linux" ] && [ ! -w /dev/kvm ]; then
   # The user may already be in the kvm group without a fresh login session
   # (supplementary groups are read at login). Re-exec through sg so the
   # emulator gets the group without requiring a reboot.
@@ -42,7 +54,7 @@ fi
 
 if ! "$EMULATOR" -list-avds | grep -qx "$AVD_NAME"; then
   echo "ERROR: AVD '$AVD_NAME' not found. Create it with:" >&2
-  echo "  echo no | avdmanager create avd -n $AVD_NAME -k 'system-images;android-35;google_apis;x86_64' -d pixel_6" >&2
+  echo "  echo no | avdmanager create avd -n $AVD_NAME -k '$SYSTEM_IMAGE' -d pixel_6" >&2
   exit 1
 fi
 
