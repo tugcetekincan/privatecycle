@@ -9,14 +9,23 @@ interface ThemeColors {
   text: string;
   textSecondary: string;
   border: string;
+  borderStrong: string;
   shadowColor: string;
   accent: string;
   success: string;
+  successSoft: string;
   warning: string;
+  warningSoft: string;
   error: string;
+  teal: string;
+  tealSoft: string;
+  primarySoft: string;
+  primaryWeak: string;
+  surfaceTint: string;
   white: string;
   black: string;
   today: string;
+  todaySoft: string;
 }
 
 interface Theme {
@@ -38,14 +47,23 @@ const lightColors: ThemeColors = {
   text: '#333333',
   textSecondary: '#666666',
   border: '#f0f0f0',
+  borderStrong: '#e6e6e8',
   shadowColor: '#000000',
   accent: '#4caf50',
   success: '#4caf50',
+  successSoft: '#e8f5e9',
   warning: '#ff9800',
+  warningSoft: '#fff3e0',
   error: '#f44336',
+  teal: '#009688',
+  tealSoft: '#e0f2f1',
+  primarySoft: '#fce4ec',
+  primaryWeak: '#f8bbd0',
+  surfaceTint: '#fff8fb',
   white: '#ffffff',
   black: '#000000',
   today: '#0077b6',
+  todaySoft: '#e3f2fd',
 };
 
 const darkColors: ThemeColors = {
@@ -56,14 +74,23 @@ const darkColors: ThemeColors = {
   text: '#ffffff',
   textSecondary: '#b3b3b3',
   border: '#333333',
+  borderStrong: '#3a3a3a',
   shadowColor: '#000000',
   accent: '#4caf50',
   success: '#4caf50',
+  successSoft: '#1f3a24',
   warning: '#ff9800',
+  warningSoft: '#3a2a14',
   error: '#f44336',
+  teal: '#009688',
+  tealSoft: '#183b37',
+  primarySoft: '#3b1b28',
+  primaryWeak: '#5a2437',
+  surfaceTint: '#241a1e',
   white: '#ffffff',
   black: '#000000',
-  today: '#0077b6',
+  today: '#4fa8e0',
+  todaySoft: '#142a3a',
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
