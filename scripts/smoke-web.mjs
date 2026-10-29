@@ -5,8 +5,8 @@
 //   1. Starts `expo start --web` in CI mode (no watch) and waits for it.
 //   2. Starts the COOP/COEP proxy in front of it.
 //   3. Launches headless Chromium (Playwright), seeds demo data via ?seed=force,
-//      walks the four tabs, exercises the track-save and calendar-modal flows,
-//      and saves screenshots to artifacts/screenshots/.
+//      walks the four tabs, exercises the calendar day-modal flow and the
+//      Overview/Insights split, and saves screenshots to artifacts/screenshots/.
 //   4. Fails (exit 1) on page errors or console errors.
 //
 // Usage:
@@ -116,7 +116,8 @@ try {
     args: ['--no-sandbox'],
   });
   const context = await browser.newContext({
-    viewport: { width: 420, height: 900 }, // phone-ish: the app is mobile-first
+    viewport: { width: 390, height: 844 }, // phone-ish: matches the design boards
+    deviceScaleFactor: 2,
   });
   page = await context.newPage();
 
@@ -149,7 +150,10 @@ try {
 
   // Seed should have populated the database; wait until the calendar knows.
   await page.getByTestId('calendar-month-label').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.setViewportSize({ width: 390, height: 1250 });
+  await page.waitForTimeout(300);
   await page.screenshot({ path: shot('01-calendar'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
 
   // The seeded data must produce a fertility forecast card with predictions.
   await page.getByTestId('calendar-fertility-card').waitFor({ state: 'visible', timeout: 15_000 });
@@ -171,128 +175,71 @@ try {
   await page.getByTestId('calendar-today-caption').waitFor({ state: 'visible', timeout: 15_000 });
   log('calendar: today marker and caption rendered');
 
-  // --- Track flow: toggle period, pick flow/symptom/mood, save, dismiss dialog. ---
-  await page.getByTestId('tab-track').click();
-  await page.getByTestId('track-save-button').waitFor({ state: 'visible', timeout: 30_000 });
-  // Seeded data must be readable from the DB by now.
-  await page.getByTestId('track-has-data').waitFor({ state: 'visible', timeout: 15_000 });
+  // --- Overview: the read-only trends tab. ---
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-meta').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('overview-symptom-patterns-card').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('overview-cycle-chart').waitFor({ state: 'visible', timeout: 15_000 });
 
-  const periodToggle = page.getByTestId('track-period-toggle');
-  const periodText = (await periodToggle.textContent()) ?? '';
-  if (periodText.includes('No Period')) {
-    await periodToggle.click();
-  }
-  await page.getByTestId('track-flow-medium').click();
-  await page.getByTestId('track-symptom-cramps').click();
-  await page.getByTestId('track-flow-medium').click();
-  await page.getByTestId('track-symptom-cramps').click();
-
-  // Mood picker (Mix 1): overall face + strength chips auto-save on every tap.
-  // Pick values that differ from the seeded day so the assertions are exact.
-  const moodBefore = await page.evaluate(async () => {
-    const dateKey = __privatecycle.DataService.formatDateKey(new Date());
-    const data = await __privatecycle.DataService.getTodayData(dateKey);
-    return {
-      valence: data?.moodValence ?? 0,
-      tags: (data?.moodTags ?? []).map((tag) => tag.id),
-    };
-  });
-  const targetValence = moodBefore.valence === 4 ? 5 : 4;
-  const pool = ['happy', 'calm', 'energetic', 'tired', 'low', 'anxious', 'irritable', 'overwhelmed'];
-  const targetTag = pool.find((id) => !moodBefore.tags.includes(id));
-  if (!targetTag) {
-    failures.push('smoke setup: no unused mood tag available');
-  }
-  await page.getByTestId(`mood-valence-${targetValence}`).click();
-  await page.getByTestId(`mood-tag-${targetTag}`).click();
-  await page.getByTestId(`mood-tag-${targetTag}`).click(); // strength -> 2
-  await page.getByTestId('mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
-
-  const ovulationToggle = page.getByTestId('track-ovulation-toggle');
-  const ovulationText = (await ovulationToggle.textContent()) ?? '';
-  if (ovulationText.includes('No Ovulation')) {
-    await ovulationToggle.click();
-  }
-
-  // Clicking lower cards auto-scrolls the Track screen down; bring the top
-  // back into view so the screenshot shows the mood picker.
-  await page.getByTestId('track-date-card').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: shot('02-track-filled'), fullPage: true });
-
-  await page.getByTestId('track-save-button').click();
-  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
-  await page.screenshot({ path: shot('03-track-saved-dialog'), fullPage: true });
-  await page.getByTestId('dialog-button-ok').click();
-  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
-  log('track save flow OK');
-
-  // --- Calendar modal flow. ---
-  await page.getByTestId('tab-calendar').click();
-  await page.getByTestId('calendar-month-label').waitFor({ state: 'visible', timeout: 15_000 });
-  const sampleDay = `${monthPrefix}-15`;
-  await page.getByTestId(`calendar-day-${sampleDay}`).click();
-  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
-  await page.getByTestId('day-modal-ovulation-toggle').waitFor({ state: 'visible', timeout: 15_000 });
-
-  // Mood in the day modal is the same auto-saving picker as Track.
-  await page.getByTestId('day-modal-mood-tag-calm').click();
-  await page.getByTestId('day-modal-mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
-  // The modal slides in from the bottom; let the animation finish so the
-  // screenshot actually captures the sheet.
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: shot('04-calendar-day-modal') });
-  await page.getByTestId('day-modal-close').click();
-
-  const modalMoodTags = await page.evaluate(async (dateKey) => {
-    const data = await __privatecycle.DataService.getTodayData(dateKey);
-    return (data?.moodTags ?? []).map((tag) => tag.id);
-  }, sampleDay);
-  if (!modalMoodTags.includes('calm')) {
+  const overviewData = await page.evaluate(() => __privatecycle.DataService.getInsights());
+  if (overviewData.periodStarts.length < 3) {
     failures.push(
-      `day-modal mood auto-save did not persist (tags: ${JSON.stringify(modalMoodTags)})`
+      `overview: expected at least 3 period starts, got ${overviewData.periodStarts.length}`
     );
   }
-
-  const recordedOvulationCount = await page
-    .locator('[data-testid^="calendar-ovulation-recorded-"]')
-    .count();
-  log(`calendar: recorded ovulation marks this month = ${recordedOvulationCount}`);
-  if (recordedOvulationCount === 0) {
-    failures.push('expected at least one recorded ovulation mark in the current month');
-  }
-  log('calendar day modal flow OK');
-
-  // --- Insights: seeded data must produce non-trivial stats. ---
-  await page.getByTestId('tab-insights').click();
-  await page.getByTestId('insights-total-periods').waitFor({ state: 'visible', timeout: 30_000 });
-  await page.waitForFunction(
-    () => {
-      const el = document.querySelector('[data-testid="insights-total-periods"]');
-      return el && Number(el.textContent) >= 3;
-    },
-    { timeout: 20_000 }
-  );
-  const totalPeriods = Number(await page.getByTestId('insights-total-periods').textContent());
-  const avgCycle = Number(await page.getByTestId('insights-avg-cycle').textContent());
-  log(`insights: totalPeriods=${totalPeriods} avgCycle=${avgCycle}`);
+  const avgCycle = Number((await page.getByTestId('overview-avg-cycle').textContent())?.trim());
+  log(`overview: periods=${overviewData.periodStarts.length} avgCycle=${avgCycle}`);
   if (!(avgCycle >= 20 && avgCycle <= 40)) {
-    failures.push(`insights avg cycle out of expected range: ${avgCycle}`);
+    failures.push(`overview avg cycle out of expected range: ${avgCycle}`);
   }
-  // Fertility lives on the Calendar only; Insights must not repeat it.
-  if ((await page.getByTestId('insights-fertility-card').count()) > 0) {
-    failures.push('insights still renders the duplicate fertility card');
+  await page.getByTestId('overview-cycle-variation').waitFor({ state: 'visible', timeout: 15_000 });
+  const regularity = (await page.getByTestId('overview-cycle-regularity').textContent())?.trim();
+  if (!['Regular', 'Variable'].includes(regularity ?? '')) {
+    failures.push(`overview regularity missing or malformed: "${regularity}"`);
   }
 
-  // Mood & Cycle: seeded valence/tags must produce the trend and phase rows.
-  await page.getByTestId('insights-mood-trend').waitFor({ state: 'visible', timeout: 15_000 });
-  const moodPhaseRows = await page.locator('[data-testid^="insights-mood-phase-"]').count();
-  log(`insights: mood phase rows = ${moodPhaseRows}`);
+  await page.getByTestId('overview-mood-trend').waitFor({ state: 'visible', timeout: 15_000 });
+  const moodPhaseRows = await page.locator('[data-testid^="overview-mood-phase-"]').count();
+  log(`overview: mood phase rows = ${moodPhaseRows}`);
   if (moodPhaseRows < 2) {
     failures.push(`expected at least 2 mood phase rows, got ${moodPhaseRows}`);
   }
 
-  await page.getByTestId('insights-phase-tips-card').waitFor({ state: 'visible', timeout: 15_000 });
+  const symptomRows = await page.locator('[data-testid^="overview-symptom-row-"]').count();
+  log(`overview: symptom rows = ${symptomRows}`);
+  if (symptomRows < 2) {
+    failures.push(`expected at least 2 symptom pattern rows, got ${symptomRows}`);
+  }
+  const crampRate = (await page.getByTestId('overview-symptom-rate-cramps').textContent())?.trim();
+  if (!crampRate || !/^\d+%$/.test(crampRate)) {
+    failures.push(`cramps rate missing or malformed: "${crampRate}"`);
+  }
+  const crampSegments = await page.locator('[data-testid^="overview-symptom-segment-cramps-"]').count();
+  if (crampSegments < 1) {
+    failures.push('cramps phase bar has no phase segments');
+  }
+
+  await page.getByTestId('overview-cycle-hero').scrollIntoViewIfNeeded();
+  await page.setViewportSize({ width: 390, height: 1750 });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: shot('02-overview'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  // --- Insights: today + patterns + tips, not the raw charts. ---
+  await page.getByTestId('tab-insights').click();
+  await page.getByTestId('insights-today-card').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('insights-current-phase-badge').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('insights-today-focus').waitFor({ state: 'visible', timeout: 15_000 });
+
+  const patternCards = await page.locator('[data-testid^="insights-pattern-"]').count();
+  log(`insights: pattern cards = ${patternCards}`);
+  if (patternCards < 1) {
+    failures.push(`expected at least 1 pattern card, got ${patternCards}`);
+  }
+  const todayPattern = await page.getByTestId('insights-today-pattern').count();
+  log(`insights: personal Today row = ${todayPattern === 1 ? 'present' : 'not present'}`);
+
+  await page.getByTestId('insights-phase-tips-card').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('insights-phase-tab-follicular').click();
   await page.waitForTimeout(200);
   const follicularTitle = await page.getByTestId('insights-phase-summary-title').textContent();
@@ -301,71 +248,189 @@ try {
   }
   await page.getByTestId('insights-phase-tab-menstrual').click();
   await page.waitForTimeout(200);
-
-  await page.getByTestId('insights-symptom-patterns-card').waitFor({ state: 'visible', timeout: 15_000 });
-  const symptomRows = await page.locator('[data-testid^="insights-symptom-row-"]').count();
-  log(`insights: symptom pattern rows = ${symptomRows}`);
-  if (symptomRows < 2) {
-    failures.push(`expected at least 2 symptom pattern rows, got ${symptomRows}`);
-  }
-  const crampRate = (await page.getByTestId('insights-symptom-rate-cramps').textContent())?.trim();
-  if (!crampRate || !/^\d+%$/.test(crampRate)) {
-    failures.push(`cramps rate missing or malformed: "${crampRate}"`);
-  }
-  const crampSegments = await page.locator('[data-testid^="insights-symptom-segment-cramps-"]').count();
-  if (crampSegments < 1) {
-    failures.push('cramps phase bar has no phase segments');
+  const phaseTips = await page.locator('[data-testid^="insights-phase-tip-"]').count();
+  if (phaseTips !== 4) {
+    failures.push(`expected 4 phase tips, got ${phaseTips}`);
   }
 
-  // The app scrolls inside a fixed-height ScrollView, so a fullPage capture
-  // only sees the top. A taller viewport renders the whole Insights screen.
-  await page.setViewportSize({ width: 420, height: 2300 });
+  // The raw metrics must not be duplicated on Insights anymore.
+  for (const movedTestId of [
+    'insights-avg-cycle',
+    'insights-mood-trend',
+    'insights-symptom-patterns-card',
+  ]) {
+    if ((await page.getByTestId(movedTestId).count()) > 0) {
+      failures.push(`Insights still renders moved metric: ${movedTestId}`);
+    }
+  }
+
+  await page.getByTestId('insights-today-card').scrollIntoViewIfNeeded();
+  await page.setViewportSize({ width: 390, height: 2100 });
   await page.waitForTimeout(300);
-  await page.screenshot({ path: shot('05-insights'), fullPage: true });
-  await page.setViewportSize({ width: 420, height: 900 });
+  await page.screenshot({ path: shot('03-insights'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  // --- Calendar day modal: the only daily-entry path. ---
+  await page.getByTestId('tab-calendar').click();
+  await page.getByTestId('calendar-month-label').waitFor({ state: 'visible', timeout: 15_000 });
+  const sampleDay = `${monthPrefix}-15`;
+  const sampleBefore = await page.evaluate(async (dateKey) => {
+    const data = await __privatecycle.DataService.getTodayData(dateKey);
+    return data
+      ? {
+          isPeriod: data.isPeriod,
+          flowLevel: data.flowLevel,
+          symptoms: data.symptoms,
+          isOvulation: data.isOvulation,
+          valence: data.moodValence ?? 0,
+          tags: (data.moodTags ?? []).map((tag) => tag.id),
+        }
+      : null;
+  }, sampleDay);
+
+  await page.getByTestId(`calendar-day-${sampleDay}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+
+  const modalPeriodToggle = page.getByTestId('day-modal-period-toggle');
+  const modalPeriodText = (await modalPeriodToggle.textContent()) ?? '';
+  if (modalPeriodText.includes('No Period')) {
+    await modalPeriodToggle.click();
+  }
+  await page.getByTestId('day-modal-flow-medium').click();
+  if (!(sampleBefore?.symptoms ?? []).includes('cramps')) {
+    await page.getByTestId('day-modal-symptom-cramps').click();
+  }
+  const modalOvulationToggle = page.getByTestId('day-modal-ovulation-toggle');
+  const modalOvulationText = (await modalOvulationToggle.textContent()) ?? '';
+  if (modalOvulationText.includes('No Ovulation')) {
+    await modalOvulationToggle.click();
+  }
+
+  // Mood auto-saves inside the modal; pick values that differ from the day.
+  const targetValence = sampleBefore?.valence === 4 ? 5 : 4;
+  const pool = ['happy', 'calm', 'energetic', 'tired', 'low', 'anxious', 'irritable', 'overwhelmed'];
+  const targetTag = pool.find((id) => !(sampleBefore?.tags ?? []).includes(id));
+  if (!targetTag) {
+    failures.push('smoke setup: no unused mood tag available');
+  }
+  await page.getByTestId(`day-modal-mood-valence-${targetValence}`).click();
+  await page.getByTestId(`day-modal-mood-tag-${targetTag}`).click();
+  await page.getByTestId(`day-modal-mood-tag-${targetTag}`).click(); // strength -> 2
+  await page.getByTestId('day-modal-mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
+
+  // Bring the mood picker back into view for the screenshot.
+  await page.getByTestId('day-modal').evaluate((el) => {
+    const scrollable = Array.from(el.querySelectorAll('*')).find(
+      (node) => node.scrollHeight > node.clientHeight
+    );
+    scrollable?.scrollTo?.({ top: 0 });
+  });
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: shot('04-calendar-filled') });
+
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: shot('05-calendar-saved-dialog'), fullPage: true });
+  await page.getByTestId('dialog-button-ok').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+
+  const sampleAfter = await page.evaluate(async (dateKey) => {
+    const data = await __privatecycle.DataService.getTodayData(dateKey);
+    return data
+      ? {
+          isPeriod: data.isPeriod,
+          flowLevel: data.flowLevel,
+          symptoms: data.symptoms,
+          isOvulation: data.isOvulation,
+          valence: data.moodValence ?? 0,
+          tags: data.moodTags ?? [],
+        }
+      : null;
+  }, sampleDay);
+  if (!sampleAfter?.isPeriod) failures.push('calendar entry: period flag did not save');
+  if (sampleAfter?.flowLevel !== 'medium') {
+    failures.push(`calendar entry: flow=${sampleAfter?.flowLevel}`);
+  }
+  if (!sampleAfter?.symptoms.includes('cramps')) {
+    failures.push('calendar entry: cramps did not save');
+  }
+  if (!sampleAfter?.isOvulation) failures.push('calendar entry: ovulation flag did not save');
+  if (sampleAfter?.valence !== targetValence) {
+    failures.push(`calendar entry: valence=${sampleAfter?.valence}`);
+  }
+  const savedTag = sampleAfter?.tags.find((tag) => tag.id === targetTag);
+  if (!savedTag || savedTag.level !== 2) {
+    failures.push(`calendar entry: mood tag not at level 2 (${JSON.stringify(sampleAfter?.tags)})`);
+  }
+  await page.waitForTimeout(400);
+  const recordedOvulationCount = await page
+    .locator('[data-testid^="calendar-ovulation-recorded-"]')
+    .count();
+  log(`calendar: recorded ovulation marks this month = ${recordedOvulationCount}`);
+  if (recordedOvulationCount === 0) {
+    failures.push('expected at least one recorded ovulation mark in the current month');
+  }
+  log('calendar day-modal entry flow OK');
 
   // --- Settings: dev tools, theme toggle, export button present. ---
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-export').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('settings-dev-seed').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.setViewportSize({ width: 390, height: 1700 });
+  await page.waitForTimeout(300);
   await page.screenshot({ path: shot('06-settings'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
 
   // --- Verify seeded data survives a reload (persistence through the DB). ---
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.getByTestId('tab-track').click();
-  await page.getByTestId('track-has-data').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-meta').waitFor({ state: 'visible', timeout: 30_000 });
 
-  const persistedOvulation = (await page.getByTestId('track-ovulation-toggle').textContent()) ?? '';
-  if (!persistedOvulation.includes('Ovulation Day')) {
-    failures.push(`ovulation flag did not persist across reload: "${persistedOvulation}"`);
-  }
-  log('persistence after reload OK');
-
-  // Mood auto-save must survive the reload: valence, tag strength and the
-  // legacy mood mirror (first tag id) all intact.
-  const savedMood = await page.evaluate(async () => {
-    const dateKey = __privatecycle.DataService.formatDateKey(new Date());
+  const persistedSample = await page.evaluate(async (dateKey) => {
     const data = await __privatecycle.DataService.getTodayData(dateKey);
     return data
-      ? { valence: data.moodValence, mood: data.mood, tags: data.moodTags ?? [] }
+      ? {
+          isPeriod: data.isPeriod,
+          flowLevel: data.flowLevel,
+          symptoms: data.symptoms,
+          isOvulation: data.isOvulation,
+          mood: data.mood,
+          valence: data.moodValence ?? 0,
+          tags: data.moodTags ?? [],
+        }
       : null;
-  });
-  if (!savedMood) {
-    failures.push('mood persistence: no data for today after reload');
+  }, sampleDay);
+  if (!persistedSample) {
+    failures.push('calendar persistence: no data for the saved sample day after reload');
   } else {
-    if (savedMood.valence !== targetValence) {
-      failures.push(`mood persistence: expected valence ${targetValence}, got ${savedMood.valence}`);
+    if (!persistedSample.isPeriod) failures.push('calendar persistence: period flag missing');
+    if (persistedSample.flowLevel !== 'medium') {
+      failures.push(`calendar persistence: flow=${persistedSample.flowLevel}`);
     }
-    const persistedTag = savedMood.tags.find((tag) => tag.id === targetTag);
-    if (!persistedTag || persistedTag.level !== 2) {
+    if (!persistedSample.symptoms.includes('cramps')) {
+      failures.push('calendar persistence: cramps missing');
+    }
+    if (!persistedSample.isOvulation) failures.push('calendar persistence: ovulation flag missing');
+    if (persistedSample.valence !== targetValence) {
       failures.push(
-        `mood persistence: expected ${targetTag} at level 2, got ${JSON.stringify(savedMood.tags)}`
+        `mood persistence: expected valence ${targetValence}, got ${persistedSample.valence}`
       );
     }
-    if (savedMood.tags.length > 0 && savedMood.mood !== savedMood.tags[0].id) {
+    const persistedTag = persistedSample.tags.find((tag) => tag.id === targetTag);
+    if (!persistedTag || persistedTag.level !== 2) {
+      failures.push(
+        `mood persistence: expected ${targetTag} at level 2, got ${JSON.stringify(
+          persistedSample.tags
+        )}`
+      );
+    }
+    if (persistedSample.tags.length > 0 && persistedSample.mood !== persistedSample.tags[0].id) {
       failures.push('mood persistence: legacy mood column does not mirror the first tag');
     }
-    log(`mood persistence OK: valence=${savedMood.valence} tags=${JSON.stringify(savedMood.tags)}`);
+    log(
+      `calendar persistence OK: period/ovulation/symptoms + mood valence=${persistedSample.valence}`
+    );
   }
 
   if (periodCell) {
@@ -419,10 +484,9 @@ try {
       const all = await __privatecycle.DataService.getAllDailyData();
       return all[key] ?? null;
     }, clearedKey);
-  const cellBackground = () =>
-    clearedCell.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const dayMarkCount = () => page.getByTestId(`calendar-day-mark-${clearedKey}`).count();
 
-  const backgroundBefore = await cellBackground();
+  const markBefore = await dayMarkCount();
 
   // Enter a symptom and save: the day must now have a row.
   await clearedCell.click();
@@ -435,11 +499,9 @@ try {
   if (!enteredRow || !enteredRow.symptoms.includes('cramps')) {
     failures.push(`clearing flow: saved day has no row with the symptom (${clearedKey})`);
   }
-  const backgroundMarked = await cellBackground();
-  if (backgroundMarked === backgroundBefore) {
-    failures.push(
-      `clearing flow: day with data shows no calendar mark (${backgroundBefore} unchanged)`
-    );
+  const markMarked = await dayMarkCount();
+  if (markMarked === markBefore) {
+    failures.push(`clearing flow: day with data shows no calendar mark (${markBefore} unchanged)`);
   }
   // Let the day-modal slide-out animation finish before capturing.
   await page.waitForTimeout(600);
@@ -456,19 +518,17 @@ try {
   if (leftoverRow) {
     failures.push(`clearing flow: empty day row still in the DB: ${JSON.stringify(leftoverRow)}`);
   }
-  const backgroundCleared = await cellBackground();
-  if (backgroundCleared !== backgroundBefore) {
+  const markCleared = await dayMarkCount();
+  if (markCleared !== markBefore) {
     failures.push(
       `clearing flow: day mark did not return to its clean state ` +
-        `(${backgroundBefore} -> ${backgroundCleared})`
+        `(${markBefore} -> ${markCleared})`
     );
   }
   // Let the day-modal slide-out animation finish before capturing.
   await page.waitForTimeout(600);
   await page.screenshot({ path: shot('08-calendar-day-cleared'), fullPage: true });
-  log(
-    `calendar clearing flow OK (mark ${backgroundBefore} -> ${backgroundMarked} -> ${backgroundCleared})`
-  );
+  log(`calendar clearing flow OK (mark ${markBefore} -> ${markMarked} -> ${markCleared})`);
 
   // --- Private calendar: PIN setup, save, lock, wrong PIN, reload guard. ---
   await page.getByTestId('tab-settings').click();

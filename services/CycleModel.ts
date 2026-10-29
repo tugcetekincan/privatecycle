@@ -20,6 +20,13 @@ export type CyclePhase = 'menstrual' | 'follicular' | 'ovulation' | 'luteal';
 
 export const PHASE_ORDER: CyclePhase[] = ['menstrual', 'follicular', 'ovulation', 'luteal'];
 
+export const PHASE_LABELS: Record<CyclePhase, string> = {
+  menstrual: 'Menstrual',
+  follicular: 'Follicular',
+  ovulation: 'Ovulation',
+  luteal: 'Luteal',
+};
+
 export interface CycleWindow {
   /** Recorded period start that opens the cycle. */
   start: string;
@@ -72,7 +79,7 @@ const FERTILE_WINDOW_DAYS_BEFORE = 5;
 const LUTEAL_MIN_DAYS = 8;
 const LUTEAL_MAX_DAYS = 17;
 /** Menstrual phase: the first six days (day 0 through day 5). */
-const MENSTRUAL_PHASE_DAYS = 6;
+export const MENSTRUAL_PHASE_DAYS = 6;
 /** Ovulation phase length, starting on the ovulation day. */
 const OVULATION_PHASE_DAYS = 3;
 

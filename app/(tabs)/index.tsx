@@ -20,9 +20,15 @@ import { SYMPTOMS } from '@/services/Symptoms';
 import MoodPicker from '@/components/MoodPicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionHeader from '@/components/ui/SectionHeader';
+import { Card } from '@/components/ui/Card';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import ScreenFade from '@/components/ui/ScreenFade';
+import { cardShadow, radii, spacing, typography } from '@/design/tokens';
 import { useDialog } from '@/hooks/useDialog';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -59,7 +65,7 @@ export default function CalendarTab() {
   const [forecast, setForecast] = useState<FertilityForecast | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
-  const [calendarHeight, setCalendarHeight] = useState(220);
+  const [calendarHeight, setCalendarHeight] = useState(252);
   
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -73,7 +79,7 @@ export default function CalendarTab() {
   
   const slideAnim = useRef(new Animated.Value(0)).current;
   const nextMonthAnim = useRef(new Animated.Value(screenWidth)).current;
-  const heightAnim = useRef(new Animated.Value(220)).current;
+  const heightAnim = useRef(new Animated.Value(252)).current;
 
   useEffect(() => {
     loadData();
@@ -186,7 +192,9 @@ export default function CalendarTab() {
       await DataService.saveTodayData(editingData.date, editingData);
       await loadData(); // Reload all data to update the calendar
       closeModal();
-      showSuccess('Success', 'Data saved successfully!');
+      // Let the native sheet finish dismissing before presenting the dialog,
+      // otherwise the dialog can appear behind the closing modal.
+      setTimeout(() => showSuccess('Success', 'Data saved successfully!'), 350);
     } catch (error) {
       showError('Error', 'Failed to save data. Please try again.');
       console.error('Error saving data:', error);
@@ -204,8 +212,8 @@ export default function CalendarTab() {
     });
   };
 
-  // Mood auto-saves on every tap (same picker as Track), while the rest of the
-  // modal still goes through the explicit Save button.
+  // Mood auto-saves on every tap, while the rest of the modal still goes
+  // through the explicit Save button.
   const handleModalMoodChange = async (next: MoodValue) => {
     if (!editingData) return;
     const dateKey = editingData.date;
@@ -252,10 +260,10 @@ export default function CalendarTab() {
 
   const getCalendarHeight = (date: Date) => {
     const rows = getCalendarRows(date);
-    const dayRowHeight = 36;
-    const headerHeight = 30;
-    const padding = 20;
-    return headerHeight + (rows * dayRowHeight) + padding;
+    const dayRowHeight = 44;
+    const headerHeight = 26;
+    const padding = 6;
+    return headerHeight + rows * dayRowHeight + padding;
   };
 
   const formatDateKey = (date: Date) => {
@@ -309,40 +317,6 @@ export default function CalendarTab() {
     if (predictedOvulationKeys.has(key)) return 'Predicted ovulation day';
     if (fertileWindowKeys.has(key)) return 'Within the predicted fertile window';
     return null;
-  };
-
-  // Generic helper function to determine day position for pill styling
-  const getDayPosition = (date: Date, checkFunction: (d: Date) => boolean): 'single' | 'start' | 'middle' | 'end' => {
-    if (!checkFunction(date)) return 'single';
-
-    const prevDay = new Date(date);
-    prevDay.setDate(prevDay.getDate() - 1);
-    const nextDay = new Date(date);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    const isPrevSameType = checkFunction(prevDay);
-    const isNextSameType = checkFunction(nextDay);
-
-    if (!isPrevSameType && !isNextSameType) return 'single';
-    if (!isPrevSameType && isNextSameType) return 'start';
-    if (isPrevSameType && !isNextSameType) return 'end';
-    return 'middle';
-  };
-
-  // Generic helper function to get day border radius based on position
-  const getDayBorderRadius = (position: 'single' | 'start' | 'middle' | 'end') => {
-    switch (position) {
-      case 'single':
-        return { borderRadius: 18 };
-      case 'start':
-        return { borderTopLeftRadius: 18, borderBottomLeftRadius: 18, borderTopRightRadius: 0, borderBottomRightRadius: 0 };
-      case 'middle':
-        return { borderRadius: 0 };
-      case 'end':
-        return { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderTopRightRadius: 18, borderBottomRightRadius: 18 };
-      default:
-        return { borderRadius: 18 };
-    }
   };
 
   const [animationDirection, setAnimationDirection] = useState<'prev' | 'next'>('next');
@@ -450,61 +424,56 @@ export default function CalendarTab() {
       const isOvulation = isOvulationDay(dayDate);
       const isPredictedOvulation = !isOvulation && isPredictedOvulationDay(dayDate);
       const isFertile = isFertileWindowDay(dayDate);
-
-      // Get day positions for pill styling
-      const periodPosition = isPeriod ? getDayPosition(dayDate, isPeriodDay) : 'single';
-      const noPeriodPosition = isNoPeriod ? getDayPosition(dayDate, isNoPeriodDay) : 'single';
-      const predictedPosition = isPredicted ? getDayPosition(dayDate, isPredictedPeriod) : 'single';
-
-      // Get border radius styles
-      const periodBorderRadius = isPeriod ? getDayBorderRadius(periodPosition) : {};
-      const noPeriodBorderRadius = isNoPeriod ? getDayBorderRadius(noPeriodPosition) : {};
-      const predictedBorderRadius = isPredicted ? getDayBorderRadius(predictedPosition) : {};
-
       const hasData = hasDataForDate(dayDate);
 
-      // Allow clicking on any day, not just ones with data
       const DayComponent = TouchableOpacity;
 
       days.push(
         <DayComponent
           key={day}
           testID={`calendar-day-${dayKey}`}
-          style={[
-            styles.dayCell,
-            isFertile && styles.fertileWindowDay,
-            isPeriod && [styles.periodDay, periodBorderRadius],
-            isNoPeriod && [styles.noPeriodDay, noPeriodBorderRadius],
-            isPredicted && [styles.predictedDay, predictedBorderRadius],
-            hasData && styles.clickableDay,
-          ]}
+          style={[styles.dayCell, hasData && styles.clickableDay]}
           onPress={() => handleDayPress(dayDate)}
           activeOpacity={0.7}>
-          {/* Today: a surface-coloured cutout disc with a blue ring around the
-              number. The disc separates today from any cell fill (period
-              pink, predicted purple, fertile teal, no-period gray); the blue
-              is the app's dedicated today color (see the Track screen badge)
-              and is otherwise unused in the calendar. */}
-          {isToday && <View testID={`calendar-today-${dayKey}`} style={styles.todayMarker} />}
-          <Text
+          <View
             style={[
-              styles.dayText,
-              isPeriod && styles.periodText,
-              isNoPeriod && styles.noPeriodText,
-              isPredicted && styles.predictedText,
-              isToday && styles.todayText,
+              styles.dayInner,
+              isPredicted && styles.predictedDay,
+              isFertile && styles.fertileWindowDay,
+              isPeriod && styles.periodDay,
             ]}>
-            {day}
-          </Text>
-          {isOvulation && (
-            <View testID={`calendar-ovulation-recorded-${dayKey}`} style={styles.ovulationDot} />
-          )}
-          {isPredictedOvulation && (
-            <View
-              testID={`calendar-ovulation-predicted-${dayKey}`}
-              style={[styles.ovulationDot, styles.ovulationDotPredicted]}
-            />
-          )}
+            {isToday && (
+              <View testID={`calendar-today-${dayKey}`} style={styles.todayMarker} />
+            )}
+            <Text
+              style={[
+                styles.dayText,
+                isPeriod && styles.periodText,
+                isNoPeriod && styles.noPeriodText,
+                isPredicted && styles.predictedText,
+                isToday && !isPeriod && styles.todayText,
+              ]}>
+              {day}
+            </Text>
+            {isOvulation && (
+              <View
+                testID={`calendar-ovulation-recorded-${dayKey}`}
+                style={styles.ovulationDot}
+              />
+            )}
+            {isPredictedOvulation && (
+              <View
+                testID={`calendar-ovulation-predicted-${dayKey}`}
+                style={[styles.ovulationDot, styles.ovulationDotPredicted]}
+              />
+            )}
+            {isNoPeriod && !isFertile && !isOvulation && (
+              <View
+                testID={`calendar-day-mark-${dayKey}`}
+                style={styles.noPeriodDot}
+              />
+            )}
+          </View>
         </DayComponent>
       );
     }
@@ -552,123 +521,143 @@ export default function CalendarTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Period Calendar</Text>
-          <CalendarIcon size={24} color={theme.colors.primary} />
-        </View>
+      <ScreenFade>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <ScreenHeader
+            title="Period Calendar"
+            subtitle="Tap a day to log or edit"
+            icon={<CalendarIcon size={21} color={theme.colors.primary} />}
+          />
 
-        {/* Calendar Navigation */}
-        <View style={styles.calendarHeader}>
-          <TouchableOpacity testID="calendar-prev-month" onPress={() => navigateMonth('prev')}>
-            <ChevronLeft size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-          <Text testID="calendar-month-label" style={styles.monthYear}>
-            {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </Text>
-          <TouchableOpacity testID="calendar-next-month" onPress={() => navigateMonth('next')}>
-            <ChevronRight size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                testID="calendar-prev-month"
+                style={styles.monthButton}
+                onPress={() => navigateMonth('prev')}>
+                <ChevronLeft size={19} color={theme.colors.primary} />
+              </TouchableOpacity>
+              <Text testID="calendar-month-label" style={[typography.cardTitle, styles.monthYear]}>
+                {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+              </Text>
+              <TouchableOpacity
+                testID="calendar-next-month"
+                style={styles.monthButton}
+                onPress={() => navigateMonth('next')}>
+                <ChevronRight size={19} color={theme.colors.primary} />
+              </TouchableOpacity>
+            </View>
 
-        {/* On the current month, spell today out under the title so it is
-            unambiguous at a glance; other months keep the calendar compact. */}
-        {isViewingCurrentMonth && (
-          <Text testID="calendar-today-caption" style={styles.todayCaption}>
-            <Text style={styles.todayCaptionLabel}>Today</Text>
-            {' · '}
-            {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </Text>
-        )}
+            {isViewingCurrentMonth && (
+              <Text testID="calendar-today-caption" style={[typography.micro, styles.todayCaption]}>
+                <Text style={styles.todayCaptionLabel}>TODAY</Text>
+                {' · '}
+                {now
+                  .toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                  .toUpperCase()}
+              </Text>
+            )}
 
-        {/* Calendar */}
-        <Animated.View style={[styles.calendarContainer, { height: heightAnim }]} {...panResponder.panHandlers}>
-          {/* Current Month */}
-          <Animated.View style={[
-            styles.calendar,
-            { height: calendarHeight },
-            {
-              transform: [{ translateX: slideAnim }],
-            },
-          ]}>
-            {renderCalendarContent(currentDate)}
-          </Animated.View>
+            <Animated.View
+              style={[styles.calendarViewport, { height: heightAnim }]}
+              {...panResponder.panHandlers}>
+              <Animated.View
+                style={[
+                  styles.calendar,
+                  { height: calendarHeight },
+                  { transform: [{ translateX: slideAnim }] },
+                ]}>
+                {renderCalendarContent(currentDate)}
+              </Animated.View>
 
-          {/* Next Month (for animation) */}
-          {isAnimating && nextMonthDate && (
-            <Animated.View style={[
-              styles.calendar,
-              styles.nextMonthCalendar,
-              { height: getCalendarHeight(nextMonthDate) },
-              {
-                transform: [{ translateX: nextMonthAnim }],
-              },
-            ]}>
-              {renderCalendarContent(nextMonthDate)}
+              {isAnimating && nextMonthDate && (
+                <Animated.View
+                  style={[
+                    styles.calendar,
+                    styles.nextMonthCalendar,
+                    { height: getCalendarHeight(nextMonthDate) },
+                    { transform: [{ translateX: nextMonthAnim }] },
+                  ]}>
+                  {renderCalendarContent(nextMonthDate)}
+                </Animated.View>
+              )}
             </Animated.View>
-          )}
-        </Animated.View>
 
-        {/* Legend */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
-            <Text style={styles.legendText}>Period</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.secondary, borderWidth: 1, borderColor: theme.colors.border }]} />
-            <Text style={styles.legendText}>No Period</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1' }]} />
-            <Text style={styles.legendText}>Predicted</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: OVULATION_COLOR }]} />
-            <Text style={styles.legendText}>Ovulation</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, styles.legendFertileDot]} />
-            <Text style={styles.legendText}>Fertile window</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, styles.legendTodayDot]} />
-            <Text style={styles.legendText}>Today</Text>
-          </View>
-        </View>
-
-        {/* Future Period Predictions */}
-        {futurePeriods.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Upcoming Periods</Text>
-            <View style={styles.card}>
-              <View style={styles.predictionInfo}>
-                {futurePeriods.slice(0, 3).map((periodStart, index, shown) => {
-                  const isLast = index === shown.length - 1;
-
-                  return (
-                    <View
-                      key={periodStart}
-                      style={[styles.predictionInfoItem, isLast && styles.predictionInfoItemLast]}>
-                      <Text style={styles.predictionInfoLabel}>
-                        {formatPredictionDate(periodStart)}
-                      </Text>
-                      <Text style={styles.predictionInfoValue}>
-                        {daysUntilLabel(periodStart)}
-                      </Text>
-                    </View>
-                  );
-                })}
+            <View style={styles.legend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
+                <Text style={styles.legendText}>Period</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[
+                    styles.legendDot,
+                    { backgroundColor: theme.isDark ? '#666666' : '#c9c9c9' },
+                  ]}
+                />
+                <Text style={styles.legendText}>No Period</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: theme.colors.primaryWeak }]} />
+                <Text style={styles.legendText}>Predicted</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: OVULATION_COLOR }]} />
+                <Text style={styles.legendText}>Ovulation</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: theme.colors.tealSoft }]} />
+                <Text style={styles.legendText}>Fertile window</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendTodayDot]} />
+                <Text style={styles.legendText}>Today</Text>
               </View>
             </View>
           </View>
-        )}
 
-        {/* Fertility Forecast */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Fertility Forecast</Text>
-          <View testID="calendar-fertility-card" style={styles.card}>
+          {futurePeriods.length > 0 && (
+            <>
+              <SectionHeader
+                title="UPCOMING PERIODS"
+                meta="Next 3"
+                dotColor={theme.colors.primary}
+              />
+              <Card style={styles.sectionCard} padding={14}>
+                <View style={styles.predictionInfo}>
+                  {futurePeriods.slice(0, 3).map((periodStart, index, shown) => {
+                    const isLast = index === shown.length - 1;
+                    return (
+                      <View
+                        key={periodStart}
+                        style={[
+                          styles.predictionInfoItem,
+                          isLast && styles.predictionInfoItemLast,
+                        ]}>
+                        <Text style={styles.predictionInfoLabel}>
+                          {formatPredictionDate(periodStart)}
+                        </Text>
+                        <Text style={styles.predictionInfoValue}>
+                          {daysUntilLabel(periodStart)}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Card>
+            </>
+          )}
+
+          <SectionHeader
+            title="FERTILITY FORECAST"
+            meta="Wellness estimate"
+            dotColor={OVULATION_COLOR}
+          />
+          <Card style={styles.sectionCard} padding={14} testID="calendar-fertility-card">
             {recordedOvulation || nextCycleForecast ? (
               <View style={styles.predictionInfo}>
                 {recordedOvulation && (
@@ -687,16 +676,20 @@ export default function CalendarTab() {
                   <>
                     <View style={styles.predictionInfoItem}>
                       <Text style={styles.predictionInfoLabel}>
-                        {nextCycleForecast.isCurrentCycle ? 'Ovulation expected' : 'Next ovulation'}
+                        {nextCycleForecast.isCurrentCycle
+                          ? 'Ovulation expected'
+                          : 'Next ovulation'}
                       </Text>
                       <Text testID="calendar-next-ovulation" style={styles.fertilityValue}>
-                        {formatShortDate(nextCycleForecast.ovulationDate)} · {daysUntilLabel(nextCycleForecast.ovulationDate)}
+                        {formatShortDate(nextCycleForecast.ovulationDate)} ·{' '}
+                        {daysUntilLabel(nextCycleForecast.ovulationDate)}
                       </Text>
                     </View>
                     <View style={[styles.predictionInfoItem, styles.predictionInfoItemLast]}>
                       <Text style={styles.predictionInfoLabel}>Fertile window</Text>
                       <Text testID="calendar-fertile-window" style={styles.fertilityValue}>
-                        {formatShortDate(nextCycleForecast.windowStart)} – {formatShortDate(nextCycleForecast.windowEnd)}
+                        {formatShortDate(nextCycleForecast.windowStart)} –{' '}
+                        {formatShortDate(nextCycleForecast.windowEnd)}
                       </Text>
                     </View>
                   </>
@@ -711,13 +704,15 @@ export default function CalendarTab() {
             )}
             {nextCycleForecast && (
               <Text style={styles.fertilityNote}>
-                {forecast?.stats.basis === 'recorded' ? 'Personalized from your recorded cycles' : 'Estimated from a standard cycle'}
+                {forecast?.stats.basis === 'recorded'
+                  ? 'Personalized from your recorded cycles'
+                  : 'Estimated from a standard cycle'}
                 {' · wellness estimate, not a contraceptive method'}
               </Text>
             )}
-          </View>
-        </View>
-      </ScrollView>
+          </Card>
+        </ScrollView>
+      </ScreenFade>
 
       {/* Day Details Modal */}
       <Modal
@@ -742,7 +737,7 @@ export default function CalendarTab() {
             </View>
 
             <ScrollView style={styles.modalScrollView}>
-              {/* Mood (auto-saves on every tap, same picker as Track) */}
+              {/* Mood (auto-saves on every tap) */}
               <MoodPicker
                 valence={editingData?.moodValence || 0}
                 tags={editingData?.moodTags || []}
@@ -753,7 +748,7 @@ export default function CalendarTab() {
               />
 
               {/* Period Tracking */}
-              <View style={styles.modalCard}>
+              <Card style={styles.modalCard} padding={16}>
                 <Text style={styles.modalCardTitle}>Period</Text>
                 <TouchableOpacity 
                   testID="day-modal-period-toggle"
@@ -798,10 +793,10 @@ export default function CalendarTab() {
                     </View>
                   </View>
                 )}
-              </View>
+              </Card>
 
               {/* Ovulation */}
-              <View style={styles.modalCard}>
+              <Card style={styles.modalCard} padding={16}>
                 <Text style={styles.modalCardTitle}>Ovulation</Text>
                 <TouchableOpacity
                   testID="day-modal-ovulation-toggle"
@@ -820,10 +815,10 @@ export default function CalendarTab() {
                     {getOvulationHint(selectedDateData.date)}
                   </Text>
                 )}
-              </View>
+              </Card>
 
               {/* Symptoms */}
-              <View style={styles.modalCard}>
+              <Card style={styles.modalCard} padding={16}>
                 <Text style={styles.modalCardTitle}>Symptoms</Text>
                 <View style={styles.symptomsGrid}>
                   {SYMPTOMS.map(symptom => (
@@ -845,17 +840,16 @@ export default function CalendarTab() {
                     </TouchableOpacity>
                   ))}
                 </View>
-              </View>
+              </Card>
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity
+              <PrimaryButton
                 testID="day-modal-save"
-                style={styles.saveButton}
-                onPress={saveModalData}>
-                <Check size={20} color="#fff" />
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
+                title="Save"
+                onPress={saveModalData}
+                icon={<Check size={18} color={theme.colors.white} />}
+              />
             </View>
           </View>
         </View>
@@ -865,10 +859,6 @@ export default function CalendarTab() {
   );
 }
 
-// The app's dedicated "today" blue (same as the Track screen's Today badge);
-// the dark theme uses a lighter step so it contrasts with the dark cutout disc.
-const todayAccent = (theme: any) => (theme.isDark ? '#1e88e5' : theme.colors.today);
-
 const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
@@ -877,54 +867,59 @@ const createStyles = (theme: any) => StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
+  scrollContent: {
+    paddingBottom: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.colors.text,
+  calendarCard: {
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: 20,
+    marginTop: 2,
+    padding: 14,
+    borderRadius: radii.hero,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...cardShadow(theme),
   },
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  monthButton: {
+    width: 30,
+    height: 30,
+    borderRadius: radii.sm,
+    backgroundColor: theme.colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   monthYear: {
-    fontSize: 20,
-    fontWeight: '600',
     color: theme.colors.text,
   },
   todayCaption: {
+    alignSelf: 'center',
+    overflow: 'hidden',
     textAlign: 'center',
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    paddingBottom: 8,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: theme.colors.today,
+    backgroundColor: theme.colors.todaySoft,
+    borderRadius: radii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 8,
   },
   todayCaptionLabel: {
-    color: todayAccent(theme),
-    fontWeight: '600',
+    color: theme.colors.today,
+    fontWeight: '800',
   },
-  calendarContainer: {
-    marginHorizontal: 15,
+  calendarViewport: {
     overflow: 'hidden',
   },
   calendar: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    padding: 10,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    backgroundColor: 'transparent',
   },
   nextMonthCalendar: {
     position: 'absolute',
@@ -934,114 +929,128 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   dayHeaders: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingBottom: 8,
+    paddingBottom: 7,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
   dayHeader: {
-    fontSize: 14,
-    fontWeight: '600',
+    flex: 1,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    width: 40,
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingTop: 8,
+    paddingTop: 3,
   },
   emptyDay: {
-    width: '14.28%',
-    height: 36,
+    width: '14.2857%',
+    height: 44,
   },
   dayCell: {
-    width: '14.28%',
-    height: 36,
+    width: '14.2857%',
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  dayInner: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.day,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
   dayText: {
-    fontSize: 16,
+    fontSize: 13,
+    fontWeight: '600',
     color: theme.colors.text,
   },
   todayMarker: {
     position: 'absolute',
-    top: 3,
-    left: '50%',
-    marginLeft: -15,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: 0,
+    left: 0,
+    width: 34,
+    height: 34,
+    borderRadius: radii.day,
     borderWidth: 2,
-    borderColor: todayAccent(theme),
-    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.today,
+    backgroundColor: 'transparent',
   },
   todayText: {
-    color: todayAccent(theme),
-    fontWeight: 'bold',
+    color: theme.colors.today,
+    fontWeight: '800',
   },
   periodDay: {
     backgroundColor: theme.colors.primary,
   },
   periodText: {
     color: theme.colors.white,
-    fontWeight: 'bold',
-  },
-  noPeriodDay: {
-    backgroundColor: theme.colors.secondary,
+    fontWeight: '800',
   },
   noPeriodText: {
     color: theme.colors.textSecondary,
     fontWeight: '500',
   },
+  noPeriodDot: {
+    position: 'absolute',
+    bottom: 4,
+    right: 5,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.isDark ? '#666666' : '#c9c9c9',
+  },
   predictedDay: {
-    backgroundColor: theme.isDark ? '#8e24aa' : '#ffb3d1',
+    backgroundColor: theme.colors.primaryWeak,
   },
   predictedText: {
-    color: theme.isDark ? theme.colors.white : theme.colors.text,
-    fontWeight: '500',
+    color: theme.isDark ? '#ffb3d1' : '#ad1457',
+    fontWeight: '700',
   },
   fertileWindowDay: {
-    backgroundColor: theme.isDark ? 'rgba(0, 150, 136, 0.30)' : 'rgba(0, 150, 136, 0.14)',
+    backgroundColor: theme.colors.tealSoft,
   },
   ovulationDot: {
     position: 'absolute',
-    top: 2,
+    bottom: 3,
     left: '50%',
-    marginLeft: -3.5,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    marginLeft: -2.5,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: OVULATION_COLOR,
   },
   ovulationDotPredicted: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: OVULATION_COLOR,
-  },
-  legendFertileDot: {
-    backgroundColor: theme.isDark ? 'rgba(0, 150, 136, 0.45)' : 'rgba(0, 150, 136, 0.2)',
   },
   legendTodayDot: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: todayAccent(theme),
+    borderWidth: 1.5,
+    borderColor: theme.colors.today,
   },
   fertilityValue: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
     color: OVULATION_COLOR,
     flexShrink: 1,
     textAlign: 'right',
   },
   fertilityNote: {
-    fontSize: 12,
+    fontSize: 9,
+    lineHeight: 14,
     color: theme.colors.textSecondary,
-    marginTop: 12,
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   fertilityEmpty: {
-    fontSize: 16,
+    fontSize: 12,
+    lineHeight: 17,
     color: theme.colors.textSecondary,
     textAlign: 'center',
     fontStyle: 'italic',
@@ -1051,17 +1060,18 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 2,
+    padding: 14,
+    borderRadius: radii.button,
+    borderWidth: 1.5,
     borderColor: OVULATION_COLOR,
+    backgroundColor: theme.colors.tealSoft,
   },
   ovulationButtonActive: {
     backgroundColor: OVULATION_COLOR,
   },
   ovulationButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '700',
     color: OVULATION_COLOR,
     marginLeft: 8,
   },
@@ -1069,7 +1079,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: '#fff',
   },
   ovulationHint: {
-    fontSize: 13,
+    ...typography.caption,
     color: theme.colors.textSecondary,
     marginTop: 10,
     textAlign: 'center',
@@ -1078,56 +1088,29 @@ const createStyles = (theme: any) => StyleSheet.create({
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    gap: 7,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    marginTop: 7,
+    paddingTop: 9,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   legendText: {
-    fontSize: 14,
+    fontSize: 9,
     color: theme.colors.textSecondary,
   },
-  predictionCard: {
-    backgroundColor: theme.colors.surface,
+  sectionCard: {
     marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 12,
-    padding: 20,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  section: {
-    marginVertical: 10,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    marginHorizontal: 20,
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginTop: 0,
   },
   predictionInfo: {
     gap: 0,
@@ -1137,7 +1120,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -1145,12 +1128,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderBottomWidth: 0,
   },
   predictionInfoLabel: {
-    fontSize: 16,
+    fontSize: 12,
     color: theme.colors.textSecondary,
   },
   predictionInfoValue: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
     color: theme.colors.primary,
   },
   clickableDay: {
@@ -1158,13 +1141,13 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: radii.hero,
+    borderTopRightRadius: radii.hero,
     height: '80%',
     paddingBottom: 20,
   },
@@ -1177,65 +1160,60 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderBottomColor: theme.colors.border,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.cardTitle,
     color: theme.colors.text,
     flex: 1,
   },
   closeButton: {
-    padding: 5,
+    width: 32,
+    height: 32,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.secondary,
   },
   modalScrollView: {
     flex: 1,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   modalCard: {
-    backgroundColor: theme.colors.surface,
     marginHorizontal: 20,
-    marginVertical: 10,
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginVertical: 8,
   },
   modalCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.cardTitle,
     color: theme.colors.text,
-    marginBottom: 15,
+    marginBottom: 14,
   },
   periodButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e91e63',
+    padding: 14,
+    borderRadius: radii.button,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft,
   },
   periodButtonActive: {
-    backgroundColor: '#e91e63',
+    backgroundColor: theme.colors.primary,
   },
   periodButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#e91e63',
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.primary,
     marginLeft: 8,
   },
   periodButtonTextActive: {
     color: '#fff',
   },
   flowSection: {
-    marginTop: 20,
+    marginTop: 16,
   },
   flowSectionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
+    ...typography.rowTitle,
     color: theme.colors.textSecondary,
-    marginBottom: 10,
+    marginBottom: 9,
   },
   flowButtons: {
     flexDirection: 'row',
@@ -1243,11 +1221,11 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   flowButton: {
     flex: 1,
-    padding: 12,
-    marginHorizontal: 5,
-    borderRadius: 8,
+    padding: 11,
+    marginHorizontal: 4,
+    borderRadius: radii.sm,
     alignItems: 'center',
-    opacity: 0.7,
+    opacity: 0.75,
   },
   flowButtonActive: {
     opacity: 1,
@@ -1255,8 +1233,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderColor: theme.colors.text,
   },
   flowButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: theme.colors.text,
   },
   flowButtonTextActive: {
@@ -1271,10 +1249,12 @@ const createStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.secondary,
-    paddingVertical: 8,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: radii.pill,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   symptomChipSelected: {
     backgroundColor: theme.colors.primary,
@@ -1284,7 +1264,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginRight: 6,
   },
   symptomText: {
-    fontSize: 14,
+    ...typography.caption,
     color: theme.colors.textSecondary,
   },
   symptomTextSelected: {
@@ -1296,18 +1276,5 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  saveButtonText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.white,
-  },
+
 });

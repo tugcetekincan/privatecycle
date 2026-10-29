@@ -7,6 +7,7 @@ import {
   Modal,
 } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { floatingShadow, radii, spacing, typography } from '@/design/tokens';
 import { Check, X, AlertTriangle, Info, HelpCircle } from 'lucide-react-native';
 
 export interface DialogButton {
@@ -179,58 +180,61 @@ const CustomDialog: React.FC<DialogProps> = ({
 const createStyles = (theme: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   dialog: {
     backgroundColor: theme.colors.surface,
-    borderRadius: 16,
+    borderRadius: radii.hero,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
-    elevation: 10,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    ...floatingShadow(theme),
   },
   header: {
     alignItems: 'center',
     paddingTop: 24,
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingBottom: 14,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: radii.card,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '800',
+    letterSpacing: -0.2,
     color: theme.colors.text,
     textAlign: 'center',
   },
   content: {
     paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingBottom: 22,
   },
   message: {
-    fontSize: 16,
+    fontSize: 14,
+    lineHeight: 20,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
   },
   buttonContainer: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    minHeight: 60,
+    borderBottomLeftRadius: radii.hero,
+    borderBottomRightRadius: radii.hero,
+    overflow: 'hidden',
+    minHeight: 54,
   },
   verticalButtonContainer: {
     flexDirection: 'column',
@@ -252,8 +256,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderBottomColor: theme.colors.border,
   },
   buttonText: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '700',
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,

@@ -6,7 +6,7 @@
 #
 # Prerequisites:
 #   - a dev build installed on a connected device (npm run android:dev)
-#   - in-app data: the Calendar/Track screens work with empty data too
+#   - in-app data: the Calendar screen works with empty data too
 #
 # Run: npm run e2e:mobile    (= ~/.maestro/bin/maestro test maestro/)
 #
@@ -44,33 +44,44 @@ appId: com.ncan.privatecycle.dev
     timeout: 90000
 
 - tapOn:
-    id: 'tab-track'
-- assertVisible: 'Track Your Day'
+    id: 'tab-calendar'
+- assertVisible: 'Period Calendar'
 
-# Toggle period on if it is off, then save today.
+# Open a day in the Calendar modal: mood auto-saves, then save the entry.
+- tapOn: '15'
+- assertVisible:
+    id: 'day-modal'
+- tapOn:
+    id: 'day-modal-mood-tag-calm'
+- extendedWaitUntil:
+    visible:
+      id: 'day-modal-mood-saved'
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: 'day-modal-period-toggle'
+    direction: DOWN
 - runFlow:
     when:
       visible: 'No Period'
     commands:
       - tapOn:
-          id: 'track-period-toggle'
-- tapOn:
-    id: 'track-symptom-cramps'
+          id: 'day-modal-period-toggle'
 - scrollUntilVisible:
     element:
-      id: 'track-mood-calm'
+      id: 'day-modal-symptom-cramps'
     direction: DOWN
 - tapOn:
-    id: 'track-mood-calm'
-- scrollUntilVisible:
-    element:
-      id: 'track-save-button'
-    direction: DOWN
+    id: 'day-modal-symptom-cramps'
 - tapOn:
-    id: 'track-save-button'
+    id: 'day-modal-save'
 - assertVisible: 'Success'
 - tapOn:
     id: 'dialog-button-ok'
+
+- tapOn:
+    id: 'tab-overview'
+- assertVisible: 'Overview'
 
 - tapOn:
     id: 'tab-insights'

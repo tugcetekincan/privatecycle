@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Info,
   Database,
+  ChevronRight,
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
@@ -36,6 +37,13 @@ import { seedDemoData, resetDemoData } from '@/services/DevSeedService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
 import { useDialog } from '@/hooks/useDialog';
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionHeader from '@/components/ui/SectionHeader';
+import { Card } from '@/components/ui/Card';
+import IconTile from '@/components/ui/IconTile';
+import SettingsRow from '@/components/ui/SettingsRow';
+import ScreenFade from '@/components/ui/ScreenFade';
+import { radii, spacing, typography } from '@/design/tokens';
 
 export default function SettingsTab() {
   const { theme, toggleTheme, isDark } = useTheme();
@@ -219,7 +227,7 @@ export default function SettingsTab() {
   const showHelp = () => {
     showInfo(
       'Help',
-      '• Use the Calendar tab to view your cycle\n• Track your period, symptoms, and mood daily\n• View insights and patterns in the Insights tab\n• All data is stored locally on your device'
+      '• Use the Calendar tab to log period, symptoms, and mood\n• View cycle, symptom and mood trends in Overview\n• Read personalized patterns and phase tips in Insights\n• All data is stored locally on your device'
     );
   };
 
@@ -273,468 +281,424 @@ export default function SettingsTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-          <SettingsIcon size={24} color={theme.colors.primary} />
-        </View>
+      <ScreenFade>
+        <ScrollView style={styles.scrollView}>
+          <ScreenHeader
+            title="Settings"
+            subtitle="Preferences, privacy and backups"
+            icon={<SettingsIcon size={21} color={theme.colors.primary} />}
+          />
 
-        {/* App Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>App Settings</Text>
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Bell size={20} color={theme.colors.textSecondary} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Notifications</Text>
-                <Text style={styles.settingSubtitle}>Period reminders and tips</Text>
-              </View>
-            </View>
-            <Switch
-              testID="settings-notifications-switch"
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-              thumbColor={notifications ? theme.colors.white : theme.colors.white}
+          <SectionHeader title="APP SETTINGS" dotColor={theme.colors.primary} />
+          <Card style={styles.sectionCard} padding={14}>
+            <SettingsRow
+              icon={<Bell size={15} color={theme.colors.primary} />}
+              tone="primary"
+              title="Notifications"
+              subtitle="Period reminders and tips"
+              right={
+                <Switch
+                  testID="settings-notifications-switch"
+                  value={notifications}
+                  onValueChange={setNotifications}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={theme.colors.white}
+                />
+              }
             />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Moon size={20} color={theme.colors.textSecondary} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Dark Mode</Text>
-                <Text style={styles.settingSubtitle}>Switch to dark theme</Text>
-              </View>
-            </View>
-            <Switch
-              testID="settings-darkmode-switch"
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-              thumbColor={isDark ? theme.colors.white : theme.colors.white}
+            <SettingsRow
+              last
+              icon={<Moon size={15} color={theme.colors.textSecondary} />}
+              title="Dark mode"
+              subtitle="Switch to the dark theme"
+              right={
+                <Switch
+                  testID="settings-darkmode-switch"
+                  value={isDark}
+                  onValueChange={toggleTheme}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={theme.colors.white}
+                />
+              }
             />
-          </View>
-        </View>
+          </Card>
 
-        {/* Cycle Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cycle Settings</Text>
-          
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Cycle Information</Text>
+          <SectionHeader title="CYCLE SETTINGS" dotColor={theme.colors.warning} />
+          <Card style={styles.sectionCard} padding={16}>
+            <Text style={[typography.cardTitle, styles.cardTitle, { color: theme.colors.text }]}>
+              Cycle information
+            </Text>
+            <Text style={[typography.caption, styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
+              Your current defaults
+            </Text>
             <View style={styles.cycleInfo}>
               <View style={styles.cycleInfoItem}>
-                <Text style={styles.cycleInfoLabel}>Average Cycle Length</Text>
-                <Text style={styles.cycleInfoValue}>28 days</Text>
+                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                  Average cycle length
+                </Text>
+                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>28 days</Text>
               </View>
               <View style={styles.cycleInfoItem}>
-                <Text style={styles.cycleInfoLabel}>Period Length</Text>
-                <Text style={styles.cycleInfoValue}>5 days</Text>
+                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                  Period length
+                </Text>
+                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>5 days</Text>
               </View>
               <View style={styles.cycleInfoItem}>
-                <Text style={styles.cycleInfoLabel}>Luteal Phase</Text>
-                <Text style={styles.cycleInfoValue}>14 days</Text>
+                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                  Luteal phase
+                </Text>
+                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>14 days</Text>
               </View>
             </View>
-          </View>
-        </View>
+          </Card>
 
-        {/* Privacy */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy</Text>
+          <SectionHeader title="PRIVACY" dotColor={theme.colors.teal} />
+          <Card style={styles.sectionCard} padding={14}>
+            <SettingsRow
+              last
+              testID="settings-private-calendar"
+              icon={<Shield size={15} color={theme.colors.teal} />}
+              tone="teal"
+              title="Private calendar"
+              subtitle="PIN-protected personal log"
+              onPress={() => router.push('/private')}
+              right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+            />
+          </Card>
 
-          <TouchableOpacity
-            testID="settings-private-calendar"
-            style={styles.button}
-            onPress={() => router.push('/private')}>
-            <Shield size={20} color={theme.colors.primary} />
-            <View style={styles.privateRowText}>
-              <Text style={styles.settingTitle}>Private calendar</Text>
-              <Text style={styles.settingSubtitle}>PIN-protected personal log</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+          <SectionHeader title="SUPPORT" dotColor={theme.colors.success} />
+          <Card style={styles.sectionCard} padding={14}>
+            <SettingsRow
+              testID="settings-help"
+              icon={<HelpCircle size={15} color={theme.colors.success} />}
+              tone="success"
+              title="Help & FAQ"
+              onPress={showHelp}
+              right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+            />
+            <SettingsRow
+              last
+              testID="settings-about"
+              icon={<SettingsIcon size={15} color={theme.colors.textSecondary} />}
+              title="About"
+              onPress={showAbout}
+              right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+            />
+          </Card>
 
-        {/* Support */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
-          
-          <TouchableOpacity testID="settings-help" style={styles.button} onPress={showHelp}>
-            <HelpCircle size={20} color={theme.colors.success} />
-            <Text style={styles.buttonText}>Help & FAQ</Text>
-          </TouchableOpacity>
+          <SectionHeader title="BACKUP & RESTORE" meta="Local only" dotColor={theme.colors.primary} />
+          <Card style={styles.sectionCard} padding={14}>
+            {isWeb && (
+              <View
+                style={[
+                  styles.webNotice,
+                  { backgroundColor: theme.colors.primarySoft, borderColor: theme.colors.primarySoft },
+                ]}>
+                <Info size={13} color={theme.colors.primary} />
+                <Text style={[typography.caption, styles.webNoticeText, { color: theme.colors.textSecondary }]}>
+                  On the web, exporting downloads a backup file and importing reads one from your device.
+                </Text>
+              </View>
+            )}
 
-          <TouchableOpacity testID="settings-about" style={styles.button} onPress={showAbout}>
-            <SettingsIcon size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.buttonText}>About</Text>
-          </TouchableOpacity>
-        </View>
+            {!isWeb && (
+              <SettingsRow
+                icon={<RefreshCw size={15} color={theme.colors.textSecondary} />}
+                title="Auto backup"
+                subtitle="Automatically create backups"
+                right={
+                  <Switch
+                    testID="settings-auto-backup-switch"
+                    value={backupSettings.autoBackupEnabled}
+                    onValueChange={(value) => updateBackupSettings({ autoBackupEnabled: value })}
+                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                    thumbColor={theme.colors.white}
+                  />
+                }
+              />
+            )}
 
-        {/* Backup & Restore */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Backup & Restore</Text>
+            {!isWeb && backupSettings.autoBackupEnabled && (
+              <SettingsRow
+                icon={<Clock size={15} color={theme.colors.textSecondary} />}
+                title="Backup frequency"
+                subtitle={`Currently: ${backupSettings.autoBackupFrequency}`}
+                onPress={() => {
+                  showChoice(
+                    'Backup Frequency',
+                    'Choose how often to create automatic backups',
+                    [
+                      {
+                        text: 'Daily',
+                        onPress: () => updateBackupSettings({ autoBackupFrequency: 'daily' }),
+                      },
+                      {
+                        text: 'Weekly',
+                        onPress: () => updateBackupSettings({ autoBackupFrequency: 'weekly' }),
+                      },
+                      {
+                        text: 'Monthly',
+                        onPress: () => updateBackupSettings({ autoBackupFrequency: 'monthly' }),
+                      },
+                    ],
+                    true
+                  );
+                }}
+                right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+              />
+            )}
 
-          {isWeb && (
-            <View style={styles.webNotice}>
-              <Info size={18} color={theme.colors.primary} />
-              <Text style={styles.webNoticeText}>
-                On the web, exporting downloads a backup file and importing reads one from your device.
+            {!isWeb && (
+              <SettingsRow
+                testID="settings-create-backup"
+                icon={<HardDrive size={15} color={theme.colors.primary} />}
+                tone="primary"
+                title="Create backup"
+                subtitle="Save a copy on this device"
+                onPress={createManualBackup}
+                right={
+                  loading ? (
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                  ) : (
+                    <ChevronRight size={16} color={theme.colors.textSecondary} />
+                  )
+                }
+              />
+            )}
+
+            <SettingsRow
+              testID="settings-export"
+              icon={<Download size={15} color={theme.colors.primary} />}
+              tone="primary"
+              title="Export backup"
+              subtitle="Save a JSON copy of your data"
+              onPress={exportBackup}
+              right={
+                loading ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : (
+                  <ChevronRight size={16} color={theme.colors.textSecondary} />
+                )
+              }
+            />
+
+            <SettingsRow
+              last={isWeb}
+              testID="settings-import"
+              icon={<Upload size={15} color={theme.colors.success} />}
+              tone="success"
+              title="Import backup"
+              subtitle="Restore from a backup file"
+              onPress={importBackup}
+              right={
+                loading ? (
+                  <ActivityIndicator size="small" color={theme.colors.success} />
+                ) : (
+                  <ChevronRight size={16} color={theme.colors.textSecondary} />
+                )
+              }
+            />
+
+            {!isWeb && (
+              <SettingsRow
+                testID="settings-delete-backup"
+                last
+                icon={<HardDrive size={15} color={theme.colors.error} />}
+                title="Delete backup"
+                titleColor={theme.colors.error}
+                onPress={deleteBackup}
+                right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+              />
+            )}
+          </Card>
+
+          {!isWeb && (
+            <>
+              <SectionHeader title="BACKUP INFORMATION" dotColor={theme.colors.primary} />
+              <Card style={styles.sectionCard} padding={16}>
+                <View style={styles.backupInfo}>
+                  <View style={styles.backupInfoItem}>
+                    <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                      Local backup
+                    </Text>
+                    <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>
+                      {backupStats.totalBackups > 0 ? 'Available' : 'None'}
+                    </Text>
+                  </View>
+                  <View style={styles.backupInfoItem}>
+                    <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                      Total size
+                    </Text>
+                    <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>
+                      {BackupService.formatFileSize(backupStats.totalSize)}
+                    </Text>
+                  </View>
+                  <View style={styles.backupInfoItem}>
+                    <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                      Last backup
+                    </Text>
+                    <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>
+                      {backupStats.lastBackup
+                        ? backupStats.lastBackup.toLocaleDateString()
+                        : 'Never'}
+                    </Text>
+                  </View>
+                  {backupSettings.autoBackupEnabled && backupStats.nextAutoBackup && (
+                    <View style={styles.backupInfoItem}>
+                      <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
+                        Next auto backup
+                      </Text>
+                      <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>
+                        {backupStats.nextAutoBackup.toLocaleDateString()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Card>
+            </>
+          )}
+
+          {__DEV__ && (
+            <>
+              <SectionHeader title="DEVELOPER" dotColor={theme.colors.warning} />
+              <Card style={styles.sectionCard} padding={14}>
+                <SettingsRow
+                  testID="settings-dev-seed"
+                  icon={<Database size={15} color={theme.colors.primary} />}
+                  tone="primary"
+                  title="Load demo data"
+                  subtitle="Replace the database with deterministic sample data"
+                  onPress={loadDemoData}
+                  right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+                />
+                <SettingsRow
+                  last
+                  testID="settings-dev-reset"
+                  icon={<RefreshCw size={15} color={theme.colors.error} />}
+                  title="Reset demo data"
+                  titleColor={theme.colors.error}
+                  onPress={confirmResetDemoData}
+                  right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+                />
+              </Card>
+            </>
+          )}
+
+          <SectionHeader title="DATA MANAGEMENT" dotColor={theme.colors.error} />
+          <Card style={styles.sectionCard} padding={14}>
+            <SettingsRow
+              last
+              testID="settings-clear-all"
+              icon={<Trash2 size={15} color={theme.colors.error} />}
+              title="Clear all data"
+              titleColor={theme.colors.error}
+              subtitle="Delete cycle data, private activity and backups"
+              onPress={clearAllData}
+              right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
+            />
+          </Card>
+
+          <Card style={styles.privacyNote} padding={14}>
+            <IconTile size={30} tone="success">
+              <Shield size={15} color={theme.colors.success} />
+            </IconTile>
+            <View style={styles.privacyCopy}>
+              <Text
+                style={[
+                  typography.rowTitle,
+                  { color: theme.isDark ? '#a5d6a7' : '#2e7d32' },
+                ]}>
+                Your privacy matters
+              </Text>
+              <Text
+                style={[
+                  typography.caption,
+                  styles.privacyText,
+                  { color: theme.isDark ? '#a5d6a7' : '#388e3c' },
+                ]}>
+                All data stays on your device. Nothing is collected or synced. Private entries are
+                PIN-locked and only included in backups if you opt in.
               </Text>
             </View>
-          )}
-
-          {/* Auto Backup Settings (local-file based; native only) */}
-          {!isWeb && (
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <RefreshCw size={20} color={theme.colors.textSecondary} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Auto Backup</Text>
-                <Text style={styles.settingSubtitle}>Automatically create backups</Text>
-              </View>
-            </View>
-            <Switch
-              testID="settings-auto-backup-switch"
-              value={backupSettings.autoBackupEnabled}
-              onValueChange={(value) => updateBackupSettings({ autoBackupEnabled: value })}
-              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-              thumbColor={backupSettings.autoBackupEnabled ? theme.colors.white : theme.colors.white}
-            />
-          </View>
-          )}
-
-          {/* Backup Frequency */}
-          {!isWeb && backupSettings.autoBackupEnabled && (
-            <TouchableOpacity 
-              style={styles.settingItem}
-              onPress={() => {
-                showChoice(
-                  'Backup Frequency',
-                  'Choose how often to create automatic backups',
-                  [
-                    { text: 'Daily', onPress: () => updateBackupSettings({ autoBackupFrequency: 'daily' }) },
-                    { text: 'Weekly', onPress: () => updateBackupSettings({ autoBackupFrequency: 'weekly' }) },
-                    { text: 'Monthly', onPress: () => updateBackupSettings({ autoBackupFrequency: 'monthly' }) },
-                  ],
-                  true
-                );
-              }}
-            >
-              <View style={styles.settingInfo}>
-                <Clock size={20} color={theme.colors.textSecondary} />
-                <View style={styles.settingText}>
-                  <Text style={styles.settingTitle}>Backup Frequency</Text>
-                  <Text style={styles.settingSubtitle}>Currently: {backupSettings.autoBackupFrequency}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* Backup Actions */}
-          {!isWeb && (
-          <TouchableOpacity
-            testID="settings-create-backup"
-            style={styles.button}
-            onPress={createManualBackup}
-            disabled={loading}
-          >
-            <HardDrive size={20} color={theme.colors.primary} />
-            <Text style={styles.buttonText}>Create Backup</Text>
-            {loading && <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginLeft: 10 }} />}
-          </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            testID="settings-export"
-            style={styles.button} 
-            onPress={exportBackup}
-            disabled={loading}
-          >
-            <Download size={20} color={theme.colors.success} />
-            <Text style={styles.buttonText}>Export Backup</Text>
-            {loading && <ActivityIndicator size="small" color={theme.colors.success} style={{ marginLeft: 10 }} />}
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            testID="settings-import"
-            style={styles.button} 
-            onPress={importBackup}
-            disabled={loading}
-          >
-            <Upload size={20} color={theme.colors.accent} />
-            <Text style={styles.buttonText}>Import Backup</Text>
-            {loading && <ActivityIndicator size="small" color={theme.colors.accent} style={{ marginLeft: 10 }} />}
-          </TouchableOpacity>
-
-          {!isWeb && (
-          <TouchableOpacity
-            style={styles.button}
-            onPress={deleteBackup}
-          >
-            <HardDrive size={20} color={theme.colors.error} />
-            <Text style={styles.buttonText}>Delete Backup</Text>
-          </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Backup Information (local-file stats; native only) */}
-        {!isWeb && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Backup Information</Text>
-
-          <View style={styles.card}>
-            <View style={styles.backupInfo}>
-              <View style={styles.backupInfoItem}>
-                <Text style={styles.backupInfoLabel}>Local Backup</Text>
-                <Text style={styles.backupInfoValue}>{backupStats.totalBackups > 0 ? 'Available' : 'None'}</Text>
-              </View>
-              <View style={styles.backupInfoItem}>
-                <Text style={styles.backupInfoLabel}>Total Size</Text>
-                <Text style={styles.backupInfoValue}>
-                  {BackupService.formatFileSize(backupStats.totalSize)}
-                </Text>
-              </View>
-              <View style={styles.backupInfoItem}>
-                <Text style={styles.backupInfoLabel}>Last Backup</Text>
-                <Text style={styles.backupInfoValue}>
-                  {backupStats.lastBackup ? backupStats.lastBackup.toLocaleDateString() : 'Never'}
-                </Text>
-              </View>
-              {backupSettings.autoBackupEnabled && backupStats.nextAutoBackup && (
-                <View style={styles.backupInfoItem}>
-                  <Text style={styles.backupInfoLabel}>Next Auto Backup</Text>
-                  <Text style={styles.backupInfoValue}>
-                    {backupStats.nextAutoBackup.toLocaleDateString()}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-        )}
-
-        {/* Developer Tools (dev builds only) */}
-        {__DEV__ && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Developer</Text>
-
-            <TouchableOpacity
-              testID="settings-dev-seed"
-              style={styles.button}
-              onPress={loadDemoData}
-            >
-              <Database size={20} color={theme.colors.primary} />
-              <Text style={styles.buttonText}>Load Demo Data</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              testID="settings-dev-reset"
-              style={styles.button}
-              onPress={confirmResetDemoData}
-            >
-              <RefreshCw size={20} color={theme.colors.error} />
-              <Text style={[styles.buttonText, styles.dangerText]}>Reset Demo Data</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Data Management */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data Management</Text>
-          
-          <TouchableOpacity testID="settings-clear-all" style={[styles.button, styles.dangerButton]} onPress={clearAllData}>
-            <Trash2 size={20} color={theme.colors.error} />
-            <Text style={[styles.buttonText, styles.dangerText]}>Clear All Data</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Privacy Notice */}
-        <View style={styles.privacyCard}>
-          <Text style={styles.privacyTitle}>🔒 Your Privacy Matters</Text>
-          <Text style={styles.privacyText}>
-            All your data is stored locally on your device. We don't collect, share, or sync your personal information with any servers. Private calendar entries are locked with a PIN and are only included in backups if you enable that inside the calendar.
-          </Text>
-        </View>
-      </ScrollView>
+          </Card>
+        </ScrollView>
+      </ScreenFade>
       <DialogComponent />
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  section: {
-    marginVertical: 10,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  settingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingText: {
-    marginLeft: 15,
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  settingSubtitle: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  webNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginHorizontal: 20,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  webNoticeText: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 13,
-    lineHeight: 19,
-    color: theme.colors.textSecondary,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    marginHorizontal: 20,
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 15,
-  },
-  cycleInfo: {
-    gap: 12,
-  },
-  cycleInfoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cycleInfoLabel: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-  cycleInfoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.primary,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  buttonText: {
-    fontSize: 16,
-    color: theme.colors.text,
-    marginLeft: 15,
-  },
-  privateRowText: {
-    flex: 1,
-    marginLeft: 15,
-  },
-  dangerButton: {
-    backgroundColor: theme.colors.surface,
-  },
-  dangerText: {
-    color: theme.colors.error,
-  },
-  privacyCard: {
-    backgroundColor: theme.isDark ? '#1a3d1a' : '#e8f5e8',
-    marginHorizontal: 20,
-    marginVertical: 20,
-    padding: 20,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.success,
-  },
-  privacyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.isDark ? '#81c784' : '#2e7d32',
-    marginBottom: 8,
-  },
-  privacyText: {
-    fontSize: 14,
-    color: theme.isDark ? '#a5d6a7' : '#388e3c',
-    lineHeight: 20,
-  },
-  backupInfo: {
-    gap: 12,
-  },
-  backupInfoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backupInfoLabel: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-  },
-  backupInfoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.primary,
-  },
-});
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    sectionCard: {
+      marginHorizontal: 20,
+      marginTop: 0,
+    },
+    cardTitle: {
+      marginBottom: 2,
+    },
+    cardSubtitle: {
+      marginBottom: 12,
+    },
+    cycleInfo: {
+      gap: 10,
+      marginTop: 10,
+    },
+    cycleInfoItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 2,
+    },
+    cycleInfoLabel: {
+      flexShrink: 1,
+    },
+    webNotice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      padding: 8,
+      borderRadius: radii.sm,
+      borderWidth: 1,
+      marginBottom: 8,
+    },
+    webNoticeText: {
+      flex: 1,
+      lineHeight: 15,
+    },
+    backupInfo: {
+      gap: 10,
+    },
+    backupInfoItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+    },
+    privacyNote: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      marginHorizontal: 20,
+      marginTop: 20,
+      marginBottom: 24,
+      backgroundColor: theme.colors.successSoft,
+      borderColor: theme.colors.successSoft,
+    },
+    privacyCopy: {
+      flex: 1,
+    },
+    privacyText: {
+      marginTop: 2,
+      lineHeight: 16,
+    },
+  });

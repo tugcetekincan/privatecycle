@@ -37,6 +37,36 @@ export interface CurrentPhaseStatus {
   daysSinceLastPeriod: number;
 }
 
+/** One curated, phase-level nudge for the Today card on Insights. */
+export interface TodayFocus {
+  emoji: string;
+  title: string;
+  description: string;
+}
+
+export const TODAY_FOCUS: Record<CyclePhase, TodayFocus> = {
+  menstrual: {
+    emoji: '🫖',
+    title: 'Warmth over intensity',
+    description: 'A heating pad, an early night, and one fewer commitment.',
+  },
+  follicular: {
+    emoji: '⚡',
+    title: 'Use the energy spike',
+    description: 'Put the hardest task first, then get outside for daylight.',
+  },
+  ovulation: {
+    emoji: '🗣️',
+    title: 'Make the connection',
+    description: 'Schedule the conversation or workout that needs confidence.',
+  },
+  luteal: {
+    emoji: '🌙',
+    title: 'Keep the evening slow',
+    description: 'A steady dinner, a warm shower, and lights out 30 minutes earlier.',
+  },
+};
+
 export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   menstrual: {
     phase: 'menstrual',

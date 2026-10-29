@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Calendar, Heart, ChartBar as BarChart2, Settings } from 'lucide-react-native';
+import { Calendar, TrendingUp, Lightbulb, Settings } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 
 export default function TabLayout() {
@@ -22,8 +22,8 @@ export default function TabLayout() {
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textSecondary,
           tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '500',
+            fontSize: 11,
+            fontWeight: '600',
             marginTop: 4,
           },
           tabBarIconStyle: {
@@ -33,8 +33,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            tabBarIcon: ({ size, color }) => (
-              <Calendar size={size} color={color} />
+            tabBarIcon: ({ color }) => (
+              <Calendar size={22} color={color} />
             ),
             tabBarLabel: 'Calendar',
             tabBarButtonTestID: 'tab-calendar',
@@ -43,18 +43,18 @@ export default function TabLayout() {
         <Tabs.Screen
           name="track"
           options={{
-            tabBarIcon: ({ size, color }) => (
-              <Heart size={size} color={color} />
+            tabBarIcon: ({ color }) => (
+              <TrendingUp size={22} color={color} />
             ),
-            tabBarLabel: 'Track',
-            tabBarButtonTestID: 'tab-track',
+            tabBarLabel: 'Overview',
+            tabBarButtonTestID: 'tab-overview',
           }}
         />
         <Tabs.Screen
           name="insights"
           options={{
-            tabBarIcon: ({ size, color }) => (
-              <BarChart2 size={size} color={color} />
+            tabBarIcon: ({ color }) => (
+              <Lightbulb size={22} color={color} />
             ),
             tabBarLabel: 'Insights',
             tabBarButtonTestID: 'tab-insights',
@@ -63,8 +63,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="settings"
           options={{
-            tabBarIcon: ({ size, color }) => (
-              <Settings size={size} color={color} />
+            tabBarIcon: ({ color }) => (
+              <Settings size={22} color={color} />
             ),
             tabBarLabel: 'Settings',
             tabBarButtonTestID: 'tab-settings',

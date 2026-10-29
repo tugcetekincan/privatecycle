@@ -5,132 +5,60 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  Dimensions,
   TouchableOpacity,
 } from 'react-native';
-import Svg, { Circle, Polyline, Rect } from 'react-native-svg';
-import { ChartBar as BarChart2, TrendingUp, Calendar, Heart } from 'lucide-react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { DataService } from '@/services/DataService';
-import { MoodSeriesPoint, PhaseMoodSummary, MOOD_SERIES_DAYS } from '@/services/MoodInsights';
-import { MOOD_OPTIONS } from '@/services/MoodTags';
+import { CyclePhase, PHASE_LABELS } from '@/services/CycleModel';
 import {
   CYCLE_PHASE_TIPS,
   getCurrentPhaseStatus,
-  CyclePhase,
   PHASE_ORDER,
+  TODAY_FOCUS,
 } from '@/services/CyclePhaseTips';
-import { SymptomPattern } from '@/services/SymptomInsights';
-import { symptomMeta } from '@/services/Symptoms';
+import { buildNarrative, NarrativePattern } from '@/services/CycleNarrative';
 import { formatDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionHeader from '@/components/ui/SectionHeader';
+import { Card, GradientCard } from '@/components/ui/Card';
+import Pill from '@/components/ui/Pill';
+import EmptyState from '@/components/ui/EmptyState';
+import ScreenFade from '@/components/ui/ScreenFade';
+import { radii, spacing, typography } from '@/design/tokens';
 
-// Intentional accent for ovulation marks; keeps them distinct from period pink.
+// Intentional accent for ovulation; keeps it distinct from period pink.
 const OVULATION_COLOR = '#009688';
 
-const { width: screenWidth } = Dimensions.get('window');
-
-const VALENCE_FACES: { [value: number]: string } = {
-  1: '😞',
-  2: '😕',
-  3: '😐',
-  4: '🙂',
-  5: '😄',
+const PHASE_BADGE_LABELS: Record<CyclePhase, string> = {
+  menstrual: 'MENSTRUAL',
+  follicular: 'FOLLICULAR',
+  ovulation: 'OVULATION',
+  luteal: 'LUTEAL',
 };
 
-const PHASE_LABELS: { [phase: string]: string } = {
-  menstrual: 'Menstrual',
-  follicular: 'Follicular',
-  ovulation: 'Ovulation',
-  luteal: 'Luteal',
+type InsightStats = Awaited<ReturnType<typeof DataService.getInsights>>;
+
+const sentenceCase = (value: string): string =>
+  value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+
+const EMPTY_STATS: InsightStats = {
+  averageCycle: 28,
+  lastPeriodLength: 0,
+  nextPeriodIn: 0,
+  totalPeriods: 0,
+  moodSeries: [],
+  moodPhases: [],
+  periodStarts: [],
+  ovulationDays: [],
+  symptomPatterns: [],
+  trackedDays: 0,
 };
-
-function moodLabel(id: string): string {
-  return (
-    MOOD_OPTIONS.find((option) => option.id === id)?.label ??
-    id.charAt(0).toUpperCase() + id.slice(1)
-  );
-}
-
-function levelDots(averageLevel: number): string {
-  return '●'.repeat(Math.min(3, Math.max(1, Math.round(averageLevel))));
-}
-
-function formatPercent(rate: number): string {
-  const percent = rate * 100;
-  if (percent > 0 && percent < 1) return '<1%';
-  return `${Math.round(percent)}%`;
-}
-
-/**
- * Daily valence over the last `MOOD_SERIES_DAYS` days: period days are shaded,
- * one dot per logged day. Pure SVG so no chart dependency is needed.
- */
-function MoodTrendChart({
-  series,
-  width,
-  color,
-}: {
-  series: MoodSeriesPoint[];
-  width: number;
-  color: string;
-}) {
-  const height = 96;
-  const padY = 12;
-  const slot = series.length > 1 ? width / (series.length - 1) : width;
-  const x = (index: number) => (series.length > 1 ? index * slot : width / 2);
-  const y = (valence: number) => padY + ((5 - valence) / 4) * (height - padY * 2);
-
-  const logged = series
-    .map((point, index) => ({ ...point, index }))
-    .filter((point) => point.valence > 0);
-
-  return (
-    <Svg width={width} height={height}>
-      {series.map((point, index) =>
-        point.isPeriod ? (
-          <Rect
-            key={point.date}
-            x={x(index) - slot / 2}
-            y={0}
-            width={slot}
-            height={height}
-            fill={color}
-            fillOpacity={0.14}
-          />
-        ) : null
-      )}
-      {logged.length > 1 && (
-        <Polyline
-          points={logged.map((point) => `${x(point.index)},${y(point.valence)}`).join(' ')}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      )}
-      {logged.map((point) => (
-        <Circle key={point.date} cx={x(point.index)} cy={y(point.valence)} r={3} fill={color} />
-      ))}
-    </Svg>
-  );
-}
 
 export default function InsightsTab() {
   const { theme } = useTheme();
-  const [stats, setStats] = useState({
-    averageCycle: 28,
-    lastPeriodLength: 0,
-    nextPeriodIn: 0,
-    totalPeriods: 0,
-    moodSeries: [] as MoodSeriesPoint[],
-    moodPhases: [] as PhaseMoodSummary[],
-    periodStarts: [] as string[],
-    ovulationDays: [] as string[],
-    symptomPatterns: [] as SymptomPattern[],
-    trackedDays: 0,
-  });
+  const [stats, setStats] = useState<InsightStats>(EMPTY_STATS);
   const [selectedPhase, setSelectedPhase] = useState<CyclePhase | null>(null);
 
   const loadInsights = useCallback(async () => {
@@ -146,18 +74,26 @@ export default function InsightsTab() {
   );
 
   const styles = createStyles(theme);
-
-  const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
-  const chartWidth = screenWidth - 80;
-
   const todayKey = formatDateKey(new Date());
   const currentStatus = getCurrentPhaseStatus(
     todayKey,
     stats.periodStarts,
     stats.ovulationDays
   );
-  const activePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
+  const narrative = buildNarrative(
+    {
+      symptomPatterns: stats.symptomPatterns,
+      moodPhases: stats.moodPhases,
+      periodStarts: stats.periodStarts,
+    },
+    currentStatus?.phase ?? null
+  );
+
+  const activePhase: CyclePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
   const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
+  const currentPhaseInfo = currentStatus ? CYCLE_PHASE_TIPS[currentStatus.phase] : null;
+  const todayFocus = currentStatus ? TODAY_FOCUS[currentStatus.phase] : null;
+  const showPhaseSummary = !currentStatus || activePhase !== currentStatus.phase;
 
   const phaseColors: { [phase in CyclePhase]: string } = {
     menstrual: theme.colors.primary,
@@ -166,221 +102,208 @@ export default function InsightsTab() {
     luteal: theme.colors.warning,
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Insights</Text>
-          <BarChart2 size={24} color={theme.colors.primary} />
-        </View>
-
-        {/* Cycle Stats */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Calendar size={32} color={theme.colors.primary} />
-            <Text testID="insights-avg-cycle" style={styles.statNumber}>{stats.averageCycle}</Text>
-            <Text style={styles.statLabel}>Avg Cycle Length</Text>
-            <Text style={styles.statUnit}>days</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Heart size={32} color={theme.colors.error} />
-            <Text testID="insights-last-period" style={styles.statNumber}>{stats.lastPeriodLength}</Text>
-            <Text style={styles.statLabel}>Last Period</Text>
-            <Text style={styles.statUnit}>days</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <TrendingUp size={32} color={theme.colors.success} />
-            <Text testID="insights-next-period" style={styles.statNumber}>{stats.nextPeriodIn}</Text>
-            <Text style={styles.statLabel}>Next Period</Text>
-            <Text style={styles.statUnit}>days</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <BarChart2 size={32} color={theme.colors.warning} />
-            <Text testID="insights-total-periods" style={styles.statNumber}>{stats.totalPeriods}</Text>
-            <Text style={styles.statLabel}>Total Tracked</Text>
-            <Text style={styles.statUnit}>periods</Text>
-          </View>
-        </View>
-
-        {/* Symptom Patterns */}
-        <View testID="insights-symptom-patterns-card" style={styles.card}>
-          <Text style={styles.cardTitle}>Symptom Patterns</Text>
-          <Text style={styles.symptomIntro}>Where your symptoms show up across your cycle</Text>
-          {stats.symptomPatterns.length > 0 ? (
-            <>
-              <View style={styles.symptomsList}>
-                {stats.symptomPatterns.map((pattern) => {
-                  const meta = symptomMeta(pattern.id);
-                  const phaseBreakdown = PHASE_ORDER
-                    .filter((phase) => pattern.phaseDays[phase] > 0)
-                    .map(
-                      (phase) =>
-                        `${PHASE_LABELS[phase]} ${formatPercent(
-                          pattern.phaseDays[phase] / Math.max(1, pattern.phasedDays)
-                        )}`
-                    )
-                    .join(', ');
-
-                  return (
-                    <View
-                      key={pattern.id}
-                      testID={`insights-symptom-row-${pattern.id}`}
-                      style={styles.symptomRow}>
-                      <View style={styles.symptomHeader}>
-                        <View style={styles.symptomInfo}>
-                          <Text style={styles.symptomEmoji}>{meta.icon}</Text>
-                          <Text style={styles.symptomName}>{meta.label}</Text>
-                        </View>
-                        <Text
-                          testID={`insights-symptom-rate-${pattern.id}`}
-                          style={styles.symptomRate}>
-                          {formatPercent(pattern.rate)}
-                        </Text>
-                      </View>
-                      <View
-                        testID={`insights-symptom-bar-${pattern.id}`}
-                        accessible
-                        accessibilityLabel={
-                          `${meta.label}: ${formatPercent(pattern.rate)} of tracked days` +
-                          (phaseBreakdown ? `. ${phaseBreakdown}` : '')
-                        }
-                        style={styles.symptomBarTrack}>
-                        {pattern.phasedDays > 0 ? (
-                          PHASE_ORDER.map((phase) =>
-                            pattern.phaseDays[phase] > 0 ? (
-                              <View
-                                key={phase}
-                                testID={`insights-symptom-segment-${pattern.id}-${phase}`}
-                                style={[
-                                  styles.symptomBarSegment,
-                                  {
-                                    width: `${(pattern.phaseDays[phase] / pattern.phasedDays) * 100}%`,
-                                    backgroundColor: phaseColors[phase],
-                                  },
-                                ]}
-                              />
-                            ) : null
-                          )
-                        ) : (
-                          <View style={styles.symptomBarEmpty} />
-                        )}
-                      </View>
-                      <View style={styles.symptomFooter}>
-                        <Text style={styles.symptomCaption}>
-                          {pattern.days} of {stats.trackedDays} tracked{' '}
-                          {stats.trackedDays === 1 ? 'day' : 'days'}
-                        </Text>
-                        <Text style={styles.symptomPhaseCaption}>
-                          {pattern.dominantPhase
-                            ? `${formatPercent(pattern.dominantShare)} in ${PHASE_LABELS[
-                                pattern.dominantPhase
-                              ].toLowerCase()}`
-                            : 'Track periods for phase split'}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-              <View style={styles.phaseLegend}>
-                {PHASE_ORDER.map((phase) => (
-                  <View key={phase} style={styles.phaseLegendItem}>
-                    <View
-                      style={[styles.phaseLegendDot, { backgroundColor: phaseColors[phase] }]}
-                    />
-                    <Text style={styles.phaseLegendText}>{PHASE_LABELS[phase]}</Text>
-                  </View>
-                ))}
-              </View>
-              <Text style={styles.symptomFootnote}>
-                Bars split each symptom's logged days across your recorded cycle phases.
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.noDataText}>Track symptoms to see your patterns!</Text>
-          )}
-        </View>
-
-        {/* Mood & Cycle */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mood & Cycle</Text>
-          {valenceDays >= 5 && (
-            <>
-              <View testID="insights-mood-trend" style={styles.trendWrap}>
-                <MoodTrendChart
-                  series={stats.moodSeries}
-                  width={chartWidth}
-                  color={theme.colors.primary}
-                />
-              </View>
-              <Text style={styles.trendCaption}>
-                Last {MOOD_SERIES_DAYS} days · shaded days are period days
-              </Text>
-            </>
-          )}
-          {stats.moodPhases.length > 0 ? (
-            <View style={styles.phaseList}>
-              {stats.moodPhases.map((entry) => (
+  const renderPatternVisual = (pattern: NarrativePattern) => {
+    if (pattern.visual.type === 'phase') {
+      return (
+        <View>
+          <View style={styles.miniPhaseBar}>
+            {pattern.visual.shares
+              .filter((entry) => entry.share > 0)
+              .map((entry) => (
                 <View
                   key={entry.phase}
-                  testID={`insights-mood-phase-${entry.phase}`}
-                  style={styles.phaseRow}>
-                  <View style={styles.phaseMain}>
-                    <Text style={styles.phaseName}>{PHASE_LABELS[entry.phase]}</Text>
-                    <View style={styles.phaseScoreWrap}>
-                      {entry.averageValence !== null && (
-                        <Text style={styles.phaseFace}>
-                          {VALENCE_FACES[Math.min(5, Math.max(1, Math.round(entry.averageValence)))]}
-                        </Text>
-                      )}
-                      <Text style={styles.phaseScore}>
-                        {entry.averageValence !== null ? entry.averageValence.toFixed(1) : '—'}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.phaseDetail}>
-                    {entry.topTags.length > 0
-                      ? entry.topTags
-                          .map((tag) => `${moodLabel(tag.id)} ${levelDots(tag.averageLevel)}`)
-                          .join(' · ') + ' · '
-                      : ''}
-                    {entry.days === 1 ? '1 day' : `${entry.days} days`}
-                  </Text>
-                </View>
+                  style={{
+                    flexGrow: entry.share,
+                    flexBasis: 0,
+                    backgroundColor: phaseColors[entry.phase],
+                  }}
+                />
               ))}
-            </View>
-          ) : (
-            <Text testID="insights-mood-empty" style={styles.noDataText}>
-              Track your moods to see your cycle patterns!
-            </Text>
-          )}
-        </View>
-
-        {/* Cycle Phase Tips */}
-        <View testID="insights-phase-tips-card" style={styles.card}>
-          <View style={styles.phaseTipsHeader}>
-            <View style={styles.phaseTipsTitleRow}>
-              <Text style={[styles.cardTitle, styles.phaseTipsTitle]}>Cycle Phase Tips</Text>
-              {currentStatus && (
-                <View testID="insights-current-phase-badge" style={styles.currentBadge}>
-                  <Text style={styles.currentBadgeDot}>●</Text>
-                  <Text style={styles.currentBadgeText}>Today · Day {currentStatus.cycleDay}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.phaseTipsSubtitle}>Guidance synced to your body's rhythm</Text>
-            {!currentStatus && (
-              <Text testID="insights-phase-no-data" style={styles.phaseTipsHint}>
-                Track your period to see which phase you're in. You can still browse all phases.
-              </Text>
+            {pattern.visual.unphasedShare > 0.01 && (
+              <View
+                style={{
+                  flexGrow: pattern.visual.unphasedShare,
+                  flexBasis: 0,
+                  backgroundColor: theme.colors.border,
+                }}
+              />
             )}
           </View>
+          <View style={styles.miniPhaseLegend}>
+            {PHASE_ORDER.map((phase) => (
+              <Text key={phase} style={styles.miniPhaseLegendText}>
+                {PHASE_LABELS[phase]}
+              </Text>
+            ))}
+          </View>
+        </View>
+      );
+    }
 
-          {/* Phase Selector Tabs */}
+    if (pattern.visual.type === 'mood') {
+      return (
+        <View style={styles.compareBars}>
+          {pattern.visual.rows.map((row) => (
+            <View key={row.phase} style={styles.compareRow}>
+              <Text style={styles.compareLabel}>{row.label}</Text>
+              <View style={styles.compareTrack}>
+                <View
+                  style={[
+                    styles.compareFill,
+                    {
+                      width: `${(row.value / 5) * 100}%`,
+                      backgroundColor: phaseColors[row.phase],
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.compareValue}>{row.value.toFixed(1)}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    const range = pattern.visual;
+    const span = range.max - range.min;
+    const averagePosition = span === 0 ? 50 : ((range.average - range.min) / span) * 100;
+
+    return (
+      <View style={styles.rangeStrip}>
+        <View style={styles.rangeTrack}>
+          <View style={styles.rangeFill} />
+          <View
+            style={[
+              styles.rangeDot,
+              { left: `${Math.min(100, Math.max(0, averagePosition))}%` },
+            ]}
+          />
+        </View>
+        <View style={styles.rangeLabels}>
+          <Text style={styles.rangeLabel}>{range.min}d</Text>
+          <Text style={styles.rangeLabel}>{range.max}d</Text>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScreenFade>
+        <ScrollView style={styles.scrollView}>
+          <ScreenHeader
+            title="Insights"
+            subtitle="What your log is telling you"
+            icon={<Lightbulb size={21} color={theme.colors.primary} />}
+          />
+
+          {/* Today */}
+          {currentStatus && currentPhaseInfo && todayFocus ? (
+            <GradientCard testID="insights-today-card" style={styles.todayCard}>
+            <View style={styles.todayTop}>
+              <Text style={styles.todayKicker}>TODAY</Text>
+              <View testID="insights-current-phase-badge" style={styles.todayPill}>
+                <Text style={styles.todayPillText}>
+                  {PHASE_BADGE_LABELS[currentStatus.phase]} · DAY {currentStatus.cycleDay}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.todayTitle}>{sentenceCase(currentPhaseInfo.tagline)}</Text>
+            <Text style={styles.todaySummary}>{currentPhaseInfo.summary}</Text>
+
+            <View testID="insights-today-focus" style={styles.focusRow}>
+              <Text style={styles.focusEmoji}>{todayFocus.emoji}</Text>
+              <View style={styles.focusCopy}>
+                <Text style={styles.focusLabel}>TODAY'S FOCUS</Text>
+                <Text style={styles.focusTitle}>{todayFocus.title}</Text>
+                <Text style={styles.focusDesc}>{todayFocus.description}</Text>
+              </View>
+            </View>
+
+            {narrative.todayPattern && (
+              <View
+                testID="insights-today-pattern"
+                style={[styles.focusRow, styles.personalFocus]}>
+                <Text style={styles.focusEmoji}>{narrative.todayPattern.icon}</Text>
+                <View style={styles.focusCopy}>
+                  <Text style={styles.focusLabel}>YOUR PATTERN</Text>
+                  <Text style={styles.focusTitle}>{narrative.todayPattern.title}</Text>
+                  <Text style={styles.focusDesc}>{narrative.todayPattern.body}</Text>
+                </View>
+              </View>
+            )}
+            </GradientCard>
+          ) : (
+            <Card testID="insights-today-empty" style={styles.todayCard}>
+              <Text style={styles.todayKicker}>TODAY</Text>
+              <Text style={styles.todayTitle}>Your phase will appear here</Text>
+              <Text style={styles.todaySummary}>
+                Log a period in Calendar to see today's phase, focus and personal pattern.
+              </Text>
+            </Card>
+          )}
+
+          {/* Patterns */}
+          <SectionHeader
+            title="YOUR PATTERNS"
+            meta={
+              stats.trackedDays > 0
+                ? `${stats.trackedDays} logged ${stats.trackedDays === 1 ? 'day' : 'days'}`
+                : 'No logged days yet'
+            }
+            dotColor={theme.colors.primary}
+          />
+
+        {narrative.patterns.length > 0 ? (
+          <View style={styles.patternsList}>
+            {narrative.patterns.map((pattern) => (
+              <Card
+                key={pattern.id}
+                testID={`insights-pattern-${pattern.id}`}
+                style={styles.patternCard}
+                padding={14}>
+                <View style={styles.patternTop}>
+                  <View style={styles.patternIcon}>
+                    <Text style={styles.patternEmoji}>{pattern.icon}</Text>
+                  </View>
+                  <View style={styles.patternCopy}>
+                    <Text style={styles.patternTitle}>{pattern.title}</Text>
+                    <Text style={styles.patternBody}>{pattern.body}</Text>
+                    <Pill label={pattern.sampleLabel} tone="neutral" style={styles.samplePill} />
+                  </View>
+                  <View style={styles.patternStat}>
+                    <Text style={styles.patternStatValue}>{pattern.statValue}</Text>
+                    <Text style={styles.patternStatLabel}>{pattern.statLabel}</Text>
+                  </View>
+                </View>
+
+                {renderPatternVisual(pattern)}
+
+                <View style={styles.patternTip}>
+                  <Text style={styles.patternTipLabel}>{pattern.tipLabel}</Text>
+                  <Text style={styles.patternTipText}>{pattern.tip}</Text>
+                </View>
+              </Card>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.patternsEmptyWrap}>
+            <EmptyState
+              testID="insights-patterns-empty"
+              title="Patterns need a little more data"
+              body="Keep logging in Calendar — insights appear after a few cycles."
+            />
+          </View>
+        )}
+
+        {/* Phase guide */}
+        <SectionHeader
+          title="PHASE GUIDE"
+          meta="General wellness tips"
+          dotColor={theme.colors.teal}
+        />
+
+        <Card testID="insights-phase-tips-card" style={styles.phaseGuideCard} padding={16}>
           <View style={styles.phaseTabsRow}>
             {PHASE_ORDER.map((phase) => {
               const isSelected = activePhase === phase;
@@ -413,438 +336,432 @@ export default function InsightsTab() {
             })}
           </View>
 
-          {/* Active Phase Overview */}
-          <View style={styles.phaseSummaryCard}>
-            <View style={styles.phaseSummaryTop}>
-              <Text testID="insights-phase-summary-title" style={styles.phaseSummaryTitle}>{phaseInfo.title}</Text>
-              <Text style={styles.phaseSummaryDayRange}>{phaseInfo.dayRange}</Text>
+          {!currentStatus && (
+            <Text testID="insights-phase-no-data" style={styles.phaseNoData}>
+              Track your period to see which phase you're in. You can still browse all phases.
+            </Text>
+          )}
+
+          <View style={styles.guidePhaseRow}>
+            <View style={styles.guidePhaseMain}>
+              <Text testID="insights-phase-summary-title" style={styles.guidePhaseTitle}>
+                {phaseInfo.title}
+              </Text>
+              <Text style={styles.guideHormones}>Hormones · {phaseInfo.hormones}</Text>
             </View>
-            <Text style={styles.phaseSummaryTagline}>{phaseInfo.tagline}</Text>
-            <Text style={styles.phaseSummaryDesc}>{phaseInfo.summary}</Text>
-            <View style={styles.hormoneBadge}>
-              <Text style={styles.hormoneBadgeLabel}>HORMONES:</Text>
-              <Text style={styles.hormoneBadgeText}>{phaseInfo.hormones}</Text>
-            </View>
+            <Text style={styles.guideDayRange}>{phaseInfo.dayRange}</Text>
           </View>
 
-          {/* Categorized Tips List */}
-          <View style={styles.phaseTipsList}>
+          {showPhaseSummary && (
+            <>
+              <Text style={styles.guideTagline}>{sentenceCase(phaseInfo.tagline)}</Text>
+              <Text style={styles.guideSummary}>{phaseInfo.summary}</Text>
+            </>
+          )}
+
+          <View style={styles.tipsList}>
             {phaseInfo.tips.map((tip) => (
               <View
                 key={tip.category}
                 testID={`insights-phase-tip-${tip.category}`}
-                style={styles.phaseTipItem}>
-                <Text style={styles.phaseTipEmoji}>{tip.iconEmoji}</Text>
-                <View style={styles.phaseTipContent}>
-                  <View style={styles.phaseTipCategoryRow}>
-                    <Text style={styles.phaseTipCategory}>{tip.categoryLabel}</Text>
-                  </View>
-                  <Text style={styles.phaseTipTitle}>{tip.title}</Text>
-                  <Text style={styles.phaseTipDesc}>{tip.description}</Text>
+                style={styles.tipItem}>
+                <Text style={styles.tipEmoji}>{tip.iconEmoji}</Text>
+                <View style={styles.tipCopy}>
+                  <Text style={styles.tipCategory}>{tip.categoryLabel}</Text>
+                  <Text style={styles.tipTitle}>{tip.title}</Text>
+                  <Text style={styles.tipDescription}>{tip.description}</Text>
                 </View>
               </View>
             ))}
           </View>
-        </View>
-      </ScrollView>
+
+          <Text style={styles.guideNote}>
+            Observations come from your own log and are not medical advice.
+          </Text>
+        </Card>
+        </ScrollView>
+      </ScreenFade>
     </SafeAreaView>
   );
 }
 
-const createStyles = (theme: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  statCard: {
-    width: '48%',
-    backgroundColor: theme.colors.surface,
-    marginBottom: 15,
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginTop: 10,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 5,
-  },
-  statUnit: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    marginHorizontal: 20,
-    marginVertical: 10,
-    padding: 20,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: theme.colors.shadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 15,
-  },
-  noDataText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    paddingVertical: 20,
-  },
-  symptomIntro: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: -8,
-    marginBottom: 16,
-  },
-  symptomsList: {
-    gap: 18,
-  },
-  symptomRow: {
-    gap: 6,
-  },
-  symptomHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  symptomInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  symptomEmoji: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  symptomName: {
-    fontSize: 16,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  symptomRate: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginLeft: 8,
-  },
-  symptomBarTrack: {
-    height: 10,
-    borderRadius: 5,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    backgroundColor: theme.colors.border,
-  },
-  symptomBarSegment: {
-    height: '100%',
-  },
-  symptomBarEmpty: {
-    flex: 1,
-    backgroundColor: theme.colors.border,
-  },
-  symptomFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  symptomCaption: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  symptomPhaseCaption: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-    textAlign: 'right',
-  },
-  phaseLegend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginTop: 18,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  phaseLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  phaseLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  phaseLegendText: {
-    fontSize: 11,
-    color: theme.colors.textSecondary,
-  },
-  symptomFootnote: {
-    fontSize: 11,
-    lineHeight: 15,
-    color: theme.colors.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 10,
-  },
-  trendWrap: {
-    alignItems: 'center',
-  },
-  trendCaption: {
-    fontSize: 11,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  phaseList: {
-    gap: 14,
-  },
-  phaseRow: {
-    gap: 3,
-  },
-  phaseMain: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  phaseName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  phaseScoreWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  phaseFace: {
-    fontSize: 16,
-  },
-  phaseScore: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-    minWidth: 28,
-    textAlign: 'right',
-  },
-  phaseDetail: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-  },
-  phaseTipsHeader: {
-    marginBottom: 16,
-  },
-  phaseTipsTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  phaseTipsTitle: {
-    flexShrink: 1,
-    marginBottom: 0,
-  },
-  phaseTipsSubtitle: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  phaseTipsHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: theme.colors.textSecondary,
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  currentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: theme.colors.secondary,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-  },
-  currentBadgeDot: {
-    fontSize: 8,
-    color: theme.colors.primary,
-    marginRight: 4,
-  },
-  currentBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  phaseTabsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 16,
-  },
-  phaseTab: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.secondary,
-  },
-  phaseTabSelected: {
-    backgroundColor: theme.colors.primary,
-  },
-  phaseTabText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  phaseTabTextSelected: {
-    color: theme.colors.white,
-  },
-  currentPhaseDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.primary,
-    marginTop: 3,
-  },
-  currentPhaseDotSelected: {
-    backgroundColor: theme.colors.white,
-  },
-  phaseSummaryCard: {
-    backgroundColor: theme.colors.secondary,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-  },
-  phaseSummaryTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  phaseSummaryTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.text,
-  },
-  phaseSummaryDayRange: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  phaseSummaryTagline: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.primary,
-    marginBottom: 6,
-  },
-  phaseSummaryDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: theme.colors.text,
-    marginBottom: 10,
-  },
-  hormoneBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  hormoneBadgeLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    letterSpacing: 0.5,
-  },
-  hormoneBadgeText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-  },
-  phaseTipsList: {
-    gap: 12,
-  },
-  phaseTipItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: theme.colors.secondary,
-    gap: 12,
-  },
-  phaseTipEmoji: {
-    fontSize: 22,
-    marginTop: 2,
-  },
-  phaseTipContent: {
-    flex: 1,
-  },
-  phaseTipCategoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  phaseTipCategory: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.colors.primary,
-    letterSpacing: 0.5,
-  },
-  phaseTipTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  phaseTipDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: theme.colors.textSecondary,
-  },
-});
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    todayCard: {
+      marginHorizontal: 20,
+      marginTop: 10,
+    },
+    todayTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+    },
+    todayKicker: {
+      ...typography.micro,
+      color: theme.colors.textSecondary,
+    },
+    todayPill: {
+      backgroundColor: theme.isDark ? '#2a1a20' : theme.colors.white,
+      borderWidth: 1,
+      borderColor: theme.isDark ? '#4a2836' : '#f3cddd',
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    todayPillText: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      color: theme.colors.primary,
+    },
+    todayTitle: {
+      ...typography.todayTitle,
+      color: theme.colors.text,
+      marginTop: 9,
+      marginBottom: 7,
+    },
+    todaySummary: {
+      ...typography.body,
+      color: theme.colors.textSecondary,
+    },
+    focusRow: {
+      flexDirection: 'row',
+      gap: 9,
+      alignItems: 'flex-start',
+      backgroundColor: theme.isDark ? theme.colors.surfaceTint : theme.colors.white,
+      borderWidth: 1,
+      borderColor: theme.isDark ? theme.colors.border : theme.colors.primarySoft,
+      borderRadius: radii.button,
+      padding: 10,
+      marginTop: 11,
+    },
+    personalFocus: {
+      backgroundColor: theme.isDark ? theme.colors.tealSoft : '#f3fbf9',
+      borderColor: theme.isDark ? theme.colors.borderStrong : theme.colors.tealSoft,
+    },
+    focusEmoji: {
+      fontSize: 19,
+      lineHeight: 22,
+    },
+    focusCopy: {
+      flex: 1,
+    },
+    focusLabel: {
+      ...typography.micro,
+      color: theme.colors.primary,
+    },
+    focusTitle: {
+      ...typography.rowTitle,
+      color: theme.colors.text,
+      marginTop: 1,
+    },
+    focusDesc: {
+      ...typography.caption,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    patternsList: {
+      gap: 9,
+      marginHorizontal: 20,
+    },
+    patternCard: {
+      marginBottom: 8,
+    },
+    patternTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 9,
+    },
+    patternIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      backgroundColor: theme.colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    patternEmoji: {
+      fontSize: 17,
+    },
+    patternCopy: {
+      flex: 1,
+    },
+    patternTitle: {
+      fontSize: 14,
+      fontWeight: '800',
+      lineHeight: 18,
+      letterSpacing: -0.1,
+      color: theme.colors.text,
+    },
+    patternBody: {
+      ...typography.caption,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    samplePill: {
+      marginTop: 6,
+    },
+    patternStat: {
+      alignItems: 'flex-end',
+      paddingLeft: 4,
+    },
+    patternStatValue: {
+      fontSize: 18,
+      fontWeight: '800',
+      lineHeight: 21,
+      letterSpacing: -0.4,
+      color: theme.colors.text,
+    },
+    patternStatLabel: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+      marginTop: 1,
+    },
+    miniPhaseBar: {
+      flexDirection: 'row',
+      height: 6,
+      gap: 1.5,
+      borderRadius: 999,
+      overflow: 'hidden',
+      backgroundColor: theme.colors.secondary,
+      marginTop: 10,
+    },
+    miniPhaseLegend: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    miniPhaseLegendText: {
+      fontSize: 8,
+      color: theme.colors.textSecondary,
+    },
+    compareBars: {
+      marginTop: 9,
+      gap: 5,
+    },
+    compareRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+    },
+    compareLabel: {
+      width: 62,
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+    },
+    compareTrack: {
+      flex: 1,
+      height: 6,
+      borderRadius: 999,
+      backgroundColor: theme.colors.secondary,
+      overflow: 'hidden',
+    },
+    compareFill: {
+      height: '100%',
+      borderRadius: 999,
+    },
+    compareValue: {
+      width: 24,
+      textAlign: 'right',
+      fontSize: 9,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    rangeStrip: {
+      marginTop: 10,
+    },
+    rangeTrack: {
+      height: 6,
+      borderRadius: 999,
+      backgroundColor: theme.colors.secondary,
+      position: 'relative',
+    },
+    rangeFill: {
+      position: 'absolute',
+      left: '12%',
+      right: '12%',
+      top: 0,
+      bottom: 0,
+      borderRadius: 999,
+      backgroundColor: theme.isDark ? '#5a2437' : '#f8bbd0',
+    },
+    rangeDot: {
+      position: 'absolute',
+      top: '50%',
+      width: 10,
+      height: 10,
+      marginLeft: -5,
+      marginTop: -5,
+      borderRadius: 5,
+      backgroundColor: theme.colors.primary,
+      borderWidth: 2,
+      borderColor: theme.colors.surface,
+    },
+    rangeLabels: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 4,
+    },
+    rangeLabel: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+    },
+    patternTip: {
+      flexDirection: 'row',
+      gap: 6,
+      alignItems: 'flex-start',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      marginTop: 9,
+      paddingTop: 8,
+    },
+    patternTipLabel: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      color: theme.colors.primary,
+    },
+    patternTipText: {
+      flex: 1,
+      fontSize: 11,
+      lineHeight: 16,
+      color: theme.colors.text,
+    },
+    patternsEmptyWrap: {
+      marginHorizontal: 20,
+    },
+    phaseGuideCard: {
+      marginHorizontal: 20,
+    },
+    phaseTabsRow: {
+      flexDirection: 'row',
+      gap: 6,
+      marginBottom: 14,
+    },
+    phaseTab: {
+      flex: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 2,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.secondary,
+    },
+    phaseTabSelected: {
+      backgroundColor: theme.colors.primary,
+    },
+    phaseTabText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+    },
+    phaseTabTextSelected: {
+      color: theme.colors.white,
+    },
+    currentPhaseDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: theme.colors.primary,
+      marginTop: 3,
+    },
+    currentPhaseDotSelected: {
+      backgroundColor: theme.colors.white,
+    },
+    phaseNoData: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      fontStyle: 'italic',
+      marginBottom: 12,
+    },
+    guidePhaseRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      gap: 8,
+      marginBottom: 8,
+    },
+    guidePhaseMain: {
+      flex: 1,
+    },
+    guidePhaseTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: theme.colors.text,
+    },
+    guideHormones: {
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    guideDayRange: {
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+    },
+    guideTagline: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.primary,
+      marginTop: 2,
+    },
+    guideSummary: {
+      ...typography.body,
+      color: theme.colors.text,
+      marginTop: 4,
+      marginBottom: 2,
+    },
+    tipsList: {
+      gap: 8,
+      marginTop: 12,
+    },
+    tipItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 11,
+      borderRadius: 11,
+      backgroundColor: theme.colors.secondary,
+    },
+    tipEmoji: {
+      fontSize: 19,
+      lineHeight: 22,
+    },
+    tipCopy: {
+      flex: 1,
+    },
+    tipCategory: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+      color: theme.colors.primary,
+    },
+    tipTitle: {
+      ...typography.rowTitle,
+      color: theme.colors.text,
+      marginTop: 2,
+    },
+    tipDescription: {
+      ...typography.caption,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    guideNote: {
+      fontSize: 10,
+      lineHeight: 14,
+      color: theme.colors.textSecondary,
+      fontStyle: 'italic',
+      marginTop: 12,
+    },
+  });

@@ -1,6 +1,6 @@
 /**
- * Shared symptom catalog: the Track screen, the calendar day modal and the
- * Insights symptom patterns all render the same ids, labels and icons.
+ * Shared symptom catalog: the calendar day modal, the Overview symptom
+ * patterns and the Insights narrative all render the same ids, labels and icons.
  */
 
 export interface SymptomOption {

@@ -53,7 +53,7 @@ export const normalizeProtection = (value: unknown): ProtectionMethod =>
 /**
  * Whether a day holds anything worth keeping. A fully cleared day must have
  * no row at all: empty rows used to linger and kept the calendar's grey
- * "No Period" mark (and Track's "Has Data" badge) alive after the user had
+ * "No Period" mark alive after the user had
  * deleted the data back out.
  */
 export const dayHasContent = (data: DailyData): boolean =>
@@ -467,7 +467,7 @@ class SQLiteDataService {
       );
 
       // Clearing the mood may leave a row with nothing else in it; drop it so
-      // the day stops looking tracked (calendar mark, Track "Has Data" badge).
+      // the day stops looking tracked (calendar mark).
       const moodIsEmpty =
         !mood.mood && !(mood.moodValence ?? 0) && (mood.moodTags?.length ?? 0) === 0;
       if (moodIsEmpty) {

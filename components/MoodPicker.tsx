@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { cardShadow, radii, spacing, typography } from '@/design/tokens';
 import { MoodTag, MoodValue, MOOD_OPTIONS, MOOD_TAG_MAX_LEVEL, cycleMoodTag, removeMoodTag } from '@/services/MoodTags';
 
 /**
@@ -8,7 +9,7 @@ import { MoodTag, MoodValue, MOOD_OPTIONS, MOOD_TAG_MAX_LEVEL, cycleMoodTag, rem
  * multi-select feeling chips where tapping again raises intensity
  * (1 -> 2 -> 3 -> 1) and the small ✕ removes the chip.
  *
- * Used by the Track screen with auto-save on every change.
+ * Used by the Calendar day modal with auto-save on every change.
  */
 
 // Intentional period-pink accents (same hardcoded values used elsewhere in the app).
@@ -168,14 +169,12 @@ const createStyles = (theme: any) =>
     card: {
       backgroundColor: theme.colors.surface,
       marginHorizontal: 20,
-      marginVertical: 10,
-      padding: 20,
-      borderRadius: 12,
-      elevation: 2,
-      shadowColor: theme.colors.shadowColor,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      marginVertical: 8,
+      padding: 16,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      ...cardShadow(theme),
     },
     titleRow: {
       flexDirection: 'row',
@@ -183,25 +182,27 @@ const createStyles = (theme: any) =>
       justifyContent: 'space-between',
     },
     cardTitle: {
-      fontSize: 20,
-      fontWeight: '600',
+      ...typography.cardTitle,
       color: theme.colors.text,
     },
     cardTitleCompact: {
       fontSize: 18,
     },
     savedPill: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.colors.accent,
+      overflow: 'hidden',
+      fontSize: 10,
+      fontWeight: '800',
+      color: theme.colors.success,
+      backgroundColor: theme.colors.successSoft,
+      borderRadius: radii.pill,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
     },
     sectionLabel: {
-      fontSize: 12,
-      fontWeight: '600',
+      ...typography.micro,
       color: theme.colors.textSecondary,
-      letterSpacing: 0.4,
-      marginTop: 16,
-      marginBottom: 10,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
     },
     facesRow: {
       flexDirection: 'row',
@@ -209,9 +210,9 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 2,
     },
     face: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 46,
+      height: 46,
+      borderRadius: 23,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.colors.surface,
@@ -252,9 +253,9 @@ const createStyles = (theme: any) =>
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 7,
-      paddingHorizontal: 11,
-      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: radii.pill,
       borderWidth: 1,
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
@@ -273,7 +274,7 @@ const createStyles = (theme: any) =>
       ...emojiFontOnWeb,
     },
     chipText: {
-      fontSize: 13,
+      ...typography.caption,
       color: theme.colors.text,
     },
     chipTextSelected: {

@@ -23,6 +23,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Lock, ShieldAlert, X } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { radii, spacing, typography } from '@/design/tokens';
+import ScreenFade from '@/components/ui/ScreenFade';
 import { useDialog } from '@/hooks/useDialog';
 import { DataService } from '@/services/DataService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
@@ -287,9 +289,10 @@ export default function PrivateGate({ children }: PrivateGateProps) {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled">
+        <ScreenFade>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled">
           <View style={styles.lockCircle}>
             {isError ? (
               <ShieldAlert size={30} color={theme.colors.error} />
@@ -450,7 +453,8 @@ export default function PrivateGate({ children }: PrivateGateProps) {
               </TouchableOpacity>
             </>
           )}
-        </ScrollView>
+          </ScrollView>
+        </ScreenFade>
       </KeyboardAvoidingView>
 
       <DialogComponent />
@@ -474,7 +478,12 @@ const createStyles = (theme: any) =>
       paddingVertical: 8,
     },
     closeButton: {
-      padding: 8,
+      width: 32,
+      height: 32,
+      borderRadius: radii.sm,
+      backgroundColor: theme.colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     content: {
       flexGrow: 1,
@@ -485,32 +494,29 @@ const createStyles = (theme: any) =>
     lockCircle: {
       width: 64,
       height: 64,
-      borderRadius: 32,
-      backgroundColor: theme.colors.surface,
+      borderRadius: radii.hero,
+      backgroundColor: theme.colors.primarySoft,
       alignItems: 'center',
       justifyContent: 'center',
       alignSelf: 'center',
       marginBottom: 18,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.primarySoft,
     },
     title: {
-      fontSize: 28,
-      fontWeight: '700',
+      ...typography.pageTitle,
       color: theme.colors.text,
       textAlign: 'center',
       marginBottom: 8,
     },
     subtitle: {
-      fontSize: 15,
-      lineHeight: 21,
+      ...typography.body,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       marginBottom: 26,
     },
     label: {
-      fontSize: 14,
-      fontWeight: '600',
+      ...typography.micro,
       color: theme.colors.textSecondary,
       marginBottom: 8,
     },
@@ -518,43 +524,42 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      borderRadius: 12,
+      borderRadius: radii.button,
       paddingHorizontal: 16,
       paddingVertical: 14,
-      fontSize: 18,
+      fontSize: 16,
+      fontWeight: '600',
       color: theme.colors.text,
-      marginBottom: 16,
-      letterSpacing: 4,
+      marginBottom: 14,
     },
     errorText: {
+      ...typography.caption,
       color: theme.colors.error,
-      fontSize: 14,
-      lineHeight: 20,
       marginBottom: 14,
       textAlign: 'center',
     },
     warningNote: {
+      ...typography.caption,
+      lineHeight: 16,
       color: theme.colors.textSecondary,
-      fontSize: 13,
-      lineHeight: 19,
       textAlign: 'center',
       marginBottom: 18,
     },
     webNote: {
+      fontSize: 10,
+      lineHeight: 15,
       color: theme.colors.textSecondary,
-      fontSize: 12,
-      lineHeight: 18,
       textAlign: 'center',
       marginTop: 18,
       fontStyle: 'italic',
     },
     primaryButton: {
       backgroundColor: theme.colors.primary,
-      borderRadius: 12,
-      paddingVertical: 16,
+      borderRadius: radii.button,
+      paddingVertical: 14,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 54,
+      minHeight: 50,
     },
     destructiveButton: {
       backgroundColor: theme.colors.error,
@@ -564,8 +569,8 @@ const createStyles = (theme: any) =>
     },
     primaryButtonText: {
       color: theme.colors.white,
-      fontSize: 17,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
     },
     secondaryButton: {
       paddingVertical: 14,
@@ -574,8 +579,8 @@ const createStyles = (theme: any) =>
     },
     secondaryButtonText: {
       color: theme.colors.textSecondary,
-      fontSize: 15,
-      fontWeight: '500',
+      fontSize: 14,
+      fontWeight: '600',
     },
     forgotButton: {
       paddingVertical: 14,
@@ -584,16 +589,16 @@ const createStyles = (theme: any) =>
     },
     forgotText: {
       color: theme.colors.textSecondary,
-      fontSize: 14,
-      fontWeight: '500',
+      fontSize: 13,
+      fontWeight: '600',
     },
     loading: {
       alignItems: 'center',
-      gap: 12,
+      gap: spacing.base,
       marginTop: 10,
     },
     loadingText: {
       color: theme.colors.textSecondary,
-      fontSize: 14,
+      fontSize: 12,
     },
   });

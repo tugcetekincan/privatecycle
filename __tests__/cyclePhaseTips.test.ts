@@ -3,6 +3,7 @@ import {
   getCurrentPhaseStatus,
   PHASE_ORDER,
   PhaseTipCategory,
+  TODAY_FOCUS,
 } from '@/services/CyclePhaseTips';
 
 describe('getCurrentPhaseStatus', () => {
@@ -114,6 +115,15 @@ describe('CYCLE_PHASE_TIPS', () => {
         expect(tip.iconEmoji.length).toBeGreaterThan(0);
         expect(tip.categoryLabel).toBe(tip.category.toUpperCase());
       }
+    }
+  });
+
+  it('defines a curated Today focus for every phase', () => {
+    for (const phase of PHASE_ORDER) {
+      const focus = TODAY_FOCUS[phase];
+      expect(focus.emoji.length).toBeGreaterThan(0);
+      expect(focus.title.length).toBeGreaterThan(0);
+      expect(focus.description.length).toBeGreaterThan(0);
     }
   });
 });

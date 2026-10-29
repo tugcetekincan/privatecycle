@@ -24,6 +24,8 @@ import {
   X,
 } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { cardShadow, radii, spacing, typography } from '@/design/tokens';
+import ScreenFade from '@/components/ui/ScreenFade';
 import { useDialog } from '@/hooks/useDialog';
 import { usePrivateGate } from '@/components/PrivateGate';
 import { usePrivateScreenProtection } from '@/hooks/usePrivateScreenProtection';
@@ -38,7 +40,7 @@ import {
   PIN_MIN_LENGTH,
 } from '@/services/privateAccess/pin';
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const sanitizePin = (value: string): string =>
   value.replace(/\D/g, '').slice(0, PIN_MAX_LENGTH);
@@ -141,7 +143,7 @@ export default function PrivateCalendar() {
       <TouchableOpacity
         key={dayKey}
         testID={`private-day-${dayKey}`}
-        style={[styles.dayCell, isToday && styles.todayCell]}
+        style={styles.dayCell}
         onPress={() => openDay(date)}
         activeOpacity={0.7}
         accessibilityRole="button"
@@ -149,10 +151,12 @@ export default function PrivateCalendar() {
           month: 'long',
           day: 'numeric',
         })}${logged ? ', activity logged' : ''}`}>
-        <Text style={[styles.dayText, isToday && styles.todayText]}>{day}</Text>
-        {logged && (
-          <View testID={`private-day-logged-${dayKey}`} style={styles.loggedDot} />
-        )}
+        <View style={[styles.dayInner, isToday && styles.todayCell]}>
+          <Text style={[styles.dayText, isToday && styles.todayText]}>{day}</Text>
+          {logged && (
+            <View testID={`private-day-logged-${dayKey}`} style={styles.loggedDot} />
+          )}
+        </View>
       </TouchableOpacity>
     );
   }
@@ -337,7 +341,8 @@ export default function PrivateCalendar() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      <ScreenFade>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.title}>Intimacy</Text>
@@ -463,10 +468,11 @@ export default function PrivateCalendar() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footnote}>
-          Stored locally on this device. Notes are not encrypted.
-        </Text>
-      </ScrollView>
+          <Text style={styles.footnote}>
+            Stored locally on this device. Notes are not encrypted.
+          </Text>
+        </ScrollView>
+      </ScreenFade>
 
       <Modal
         animationType="slide"
@@ -711,12 +717,11 @@ const createStyles = (theme: any) =>
       flex: 1,
     },
     title: {
-      fontSize: 28,
-      fontWeight: '700',
+      ...typography.pageTitle,
       color: theme.colors.text,
     },
     subtitle: {
-      fontSize: 13,
+      ...typography.pageSubtitle,
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
@@ -725,17 +730,23 @@ const createStyles = (theme: any) =>
       alignItems: 'center',
     },
     iconButton: {
-      padding: 8,
-      marginLeft: 4,
+      width: 32,
+      height: 32,
+      borderRadius: radii.sm,
+      backgroundColor: theme.colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: 6,
     },
     calendarCard: {
       backgroundColor: theme.colors.surface,
-      marginHorizontal: 16,
+      marginHorizontal: 20,
       marginTop: 6,
       padding: 14,
-      borderRadius: 16,
+      borderRadius: radii.hero,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...cardShadow(theme),
     },
     monthHeader: {
       flexDirection: 'row',
@@ -744,11 +755,15 @@ const createStyles = (theme: any) =>
       marginBottom: 10,
     },
     monthButton: {
-      padding: 6,
+      width: 30,
+      height: 30,
+      borderRadius: radii.sm,
+      backgroundColor: theme.colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     monthLabel: {
-      fontSize: 17,
-      fontWeight: '600',
+      ...typography.cardTitle,
       color: theme.colors.text,
     },
     weekdays: {
@@ -758,7 +773,9 @@ const createStyles = (theme: any) =>
     weekday: {
       width: '14.2857%',
       textAlign: 'center',
-      fontSize: 12,
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.6,
       color: theme.colors.textSecondary,
     },
     daysGrid: {
@@ -767,30 +784,37 @@ const createStyles = (theme: any) =>
     },
     dayCell: {
       width: '14.2857%',
-      height: 42,
+      height: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 21,
+    },
+    dayInner: {
+      width: 34,
+      height: 34,
+      borderRadius: radii.day,
+      alignItems: 'center',
+      justifyContent: 'center',
       position: 'relative',
     },
     todayCell: {
-      borderWidth: 1.5,
+      borderWidth: 2,
       borderColor: theme.colors.today,
     },
     dayText: {
-      fontSize: 15,
+      fontSize: 13,
+      fontWeight: '600',
       color: theme.colors.text,
     },
     todayText: {
       color: theme.colors.today,
-      fontWeight: '700',
+      fontWeight: '800',
     },
     loggedDot: {
       position: 'absolute',
-      bottom: 4,
+      bottom: 3,
       width: 5,
       height: 5,
-      borderRadius: 3,
+      borderRadius: 2.5,
       backgroundColor: theme.colors.primary,
     },
     calendarLoading: {
@@ -802,30 +826,30 @@ const createStyles = (theme: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: theme.colors.surface,
-      marginHorizontal: 16,
+      marginHorizontal: 20,
       marginTop: 12,
       paddingVertical: 16,
-      borderRadius: 16,
+      borderRadius: radii.card,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...cardShadow(theme),
     },
     summaryItem: {
       flex: 1,
       alignItems: 'center',
     },
     summaryValue: {
-      fontSize: 26,
-      fontWeight: '700',
+      ...typography.statValue,
       color: theme.colors.primary,
     },
     summaryDate: {
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 14,
+      fontWeight: '700',
       color: theme.colors.text,
       marginTop: 3,
     },
     summaryLabel: {
-      fontSize: 12,
+      ...typography.caption,
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
@@ -879,7 +903,7 @@ const createStyles = (theme: any) =>
       borderTopColor: theme.colors.border,
     },
     actionText: {
-      fontSize: 15,
+      ...typography.rowTitle,
       color: theme.colors.text,
       marginLeft: 12,
     },
@@ -887,8 +911,8 @@ const createStyles = (theme: any) =>
       color: theme.colors.error,
     },
     footnote: {
-      fontSize: 12,
-      lineHeight: 18,
+      ...typography.caption,
+      lineHeight: 16,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       marginHorizontal: 24,
@@ -896,13 +920,13 @@ const createStyles = (theme: any) =>
     },
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
       justifyContent: 'flex-end',
     },
     modalSheet: {
       backgroundColor: theme.colors.background,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
+      borderTopLeftRadius: radii.hero,
+      borderTopRightRadius: radii.hero,
       paddingBottom: 20,
       width: '100%',
     },
@@ -921,13 +945,17 @@ const createStyles = (theme: any) =>
       borderBottomColor: theme.colors.border,
     },
     modalTitle: {
-      fontSize: 18,
-      fontWeight: '600',
+      ...typography.cardTitle,
       color: theme.colors.text,
       flex: 1,
     },
     modalClose: {
-      padding: 5,
+      width: 32,
+      height: 32,
+      borderRadius: radii.sm,
+      backgroundColor: theme.colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     modalScroll: {
       flex: 1,
@@ -936,14 +964,14 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.colors.surface,
       marginHorizontal: 20,
       marginVertical: 8,
-      padding: 18,
-      borderRadius: 12,
+      padding: 16,
+      borderRadius: radii.card,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...cardShadow(theme),
     },
     modalCardTitle: {
-      fontSize: 16,
-      fontWeight: '600',
+      ...typography.cardTitle,
       color: theme.colors.text,
       marginBottom: 8,
     },
@@ -953,8 +981,8 @@ const createStyles = (theme: any) =>
       justifyContent: 'space-between',
     },
     modalHint: {
-      fontSize: 13,
-      lineHeight: 19,
+      ...typography.caption,
+      lineHeight: 16,
       color: theme.colors.textSecondary,
       marginHorizontal: 20,
       marginTop: 8,
@@ -967,7 +995,7 @@ const createStyles = (theme: any) =>
     chip: {
       paddingVertical: 9,
       paddingHorizontal: 14,
-      borderRadius: 20,
+      borderRadius: radii.pill,
       backgroundColor: theme.colors.secondary,
       borderWidth: 1,
       borderColor: theme.colors.border,
@@ -977,7 +1005,7 @@ const createStyles = (theme: any) =>
       borderColor: theme.colors.primary,
     },
     chipText: {
-      fontSize: 14,
+      ...typography.caption,
       color: theme.colors.textSecondary,
     },
     chipTextSelected: {
@@ -986,17 +1014,17 @@ const createStyles = (theme: any) =>
     },
     noteInput: {
       minHeight: 100,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      borderRadius: 10,
+      borderRadius: radii.button,
       padding: 12,
-      fontSize: 15,
-      lineHeight: 21,
+      fontSize: 14,
+      lineHeight: 20,
       color: theme.colors.text,
     },
     noteHint: {
-      fontSize: 12,
+      ...typography.caption,
       color: theme.colors.textSecondary,
       marginTop: 6,
     },
@@ -1023,21 +1051,20 @@ const createStyles = (theme: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 16,
-      borderRadius: 12,
+      padding: 14,
+      borderRadius: radii.button,
       gap: 8,
     },
     saveButtonText: {
-      fontSize: 17,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: theme.colors.white,
     },
     buttonDisabled: {
       opacity: 0.6,
     },
     label: {
-      fontSize: 13,
-      fontWeight: '600',
+      ...typography.micro,
       color: theme.colors.textSecondary,
       marginHorizontal: 20,
       marginTop: 14,
@@ -1047,18 +1074,18 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      borderRadius: 10,
+      borderRadius: radii.button,
       paddingHorizontal: 14,
       paddingVertical: 12,
       fontSize: 16,
+      fontWeight: '600',
       color: theme.colors.text,
       marginHorizontal: 20,
-      letterSpacing: 3,
     },
     errorText: {
+      ...typography.caption,
+      lineHeight: 16,
       color: theme.colors.error,
-      fontSize: 13,
-      lineHeight: 19,
       marginHorizontal: 20,
       marginTop: 10,
     },
