@@ -12,10 +12,10 @@ name: CI
 # Rerunning CI for an already-released commit republishes its version.
 #
 # Caches (see steps below for the reasoning):
-#  - native-libs-v2: Gradle/CMake outputs of autolinked libraries and the
+#  - native-libs-v4: Gradle/CMake outputs of autolinked libraries and the
 #    Gradle plugin included builds (npm ci wipes node_modules, so restore
 #    happens after install).
-#  - app-build-v1: generated android/ project outputs + Gradle task history.
+#  - app-build-v2: generated android/ project outputs + Gradle task history.
 #  - native-ccache-v1: compiled objects, so native recompiles stay cheap even
 #    though a fresh checkout makes Ninja think inputs are newer than outputs.
 # Cold builds are ~15 min; warm builds should stay well under 6.
@@ -67,7 +67,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -146,9 +146,9 @@ jobs:
             node_modules/expo-modules-core/expo-module-gradle-plugin/**/.gradle
             node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/build
             node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/.gradle
-          key: native-libs-v3-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: native-libs-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
-            native-libs-v3-${{ runner.os }}-
+            native-libs-v4-${{ runner.os }}-
 
       - name: Prebuild Android project
         env:
@@ -172,9 +172,9 @@ jobs:
             android/build
             android/app/build
             android/app/.cxx
-          key: app-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
+          key: app-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
           restore-keys: |
-            app-build-v1-${{ runner.os }}-
+            app-build-v2-${{ runner.os }}-
 
       - name: Tune Gradle for CI
         run: |
@@ -244,7 +244,7 @@ jobs:
             android/build
             android/app/build
             android/app/.cxx
-          key: app-build-v1-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
+          key: app-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'plugins/**') }}
 
       # --- Nightly channel -------------------------------------------------
       # Same code, separate identity (com.ncan.privatecycle.nightly): a
