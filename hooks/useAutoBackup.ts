@@ -11,7 +11,7 @@ export const useAutoBackup = () => {
   }, []);
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+    if (appState.current?.match(/inactive|background/) && nextAppState === 'active') {
       try {
         await BackupService.performAutoBackup();
       } catch (error) {

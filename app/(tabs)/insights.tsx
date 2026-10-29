@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Lightbulb } from 'lucide-react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import { DataService } from '@/services/DataService';
 import { CyclePhase, PHASE_LABELS } from '@/services/CycleModel';
 import {

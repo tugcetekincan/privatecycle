@@ -18,7 +18,7 @@ import { addDays, daysBetween, parseDateKey } from '@/services/dateKey';
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
 import { SYMPTOMS } from '@/services/Symptoms';
 import MoodPicker from '@/components/MoodPicker';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import SectionHeader from '@/components/ui/SectionHeader';

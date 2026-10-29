@@ -1,10 +1,14 @@
 import { Tabs } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Calendar, TrendingUp, Lightbulb, Settings } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 
 export default function TabLayout() {
   const { theme } = useTheme();
+  // Android is edge-to-edge since SDK 54 (mandatory): the system navigation bar
+  // is drawn over the app, so the fixed tab-bar height has to grow by the
+  // bottom inset or the labels end up underneath it.
+  const insets = useSafeAreaInsets();
   
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.surface }} edges={['top']}>
@@ -16,8 +20,8 @@ export default function TabLayout() {
             borderTopWidth: 1,
             borderTopColor: theme.colors.border,
             paddingTop: 8,
-            paddingBottom: 8,
-            height: 80,
+            paddingBottom: 8 + insets.bottom,
+            height: 80 + insets.bottom,
           },
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textSecondary,

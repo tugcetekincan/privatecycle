@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ncan.privatecycle"
@@ -33,13 +32,6 @@
       "expo-asset",
       "expo-secure-store"
     ],
-    "androidStatusBar": {
-      "barStyle": "dark-content",
-      "backgroundColor": "#ffffff"
-    },
-    "androidNavigationBar": {
-      "visible": "leanback"
-    },
     "experiments": {
       "typedRoutes": true
     },

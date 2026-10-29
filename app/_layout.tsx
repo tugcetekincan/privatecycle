@@ -27,10 +27,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
-      <StatusBar 
-        style={theme.isDark ? "light" : "dark"} 
-        backgroundColor={theme.colors.background}
-      />
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
     </SafeAreaProvider>
   );
 }

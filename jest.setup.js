@@ -19,7 +19,7 @@ jest.mock('expo-sqlite', () => {
   };
 });
 
-jest.mock('expo-file-system', () => ({
+const mockFileSystem = {
   documentDirectory: 'file:///document/',
   cacheDirectory: 'file:///cache/',
   getInfoAsync: jest.fn(async () => ({ exists: false })),
@@ -28,7 +28,12 @@ jest.mock('expo-file-system', () => ({
   readAsStringAsync: jest.fn(async () => ''),
   readDirectoryAsync: jest.fn(async () => []),
   deleteAsync: jest.fn(async () => undefined),
-}));
+};
+
+// The classic API lives behind the `legacy` entry point since SDK 54; both
+// specifiers share one mock so tests can configure either import.
+jest.mock('expo-file-system', () => mockFileSystem);
+jest.mock('expo-file-system/legacy', () => mockFileSystem);
 
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(async () => ({ canceled: true, assets: [] })),
