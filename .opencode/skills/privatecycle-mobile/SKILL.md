@@ -1,15 +1,14 @@
 ---
 name: PrivateCycle Mobile
-description: Build, install, drive and screenshot PrivateCycle on a real Android device or emulator — adb, Expo dev builds, Maestro flows, and the cases where web verification is not enough (date pickers, share sheet, file system, permissions, safe areas). Use when a change is native-only or web verification passed but the device behavior must be confirmed.
+description: Build, install, drive and screenshot PrivateCycle on a real Android device or emulator — adb, Expo dev builds, Maestro flows, and the cases where web verification is not enough (share sheet, file system, permissions, safe areas). Use when a change is native-only or web verification passed but the device behavior must be confirmed.
 ---
 
 # PrivateCycle on Android
 
 The web harness verifies logic and layout fast. Use this lane when the change
-touches native behavior: `@react-native-community/datetimepicker`, share sheet,
-document picker, file system backups, splash/icons, permissions, haptics,
-safe-area/notch, performance, or anything the user reported "only on the
-phone".
+touches native behavior: share sheet, document picker, file system backups,
+splash/icons, permissions, haptics, safe-area/notch, performance, or anything
+the user reported "only on the phone".
 
 ## Environment (this machine)
 
@@ -94,7 +93,7 @@ data on device; the `?seed` URL mechanism is web-only.
 
 ## Maestro flows
 
-`maestro/smoke.yaml` covers launch → tabs → track save → back to calendar,
+`maestro/smoke.yaml` covers launch → Calendar day-modal entry → Overview → Insights → Settings → back to calendar,
 targeting the dev variant. Validated on the `privatecycle` AVD via
 `npm run e2e:mobile` (≈1 min). `maestro/private-calendar.yaml` stops and
 relaunches the app, then covers the private calendar: PIN setup or unlock with
@@ -114,7 +113,7 @@ Notes:
 - Flows select by `id:`, which maps to React Native `testID` on Android. Keep
   testIDs stable (see the `privatecycle-verify` skill for the naming scheme).
 - Long screens need `scrollUntilVisible` before tapping elements below the
-  fold; `track-save-button` and `track-symptom-*` are examples.
+  fold; `day-modal-save` and `day-modal-symptom-*` are examples.
 - `takeScreenshot:` writes to `~/.maestro/tests/<timestamp>/<flow>/takeScreenshot/`.
   Copy the file into `artifacts/screenshots/` when you need it as evidence.
 - First build on a fresh checkout takes ~20 min (`npx expo run:android

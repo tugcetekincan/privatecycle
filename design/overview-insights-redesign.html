@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PrivateCycle — Overview &amp; Insights redesign (v2)</title>
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #eef1f5;
+    color: #1d2433;
+    -webkit-font-smoothing: antialiased;
+  }
+  .board { max-width: 1240px; margin: 0 auto; padding: 52px 32px 80px; }
+  .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 32px; }
+  .eyebrow { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 800; color: #e91e63; }
+  h1 { font-size: 38px; line-height: 1.1; letter-spacing: -.035em; margin: 12px 0 14px; max-width: 760px; }
+  h1 em { font-style: normal; color: #e91e63; }
+  .lede { max-width: 760px; margin: 0; font-size: 16px; line-height: 1.6; color: #5b6472; }
+  .theme-toggle {
+    appearance: none; border: 1px solid #d9dfe8; background: #fff; color: #293241;
+    border-radius: 999px; padding: 10px 16px; font: inherit; font-size: 12px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; box-shadow: 0 2px 8px rgba(20,29,45,.06);
+  }
+  .theme-toggle:hover { border-color: #b9c2cf; }
+  .summary-strip { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 26px; }
+  .summary-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #fff; border: 1px solid #e1e6ee; border-radius: 999px;
+    padding: 7px 12px; font-size: 11px; font-weight: 600; color: #5b6472;
+  }
+  .summary-pill b { color: #1d2433; font-weight: 800; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .screens { display: flex; justify-content: center; align-items: flex-start; gap: 64px; margin-top: 50px; }
+  .screen-col { width: 390px; flex: 0 0 390px; }
+  .screen-label { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; padding: 0 4px; }
+  .screen-num {
+    width: 30px; height: 30px; border-radius: 9px; background: #1d2433; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+  }
+  .screen-label h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+  .screen-label p { margin: 2px 0 0; font-size: 11px; color: #788292; }
+  .screen-tag {
+    margin-left: auto; font-size: 9px; letter-spacing: .1em; font-weight: 800; color: #738094;
+    border: 1px solid #d8dee7; background: #fff; border-radius: 999px; padding: 4px 8px;
+  }
+
+  /* ---------- Phone surface ---------- */
+  .screen {
+    --s-bg: #fafafa;
+    --s-surface: #ffffff;
+    --s-secondary: #f5f5f5;
+    --s-text: #333333;
+    --s-muted: #6b6b6b;
+    --s-border: #eeeeef;
+    --s-primary: #e91e63;
+    --s-primary-soft: #fce4ec;
+    --s-primary-weak: #f8bbd0;
+    --s-green: #4caf50;
+    --s-orange: #ff9800;
+    --s-teal: #009688;
+    --s-red: #f44336;
+    --s-shadow: rgba(0,0,0,.055);
+    width: 390px;
+    background: var(--s-bg);
+    color: var(--s-text);
+    border-radius: 38px;
+    overflow: hidden;
+    border: 1px solid rgba(18,27,43,.09);
+    box-shadow: 0 30px 70px rgba(20,29,45,.17), 0 2px 0 rgba(255,255,255,.9) inset;
+  }
+  body.dark .screen {
+    --s-bg: #121212;
+    --s-surface: #1e1e1e;
+    --s-secondary: #2a2a2a;
+    --s-text: #ffffff;
+    --s-muted: #b3b3b3;
+    --s-border: #333333;
+    --s-primary-soft: #3b1b28;
+    --s-primary-weak: #5a2437;
+    --s-shadow: rgba(0,0,0,.35);
+    border-color: #2a2a2a;
+    box-shadow: 0 30px 70px rgba(0,0,0,.35);
+  }
+  .statusbar {
+    height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; font-size: 11px; font-weight: 700; color: var(--s-text);
+  }
+  .statusicons { display: flex; align-items: center; gap: 5px; color: var(--s-text); }
+  .statusicons svg { width: 14px; height: 14px; }
+  .app-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px 12px; }
+  .app-title { font-size: 28px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+  .app-sub { font-size: 12px; color: var(--s-muted); margin-top: 3px; font-weight: 500; }
+  .app-icon {
+    width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    background: var(--s-primary-soft); color: var(--s-primary);
+  }
+  .app-icon svg { width: 21px; height: 21px; }
+  .content { padding: 0 20px 18px; }
+
+  /* ---------- Overview ---------- */
+  .hero-card {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, var(--s-surface) 0%, var(--s-surface) 55%, var(--s-primary-soft) 145%);
+    border: 1px solid var(--s-border); border-radius: 18px; padding: 17px 17px 14px;
+    display: grid; grid-template-columns: 1fr auto; gap: 8px;
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .kicker { font-size: 10px; letter-spacing: .13em; font-weight: 800; color: var(--s-muted); }
+  .hero-number { font-size: 44px; line-height: .95; font-weight: 800; letter-spacing: -.045em; margin-top: 4px; }
+  .hero-number span { font-size: 13px; font-weight: 600; color: var(--s-muted); letter-spacing: 0; }
+  .phase-pill {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 9px;
+    font-size: 11px; font-weight: 800; color: #b26a00; background: #fff3e0;
+    border-radius: 999px; padding: 4px 8px;
+  }
+  body.dark .phase-pill { color: #ffb74d; background: #3a2a14; }
+  .phase-pill .dot { background: currentColor; }
+  .hero-side { text-align: right; padding-top: 2px; }
+  .side-label { font-size: 9px; letter-spacing: .11em; font-weight: 800; color: var(--s-muted); }
+  .side-number { font-size: 28px; line-height: 1.05; font-weight: 800; letter-spacing: -.035em; margin-top: 3px; }
+  .side-number span { font-size: 11px; font-weight: 600; color: var(--s-muted); letter-spacing: 0; }
+  .side-sub { font-size: 11px; color: var(--s-muted); margin-top: 2px; }
+  .phase-track-wrap { grid-column: 1 / -1; margin-top: 13px; }
+  .phase-track { position: relative; display: flex; height: 8px; gap: 2px; }
+  .phase-track .seg { height: 8px; }
+  .phase-track .seg:first-child { border-radius: 999px 3px 3px 999px; }
+  .phase-track .seg:last-child { border-radius: 3px 999px 999px 3px; }
+  .today-marker {
+    position: absolute; top: -4px; width: 2px; height: 16px; background: var(--s-text);
+    border-radius: 2px; box-shadow: 0 0 0 3px var(--s-surface); transform: translateX(-1px); z-index: 2;
+  }
+  .phase-track-labels { display: flex; justify-content: space-between; margin-top: 7px; font-size: 9px; color: var(--s-muted); }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 11px; }
+  .stat {
+    background: var(--s-surface); border: 1px solid var(--s-border); border-radius: 14px; padding: 13px;
+    box-shadow: 0 2px 8px var(--s-shadow);
+  }
+  .stat-icon { width: 25px; height: 25px; border-radius: 8px; background: var(--s-secondary); display: flex; align-items: center; justify-content: center; }
+  .stat-icon svg { width: 14px; height: 14px; }
+  .stat-num { font-size: 29px; font-weight: 800; line-height: 1; letter-spacing: -.04em; margin-top: 9px; }
+  .stat-num span { font-size: 11px; font-weight: 600; color: var(--s-muted); letter-spacing: 0; margin-left: 2px; }
+  .stat-label { font-size: 12px; color: var(--s-muted); margin-top: 3px; }
+  .card {
+    background: var(--s-surface); border: 1px solid var(--s-border); border-radius: 16px; padding: 15px;
+    margin-top: 11px; box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+  .card-meta { font-size: 10px; color: var(--s-muted); font-weight: 700; white-space: nowrap; }
+  .card-sub { font-size: 11px; color: var(--s-muted); margin: 4px 0 12px; line-height: 1.4; }
+  .symptom + .symptom { margin-top: 12px; }
+  .symptom-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; gap: 8px; }
+  .symptom-name { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; }
+  .sym-icon { font-size: 16px; }
+  .sym-rate { font-size: 13px; font-weight: 800; }
+  .bar { display: flex; height: 8px; gap: 1.5px; border-radius: 999px; overflow: hidden; background: var(--s-secondary); }
+  .bar span { height: 100%; }
+  .sym-caption { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 9px; color: var(--s-muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; border-top: 1px solid var(--s-border); margin-top: 13px; padding-top: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--s-muted); }
+  .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .mood-chart { margin: 1px 0 2px; }
+  .mood-chart svg { display: block; width: 100%; height: auto; }
+  .mood-caption { font-size: 9px; color: var(--s-muted); text-align: center; margin: 0 0 10px; }
+  .mood-row { display: flex; align-items: center; gap: 7px; padding: 7px 0; border-top: 1px solid var(--s-border); }
+  .mood-phase { width: 78px; font-size: 12px; font-weight: 700; flex: 0 0 78px; }
+  .mood-face { font-size: 14px; }
+  .mood-score { width: 27px; font-size: 12px; font-weight: 800; text-align: right; }
+  .mood-tags { flex: 1; font-size: 9px; color: var(--s-muted); text-align: right; line-height: 1.3; }
+  .footnote { display: flex; gap: 7px; align-items: flex-start; margin: 13px 3px 4px; font-size: 10px; line-height: 1.45; color: var(--s-muted); }
+  .footnote svg { width: 12px; height: 12px; flex: 0 0 12px; margin-top: 1px; }
+
+  /* ---------- Insights ---------- */
+  .today-card {
+    position: relative; overflow: hidden;
+    background: linear-gradient(140deg, var(--s-surface) 0%, var(--s-surface) 28%, var(--s-primary-soft) 150%);
+    border: 1px solid #f5d3e0; border-radius: 18px; padding: 16px;
+    box-shadow: 0 3px 14px rgba(233,30,99,.08);
+  }
+  body.dark .today-card { border-color: #4a2836; box-shadow: 0 3px 14px rgba(0,0,0,.25); }
+  .today-top { display: flex; align-items: center; justify-content: space-between; }
+  .today-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800;
+    letter-spacing: .08em; color: var(--s-primary); background: rgba(255,255,255,.72);
+    border: 1px solid rgba(233,30,99,.16); border-radius: 999px; padding: 4px 7px;
+  }
+  body.dark .today-pill { background: rgba(0,0,0,.18); border-color: #4a2836; }
+  .today-card h2 { font-size: 22px; line-height: 1.15; letter-spacing: -.03em; margin: 9px 0 7px; }
+  .today-card p { font-size: 12px; line-height: 1.55; color: var(--s-muted); margin: 0; }
+  .focus {
+    display: flex; gap: 9px; align-items: flex-start; margin-top: 12px; padding: 10px;
+    border-radius: 11px; background: rgba(255,255,255,.74); border: 1px solid rgba(233,30,99,.12);
+  }
+  body.dark .focus { background: rgba(0,0,0,.18); border-color: #4a2836; }
+  .focus-emoji { font-size: 18px; line-height: 1; margin-top: 1px; }
+  .focus-label { font-size: 9px; letter-spacing: .11em; font-weight: 800; color: var(--s-primary); }
+  .focus-title { font-size: 11px; font-weight: 800; margin-top: 1px; }
+  .focus-desc { font-size: 10px; color: var(--s-muted); margin-top: 1px; line-height: 1.4; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 19px 2px 8px; }
+  .section-title { font-size: 11px; letter-spacing: .13em; font-weight: 800; color: var(--s-muted); }
+  .section-note { font-size: 9px; color: var(--s-muted); }
+  .pattern-card {
+    background: var(--s-surface); border: 1px solid var(--s-border); border-radius: 16px; padding: 13px;
+    margin-bottom: 8px; box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .pattern-top { display: flex; align-items: flex-start; gap: 9px; }
+  .pattern-icon {
+    width: 33px; height: 33px; flex: 0 0 33px; border-radius: 10px; background: var(--s-secondary);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .pattern-copy { flex: 1; min-width: 0; }
+  .pattern-title { font-size: 13px; font-weight: 800; line-height: 1.3; letter-spacing: -.01em; }
+  .pattern-body { font-size: 11px; line-height: 1.5; color: var(--s-muted); margin: 3px 0 0; }
+  .pattern-stat { text-align: right; flex: 0 0 auto; padding-left: 4px; }
+  .pattern-stat strong { display: block; font-size: 17px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+  .pattern-stat span { display: block; font-size: 8px; color: var(--s-muted); margin-top: 2px; }
+  .pattern-tip {
+    display: flex; gap: 6px; align-items: flex-start; margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--s-border); font-size: 10px; line-height: 1.45; color: var(--s-text);
+  }
+  .tip-label { font-size: 8px; letter-spacing: .1em; font-weight: 800; color: var(--s-primary); white-space: nowrap; padding-top: 1px; }
+  .pattern-tag {
+    display: inline-block; margin-top: 5px; font-size: 8px; font-weight: 700; color: var(--s-muted);
+    background: var(--s-secondary); border-radius: 999px; padding: 2px 6px;
+  }
+  .chips { display: flex; gap: 5px; margin: 8px 0 12px; }
+  .chip {
+    flex: 1; text-align: center; font-size: 9px; font-weight: 800; color: var(--s-muted);
+    background: var(--s-secondary); border-radius: 8px; padding: 7px 3px;
+  }
+  .chip.active { background: var(--s-primary); color: #fff; }
+  .guide-phase { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 1px 9px; }
+  .guide-phase h4 { font-size: 13px; margin: 0; letter-spacing: -.01em; }
+  .guide-phase span { font-size: 9px; color: var(--s-muted); }
+  .guide-hormones { font-size: 9px; color: var(--s-muted); margin: 2px 0 0; }
+  .tip-item { display: flex; gap: 9px; align-items: flex-start; padding: 9px; background: var(--s-secondary); border-radius: 10px; margin-bottom: 6px; }
+  .tip-item:last-child { margin-bottom: 0; }
+  .tip-emoji { font-size: 17px; line-height: 1.15; }
+  .tip-cat { font-size: 8px; letter-spacing: .1em; font-weight: 800; color: var(--s-primary); }
+  .tip-title { font-size: 11px; font-weight: 800; margin-top: 1px; }
+  .tip-desc { font-size: 9.5px; line-height: 1.45; color: var(--s-muted); margin-top: 2px; }
+  .guide-note { font-size: 9px; line-height: 1.45; color: var(--s-muted); margin: 10px 2px 0; font-style: italic; }
+
+  /* ---------- Overview: themed sections ---------- */
+  .theme-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 2px 8px; }
+  .theme-head.first { margin-top: 2px; }
+  .theme-title { display: flex; align-items: center; gap: 6px; font-size: 10px; letter-spacing: .13em; font-weight: 800; color: var(--s-muted); }
+  .theme-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+  .theme-meta { font-size: 9px; color: var(--s-muted); }
+  .card-title-row { display: flex; align-items: center; gap: 7px; }
+  .regular-pill { font-size: 8px; font-weight: 800; color: #2e7d32; background: #e8f5e9; border-radius: 999px; padding: 2px 6px; line-height: 1.2; }
+  body.dark .regular-pill { color: #81c784; background: #1f3a24; }
+  .cycle-stats {
+    display: flex; align-items: stretch; margin-top: 10px; padding: 14px 4px;
+    background: var(--s-surface); border: 1px solid var(--s-border); border-radius: 16px;
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .cycle-stat { flex: 1; text-align: center; padding: 0 3px; }
+  .cycle-stat-value { font-size: 26px; line-height: 1; font-weight: 800; letter-spacing: -.04em; }
+  .cycle-stat-value span { font-size: 10px; font-weight: 600; color: var(--s-muted); letter-spacing: 0; margin-left: 1px; }
+  .cycle-stat-label { font-size: 9px; color: var(--s-muted); margin-top: 5px; }
+  .cycle-stat-divider { width: 1px; background: var(--s-border); margin: 2px 0; }
+  .cycle-chart { position: relative; height: 108px; padding: 8px 2px 0; }
+  .cycle-bars { display: flex; align-items: flex-end; gap: 8px; height: 80px; }
+  .cycle-bar-col { flex: 1; display: flex; align-items: flex-end; justify-content: center; height: 100%; }
+  .cycle-bar { width: 100%; max-width: 24px; border-radius: 5px 5px 2px 2px; background: var(--s-primary-weak); }
+  .cycle-bar.last { background: var(--s-primary); }
+  .cycle-labels { display: flex; gap: 8px; margin-top: 6px; }
+  .cycle-labels span { flex: 1; text-align: center; font-size: 8px; color: var(--s-muted); }
+  .cycle-avg-line {
+    position: absolute; left: 2px; right: 2px; bottom: 62px;
+    border-top: 1px dashed var(--s-muted); opacity: .35; pointer-events: none;
+  }
+  .cycle-chart-caption { font-size: 9px; color: var(--s-muted); text-align: center; margin-top: 2px; }
+
+  /* ---------- Insights: enhanced today + pattern visuals ---------- */
+  .focus.personal { border-color: rgba(0,150,136,.18); background: rgba(255,255,255,.52); }
+  body.dark .focus.personal { border-color: #1f4a45; background: rgba(0,0,0,.12); }
+  .mini-phase-bar { display: flex; height: 6px; gap: 1.5px; border-radius: 999px; overflow: hidden; background: var(--s-secondary); margin-top: 10px; }
+  .mini-phase-bar span { height: 100%; }
+  .mini-phase-caption { display: flex; justify-content: space-between; margin-top: 3px; font-size: 8px; color: var(--s-muted); }
+  .compare-bars { margin-top: 9px; display: flex; flex-direction: column; gap: 5px; }
+  .compare-row { display: flex; align-items: center; gap: 7px; }
+  .compare-label { width: 58px; font-size: 9px; color: var(--s-muted); flex: 0 0 58px; }
+  .compare-track { flex: 1; height: 6px; border-radius: 999px; background: var(--s-secondary); overflow: hidden; }
+  .compare-track span { display: block; height: 100%; border-radius: 999px; }
+  .compare-value { width: 22px; text-align: right; font-size: 9px; font-weight: 800; }
+  .range-strip { margin-top: 10px; }
+  .range-track { position: relative; height: 6px; border-radius: 999px; background: var(--s-secondary); }
+  .range-fill { position: absolute; left: 12%; right: 12%; top: 0; bottom: 0; border-radius: 999px; background: var(--s-primary-weak); }
+  .range-dot { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--s-primary); border: 2px solid var(--s-surface); transform: translate(-50%, -50%); }
+  .range-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--s-muted); margin-top: 4px; }
+
+  /* ---------- Tab bar ---------- */
+  .tabbar { display: flex; border-top: 1px solid var(--s-border); background: var(--s-surface); padding: 10px 8px 16px; }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--s-muted); font-size: 11px; font-weight: 600; }
+  .tab.active { color: var(--s-primary); }
+  .tab svg { width: 22px; height: 22px; }
+
+  /* ---------- Board notes ---------- */
+  .board-notes { display: grid; grid-template-columns: 1.08fr .92fr; gap: 32px; margin-top: 58px; }
+  .panel { background: #fff; border: 1px solid #e1e6ee; border-radius: 20px; padding: 26px; box-shadow: 0 8px 30px rgba(20,29,45,.05); }
+  .panel h2 { margin: 0 0 6px; font-size: 21px; letter-spacing: -.025em; }
+  .panel > p { margin: 0 0 16px; font-size: 13px; line-height: 1.55; color: #647081; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #8a94a4; padding: 8px 7px; border-bottom: 1px solid #e6eaf0; }
+  td { padding: 9px 7px; border-bottom: 1px solid #eef1f5; vertical-align: top; line-height: 1.4; }
+  td:first-child { font-weight: 700; color: #2c3645; }
+  td .muted { color: #8a94a4; }
+  .arrow { color: #e91e63; font-weight: 800; }
+  .decision { display: flex; gap: 11px; padding: 12px 0; border-bottom: 1px solid #eef1f5; }
+  .decision:last-child { border-bottom: none; padding-bottom: 0; }
+  .decision-num {
+    width: 22px; height: 22px; flex: 0 0 22px; border-radius: 7px; background: #fce4ec;
+    color: #c2185b; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;
+  }
+  .decision h3 { margin: 0; font-size: 12px; line-height: 1.35; }
+  .decision p { margin: 2px 0 0; font-size: 11px; line-height: 1.5; color: #647081; }
+  .recommended { display: inline-block; margin-left: 6px; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; color: #2e7d32; background: #e8f5e9; border-radius: 999px; padding: 2px 6px; vertical-align: 1px; }
+  .board-footer { margin-top: 38px; text-align: center; font-size: 11px; color: #8a94a4; }
+  .empty-note { margin-top: 14px; border: 1px dashed #d8dee7; border-radius: 10px; padding: 11px; font-size: 10px; line-height: 1.5; color: #7a8494; }
+
+  body.screens-only { background: #dfe5ec; }
+  body.screens-only .board { max-width: none; padding: 0; }
+  body.screens-only .topbar,
+  body.screens-only .summary-strip,
+  body.screens-only .screen-label,
+  body.screens-only .board-notes,
+  body.screens-only .board-footer { display: none; }
+  body.screens-only .screens { margin-top: 0; gap: 40px; flex-direction: row; align-items: flex-start; }
+  body.screens-only .screen { box-shadow: 0 12px 40px rgba(20,29,45,.14); }
+
+  @media (max-width: 980px) {
+    .board { padding: 34px 20px 60px; }
+    h1 { font-size: 30px; }
+    .topbar { flex-direction: column; }
+    .screens { flex-direction: column; align-items: center; gap: 50px; }
+    .board-notes { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="board">
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PrivateCycle · design proposal · v2</div>
+      <h1>Track by <em>theme</em>. Explain by <em>pattern</em>.</h1>
+      <p class="lede">
+        Overview is the read-only record of what you logged, grouped into Cycle, Symptoms and Mood.
+        Insights is the interpretation: today’s guidance, the patterns behind it, and what to try next.
+      </p>
+    </div>
+    <button class="theme-toggle" id="theme-toggle" type="button">Dark preview</button>
+  </header>
+
+  <div class="summary-strip">
+    <span class="summary-pill"><span class="dot" style="background:#e91e63"></span><b>Overview</b> — what you logged, by theme</span>
+    <span class="summary-pill"><span class="dot" style="background:#009688"></span><b>Insights</b> — what it means and what to try</span>
+    <span class="summary-pill"><span class="dot" style="background:#ff9800"></span><b>Calendar</b> — the only place to enter data</span>
+  </div>
+
+  <section class="screens">
+    <!-- ============================ TRENDS ============================ -->
+    <div class="screen-col">
+      <div class="screen-label">
+        <div class="screen-num">01</div>
+        <div>
+          <h2>Overview</h2>
+          <p>Formerly the Track tab</p>
+        </div>
+        <div class="screen-tag">READ-ONLY</div>
+      </div>
+
+      <div class="screen">
+        <div class="statusbar">
+          <span>9:41</span>
+          <div class="statusicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+          </div>
+        </div>
+
+        <div class="app-header">
+          <div>
+            <div class="app-title">Overview</div>
+            <div class="app-sub">Cycle, symptoms and mood over time</div>
+          </div>
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          </div>
+        </div>
+
+        <div class="content">
+          <!-- CYCLE -->
+          <div class="theme-head first">
+            <div class="theme-title"><span class="theme-dot" style="background:#e91e63"></span>CYCLE</div>
+            <div class="theme-meta">7 periods · 6 cycles</div>
+          </div>
+
+          <div class="hero-card">
+            <div>
+              <div class="kicker">CYCLE DAY</div>
+              <div class="hero-number">22 <span>of ~28</span></div>
+              <div class="phase-pill"><span class="dot"></span>Luteal phase</div>
+            </div>
+            <div class="hero-side">
+              <div class="side-label">NEXT PERIOD</div>
+              <div class="side-number">7 <span>days</span></div>
+              <div class="side-sub">Thu, Nov 5</div>
+            </div>
+            <div class="phase-track-wrap">
+              <div class="phase-track">
+                <span class="seg" style="width:17.8%;background:#e91e63"></span>
+                <span class="seg" style="width:28.6%;background:#4caf50"></span>
+                <span class="seg" style="width:10.7%;background:#009688"></span>
+                <span class="seg" style="width:42.9%;background:#ff9800"></span>
+                <span class="today-marker" style="left:78.5%"></span>
+              </div>
+              <div class="phase-track-labels">
+                <span>Period</span><span>Follicular</span><span>Ovulation</span><span>Luteal</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cycle-stats">
+            <div class="cycle-stat">
+              <div class="cycle-stat-value">28<span>d</span></div>
+              <div class="cycle-stat-label">Avg cycle</div>
+            </div>
+            <div class="cycle-stat-divider"></div>
+            <div class="cycle-stat">
+              <div class="cycle-stat-value">5<span>d</span></div>
+              <div class="cycle-stat-label">Last period</div>
+            </div>
+            <div class="cycle-stat-divider"></div>
+            <div class="cycle-stat">
+              <div class="cycle-stat-value">±2<span>d</span></div>
+              <div class="cycle-stat-label">Cycle variation</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title-row"><h3>Cycle length</h3><span class="regular-pill">Regular</span></div>
+              <span class="card-meta">Last 6 cycles</span>
+            </div>
+            <div class="cycle-chart">
+              <div class="cycle-bars">
+                <div class="cycle-bar-col"><div class="cycle-bar" style="height:45%"></div></div>
+                <div class="cycle-bar-col"><div class="cycle-bar" style="height:65%"></div></div>
+                <div class="cycle-bar-col"><div class="cycle-bar" style="height:55%"></div></div>
+                <div class="cycle-bar-col"><div class="cycle-bar" style="height:35%"></div></div>
+                <div class="cycle-bar-col"><div class="cycle-bar" style="height:75%"></div></div>
+                <div class="cycle-bar-col"><div class="cycle-bar last" style="height:55%"></div></div>
+              </div>
+              <div class="cycle-labels"><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span></div>
+              <div class="cycle-avg-line"></div>
+            </div>
+            <div class="cycle-chart-caption">Average 28 days · range 26–30</div>
+          </div>
+
+          <!-- SYMPTOMS -->
+          <div class="theme-head">
+            <div class="theme-title"><span class="theme-dot" style="background:#ff9800"></span>SYMPTOMS</div>
+            <div class="theme-meta">68 tracked days</div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Symptoms</h3>
+              <span class="card-meta">Top 4</span>
+            </div>
+            <p class="card-sub">How often each symptom shows up, split by cycle phase</p>
+
+            <div class="symptom">
+              <div class="symptom-top">
+                <div class="symptom-name"><span class="sym-icon">😣</span>Cramps</div>
+                <div class="sym-rate">46%</div>
+              </div>
+              <div class="bar">
+                <span style="width:58%;background:#e91e63"></span><span style="width:10%;background:#4caf50"></span><span style="width:6%;background:#009688"></span><span style="width:26%;background:#ff9800"></span>
+              </div>
+              <div class="sym-caption"><span>31 days</span><span>mostly menstrual · 58%</span></div>
+            </div>
+
+            <div class="symptom">
+              <div class="symptom-top">
+                <div class="symptom-name"><span class="sym-icon">😴</span>Fatigue</div>
+                <div class="sym-rate">24%</div>
+              </div>
+              <div class="bar">
+                <span style="width:25%;background:#e91e63"></span><span style="width:19%;background:#4caf50"></span><span style="width:12%;background:#009688"></span><span style="width:44%;background:#ff9800"></span>
+              </div>
+              <div class="sym-caption"><span>16 days</span><span>mostly luteal · 44%</span></div>
+            </div>
+
+            <div class="symptom">
+              <div class="symptom-top">
+                <div class="symptom-name"><span class="sym-icon">🤕</span>Headache</div>
+                <div class="sym-rate">19%</div>
+              </div>
+              <div class="bar">
+                <span style="width:8%;background:#e91e63"></span><span style="width:15%;background:#4caf50"></span><span style="width:15%;background:#009688"></span><span style="width:62%;background:#ff9800"></span>
+              </div>
+              <div class="sym-caption"><span>13 days</span><span>mostly luteal · 62%</span></div>
+            </div>
+
+            <div class="symptom">
+              <div class="symptom-top">
+                <div class="symptom-name"><span class="sym-icon">😵</span>Bloating</div>
+                <div class="sym-rate">16%</div>
+              </div>
+              <div class="bar">
+                <span style="width:18%;background:#e91e63"></span><span style="width:9%;background:#4caf50"></span><span style="width:9%;background:#009688"></span><span style="width:64%;background:#ff9800"></span>
+              </div>
+              <div class="sym-caption"><span>11 days</span><span>mostly luteal · 64%</span></div>
+            </div>
+
+            <div class="legend">
+              <span class="legend-item"><span class="legend-dot" style="background:#e91e63"></span>Menstrual</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#4caf50"></span>Follicular</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#009688"></span>Ovulation</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#ff9800"></span>Luteal</span>
+            </div>
+          </div>
+
+          <!-- MOOD -->
+          <div class="theme-head">
+            <div class="theme-title"><span class="theme-dot" style="background:#009688"></span>MOOD</div>
+            <div class="theme-meta">Last 60 days</div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Mood</h3>
+              <span class="card-meta">Trend + phases</span>
+            </div>
+            <div class="mood-chart" id="mood-chart"></div>
+            <p class="mood-caption">Shaded days are period days</p>
+
+            <div class="mood-row">
+              <div class="mood-phase">Menstrual</div><div class="mood-face">😕</div><div class="mood-score">2.4</div>
+              <div class="mood-tags">Tired ●●● · Irritable ●●</div>
+            </div>
+            <div class="mood-row">
+              <div class="mood-phase">Follicular</div><div class="mood-face">🙂</div><div class="mood-score">4.0</div>
+              <div class="mood-tags">Happy ●●● · Energetic ●●</div>
+            </div>
+            <div class="mood-row">
+              <div class="mood-phase">Ovulation</div><div class="mood-face">😄</div><div class="mood-score">4.6</div>
+              <div class="mood-tags">Happy ●●● · Energetic ●●●</div>
+            </div>
+            <div class="mood-row">
+              <div class="mood-phase">Luteal</div><div class="mood-face">😐</div><div class="mood-score">3.1</div>
+              <div class="mood-tags">Anxious ●● · Tired ●●●</div>
+            </div>
+          </div>
+
+          <div class="footnote">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <span>Everything here comes from your Calendar entries. Tap any day there to edit it.</span>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Calendar
+          </div>
+          <div class="tab active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            Overview
+          </div>
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/></svg>
+            Insights
+          </div>
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+            Settings
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================ INSIGHTS ============================ -->
+    <div class="screen-col">
+      <div class="screen-label">
+        <div class="screen-num">02</div>
+        <div>
+          <h2>Insights</h2>
+          <p>Today + patterns + tips</p>
+        </div>
+        <div class="screen-tag">PERSONAL</div>
+      </div>
+
+      <div class="screen">
+        <div class="statusbar">
+          <span>9:41</span>
+          <div class="statusicons">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+          </div>
+        </div>
+
+        <div class="app-header">
+          <div>
+            <div class="app-title">Insights</div>
+            <div class="app-sub">What your log is telling you</div>
+          </div>
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/></svg>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="today-card">
+            <div class="today-top">
+              <div class="kicker">TODAY</div>
+              <div class="today-pill">LUTEAL · DAY 22</div>
+            </div>
+            <h2>Nourish, steady &amp; wind down</h2>
+            <p>Progesterone is rising, so energy may feel steadier but slower. Keep blood sugar even and protect your sleep.</p>
+
+            <div class="focus">
+              <div class="focus-emoji">🌙</div>
+              <div>
+                <div class="focus-label">TODAY'S FOCUS</div>
+                <div class="focus-title">Keep the evening slow</div>
+                <div class="focus-desc">A steady dinner, a warm shower, and lights out 30 minutes earlier.</div>
+              </div>
+            </div>
+
+            <div class="focus personal">
+              <div class="focus-emoji">🤕</div>
+              <div>
+                <div class="focus-label">YOUR PATTERN</div>
+                <div class="focus-title">Headaches tend to show up now</div>
+                <div class="focus-desc">8 of 13 headache days fell in luteal. Keep water and meals regular.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <div class="section-title">YOUR PATTERNS</div>
+            <div class="section-note">68 logged days</div>
+          </div>
+
+          <div class="pattern-card">
+            <div class="pattern-top">
+              <div class="pattern-icon">🤕</div>
+              <div class="pattern-copy">
+                <div class="pattern-title">Headaches lean luteal</div>
+                <p class="pattern-body">8 of your 13 headache days fell in your luteal phase.</p>
+                <span class="pattern-tag">13 headache days</span>
+              </div>
+              <div class="pattern-stat"><strong>62%</strong><span>in luteal</span></div>
+            </div>
+            <div class="mini-phase-bar">
+              <span style="width:8%;background:#e91e63"></span>
+              <span style="width:15%;background:#4caf50"></span>
+              <span style="width:15%;background:#009688"></span>
+              <span style="width:62%;background:#ff9800"></span>
+            </div>
+            <div class="mini-phase-caption"><span>Menstrual</span><span>Follicular</span><span>Ovulation</span><span>Luteal</span></div>
+            <div class="pattern-tip">
+              <span class="tip-label">TRY THIS</span>
+              <span>Regular meals, water and sleep. Watch whether it repeats next luteal phase.</span>
+            </div>
+          </div>
+
+          <div class="pattern-card">
+            <div class="pattern-top">
+              <div class="pattern-icon">🙂</div>
+              <div class="pattern-copy">
+                <div class="pattern-title">Your mood lifts after your period</div>
+                <p class="pattern-body">Follicular days average 4.0/5, compared with 3.1/5 in luteal.</p>
+                <span class="pattern-tag">42 mood days</span>
+              </div>
+              <div class="pattern-stat"><strong>+0.9</strong><span>vs luteal</span></div>
+            </div>
+            <div class="compare-bars">
+              <div class="compare-row">
+                <span class="compare-label">Follicular</span>
+                <div class="compare-track"><span style="width:80%;background:#4caf50"></span></div>
+                <span class="compare-value">4.0</span>
+              </div>
+              <div class="compare-row">
+                <span class="compare-label">Luteal</span>
+                <div class="compare-track"><span style="width:62%;background:#ff9800"></span></div>
+                <span class="compare-value">3.1</span>
+              </div>
+            </div>
+            <div class="pattern-tip">
+              <span class="tip-label">TRY THIS</span>
+              <span>Plan demanding work for your follicular window; keep the last week lighter where you can.</span>
+            </div>
+          </div>
+
+          <div class="pattern-card">
+            <div class="pattern-top">
+              <div class="pattern-icon">📅</div>
+              <div class="pattern-copy">
+                <div class="pattern-title">Your cycle is steady</div>
+                <p class="pattern-body">Your last 6 cycles ranged from 26 to 30 days.</p>
+                <span class="pattern-tag">6 tracked cycles</span>
+              </div>
+              <div class="pattern-stat"><strong>28d</strong><span>average</span></div>
+            </div>
+            <div class="range-strip">
+              <div class="range-track">
+                <span class="range-fill"></span>
+                <span class="range-dot"></span>
+              </div>
+              <div class="range-labels"><span>26d</span><span>30d</span></div>
+            </div>
+            <div class="pattern-tip">
+              <span class="tip-label">WHY IT MATTERS</span>
+              <span>Steady cycles make your period and fertile-window predictions more reliable.</span>
+            </div>
+          </div>
+
+          <div class="section-head">
+            <div class="section-title">PHASE GUIDE</div>
+            <div class="section-note">General wellness tips</div>
+          </div>
+
+          <div class="chips">
+            <div class="chip">Menstrual</div>
+            <div class="chip">Follicular</div>
+            <div class="chip">Ovulation</div>
+            <div class="chip active">Luteal</div>
+          </div>
+
+          <div class="guide-phase">
+            <div>
+              <h4>Luteal phase</h4>
+              <p class="guide-hormones">Hormones · high progesterone, then tapering</p>
+            </div>
+            <span>Days 18–28+</span>
+          </div>
+
+          <div class="tip-item">
+            <div class="tip-emoji">🍠</div>
+            <div>
+              <div class="tip-cat">NUTRITION</div>
+              <div class="tip-title">Steady blood sugar &amp; magnesium</div>
+              <div class="tip-desc">Complex carbs and magnesium-rich foods may curb cravings and PMS.</div>
+            </div>
+          </div>
+          <div class="tip-item">
+            <div class="tip-emoji">🚶‍♀️</div>
+            <div>
+              <div class="tip-cat">MOVEMENT</div>
+              <div class="tip-title">Low-impact &amp; steady flow</div>
+              <div class="tip-desc">Pilates, barre or brisk walks as your resting temperature rises.</div>
+            </div>
+          </div>
+          <div class="tip-item">
+            <div class="tip-emoji">🛁</div>
+            <div>
+              <div class="tip-cat">WELLNESS</div>
+              <div class="tip-title">Ease PMS &amp; bloating</div>
+              <div class="tip-desc">Less sodium and caffeine; a warm bath can help you unwind.</div>
+            </div>
+          </div>
+          <div class="tip-item">
+            <div class="tip-emoji">🌿</div>
+            <div>
+              <div class="tip-cat">MINDSET</div>
+              <div class="tip-title">Wrap up &amp; set boundaries</div>
+              <div class="tip-desc">A good window for detail work and decluttering. Be gentle with yourself.</div>
+            </div>
+          </div>
+
+          <p class="guide-note">Observations come from your own log and are not medical advice.</p>
+        </div>
+
+        <div class="tabbar">
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            Calendar
+          </div>
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            Overview
+          </div>
+          <div class="tab active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/></svg>
+            Insights
+          </div>
+          <div class="tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+            Settings
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <section class="board-notes">
+    <div class="panel">
+      <h2>What changed in v2</h2>
+      <p>Three themed sections replace the flat dashboard. The page is about patterns now, not counts.</p>
+      <table>
+        <thead>
+          <tr><th>Area</th><th>v1</th><th>v2</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Page name</td><td class="muted">Metrics</td><td><span class="arrow">→</span> Overview <span class="muted">(chosen; alt: Trends, Rhythm)</span></td></tr>
+          <tr><td>Structure</td><td class="muted">Flat stats + charts</td><td><span class="arrow">→</span> Cycle / Symptoms / Mood themes</td></tr>
+          <tr><td>Fourth metric</td><td class="muted">Days logged</td><td><span class="arrow">→</span> Cycle variation + 6-cycle length trend</td></tr>
+          <tr><td>Today card</td><td class="muted">One phase focus</td><td><span class="arrow">→</span> Phase tip + personal pattern</td></tr>
+          <tr><td>Pattern cards</td><td class="muted">Text + percentage</td><td><span class="arrow">→</span> Mini charts + sample size + try-this</td></tr>
+          <tr><td>Entry point</td><td class="muted">Calendar</td><td><span class="arrow">→</span> Calendar only</td></tr>
+        </tbody>
+      </table>
+      <div class="empty-note">
+        <b>On “days logged”:</b> the number still appears as a sample-size caption (“68 tracked days”) where it qualifies a chart, but it no longer takes a metric tile. The fourth tile is cycle variation, backed by a six-cycle length chart — a real trend.
+      </div>
+      <div class="empty-note">
+        <b>On “themes”:</b> I read this as grouping the page by cycle theme — Cycle, Symptoms, Mood — rather than one flat grid. If you meant a different grouping, say so and I’ll re-cut it.
+      </div>
+      <div class="empty-note">
+        <b>Early state:</b> thin data shows honest dashes and “keep logging” prompts. The phase tips stay browsable from day one.
+      </div>
+      <div class="empty-note">
+        <b>What stayed:</b> the 60-day mood trend, symptom phase split and phase tips are unchanged in substance; they are just re-homed and re-framed.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Decisions from this round</h2>
+      <p>The approved direction, kept here for the implementation.</p>
+
+      <div class="decision">
+        <div class="decision-num">1</div>
+        <div>
+          <h3>Which tab name? <span class="recommended">Overview chosen</span></h3>
+          <p><b>Overview</b> won: it covers the current cycle status and the longer trends. <b>Trends</b> was the runner-up; <b>Rhythm</b> remains the warmer alternative.</p>
+        </div>
+      </div>
+
+      <div class="decision">
+        <div class="decision-num">2</div>
+        <div>
+          <h3>6-cycle length chart <span class="recommended">Included</span></h3>
+          <p>It replaces the days-logged tile with a real trend and makes cycle regularity visible at a glance. The data is already in <code>periodStarts</code>.</p>
+        </div>
+      </div>
+
+      <div class="decision">
+        <div class="decision-num">3</div>
+        <div>
+          <h3>Personal pattern row in Today <span class="recommended">Included</span></h3>
+          <p>It connects today’s guidance to the user’s own log (“headaches tend to show up now”), and falls back to “usually show up in…” when today’s phase does not match.</p>
+        </div>
+      </div>
+
+      <div class="decision">
+        <div class="decision-num">4</div>
+        <div>
+          <h3>Data-derived pattern cards <span class="recommended">Included</span></h3>
+          <p>Use the existing <code>symptomPatterns</code>, <code>moodPhases</code> and <code>periodStarts</code>. Hide a card when its sample is too small; always show the denominator.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="board-footer">
+    PrivateCycle · direction mockup · same theme tokens, typography and card language as the app · toggle dark preview above
+  </div>
+</div>
+
+<script>
+  // Mood trend: 60 days, two period windows (days 10–14 and 38–42), a typical
+  // luteal dip before each period and a follicular/ovulation lift in between.
+  const mood = [
+    3.3, 3.1, 2.9, 2.8, 2.7, 2.8, 3.0, 3.1, 3.0, 2.9,
+    2.8, 2.6, 2.8, 3.0, 3.2, 3.5, 3.7, 3.9, 4.0, 4.1,
+    4.2, 4.3, 4.2, 4.4, 4.6, 4.5, 4.3, 4.1, 3.9, 3.7,
+    3.5, 3.3, 3.1, 2.9, 3.0, 3.2, 3.3, 3.1, 2.9, 2.8,
+    2.6, 2.9, 3.1, 3.3, 3.5, 3.7, 3.9, 4.0, 4.1, 4.2,
+    4.3, 4.4, 4.5, 4.6, 4.5, 4.4, 4.1, 3.8, 3.5, 3.3
+  ];
+  const W = 310, H = 96, PAD = 12;
+  const slot = W / (mood.length - 1);
+  const x = (i) => i * slot;
+  const y = (v) => PAD + ((5 - v) / 4) * (H - PAD * 2);
+  const points = mood.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const dots = mood.map((v, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.2" fill="var(--s-primary)" />`).join('');
+  const bands = [[10, 14], [38, 42]].map(([start, end]) =>
+    `<rect x="${x(start) - slot / 2}" y="0" width="${slot * (end - start + 1)}" height="${H}" rx="2" fill="var(--s-primary)" fill-opacity=".12" />`
+  ).join('');
+  document.getElementById('mood-chart').innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mood valence over the last 60 days">
+      <line x1="0" y1="${y(5)}" x2="${W}" y2="${y(5)}" stroke="var(--s-border)" stroke-width="1" />
+      <line x1="0" y1="${y(3)}" x2="${W}" y2="${y(3)}" stroke="var(--s-border)" stroke-width="1" />
+      <line x1="0" y1="${y(1)}" x2="${W}" y2="${y(1)}" stroke="var(--s-border)" stroke-width="1" />
+      ${bands}
+      <polyline points="${points}" fill="none" stroke="var(--s-primary)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+      ${dots}
+    </svg>`;
+
+  document.getElementById('theme-toggle').addEventListener('click', (event) => {
+    document.body.classList.toggle('dark');
+    event.currentTarget.textContent = document.body.classList.contains('dark') ? 'Light preview' : 'Dark preview';
+  });
+
+  if (new URLSearchParams(window.location.search).has('screens')) {
+    document.body.classList.add('screens-only');
+  }
+  if (new URLSearchParams(window.location.search).has('dark')) {
+    document.body.classList.add('dark');
+  }
+  if (new URLSearchParams(window.location.search).has('debug')) {
+    const rect = document.querySelector('.screen').getBoundingClientRect();
+    document.body.setAttribute(
+      'data-debug',
+      [window.innerWidth, window.innerHeight, window.devicePixelRatio, rect.width, rect.height].join(',')
+    );
+  }
+</script>
+</body>
+</html>

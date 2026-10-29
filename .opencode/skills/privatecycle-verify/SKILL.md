@@ -70,7 +70,7 @@ The `?seed` query param is consumed before the first screen renders (see
 
 | Path | What |
 | --- | --- |
-| `artifacts/screenshots/*.png` | smoke flow screenshots (calendar, track, modal, insights, settings) |
+| `artifacts/screenshots/*.png` | smoke flow screenshots at 390px / 2x (calendar, overview, insights, modal, settings) |
 | `artifacts/smoke-failure.txt` | URL, all console output and body text on failure |
 | `artifacts/expo.log` | Expo/Metro output from the last run |
 
@@ -81,10 +81,11 @@ repo workspace).
 
 Naming convention: `area-element`, kebab-case.
 
-- Tabs: `tab-calendar`, `tab-track`, `tab-insights`, `tab-settings`
+- Tabs: `tab-calendar`, `tab-overview`, `tab-insights`, `tab-settings`
 - Calendar: `calendar-prev-month`, `calendar-next-month`,
   `calendar-month-label`, `calendar-day-YYYY-MM-DD`,
   `calendar-today-YYYY-MM-DD`, `calendar-today-caption`,
+  `calendar-day-mark-YYYY-MM-DD` (tracked non-period dot),
   `calendar-ovulation-recorded-YYYY-MM-DD`,
   `calendar-ovulation-predicted-YYYY-MM-DD`, `calendar-fertility-card`,
   `calendar-recorded-ovulation`, `calendar-next-ovulation`,
@@ -94,21 +95,24 @@ Naming convention: `area-element`, kebab-case.
   `day-modal-symptom-{id}`, `day-modal-mood-valence-{1..5}`,
   `day-modal-mood-tag-{id}`, `day-modal-mood-tag-{id}-clear`,
   `day-modal-mood-saved`, `day-modal-save`
-- Track: `track-date-card`, `track-period-toggle`, `track-ovulation-toggle`,
-  `track-flow-{id}`, `track-symptom-{id}`, `track-save-button`, `track-has-data`
-- Mood picker (`components/MoodPicker.tsx`, used by Track and the day modal):
+- Mood picker (`components/MoodPicker.tsx`, used by the calendar day modal):
   `mood-valence-{1..5}`, `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`;
-  the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves in both
-  places, so there is no mood save button anywhere.
-- Insights: `insights-avg-cycle`, `insights-last-period`,
-  `insights-next-period`, `insights-total-periods`,
-  `insights-mood-trend`, `insights-mood-phase-{phase}`, `insights-mood-empty`,
-  `insights-symptom-patterns-card`, `insights-symptom-row-{id}`,
-  `insights-symptom-rate-{id}`, `insights-symptom-bar-{id}`,
-  `insights-symptom-segment-{id}-{phase}`,
-  `insights-phase-tips-card`, `insights-current-phase-badge`,
-  `insights-phase-tab-{phase}`, `insights-phase-tip-{category}`,
-  `insights-phase-summary-title`, `insights-phase-no-data`
+  the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves, so there
+  is no mood save button anywhere.
+- Overview (route `/track`): `overview-cycle-hero`, `overview-cycle-day`,
+  `overview-next-period`, `overview-cycle-meta`, `overview-avg-cycle`,
+  `overview-last-period`, `overview-cycle-variation`, `overview-cycle-chart`,
+  `overview-cycle-regularity`, `overview-symptom-patterns-card`,
+  `overview-symptom-row-{id}`, `overview-symptom-rate-{id}`,
+  `overview-symptom-bar-{id}`, `overview-symptom-segment-{id}-{phase}`,
+  `overview-symptom-empty`, `overview-mood-trend`, `overview-mood-phase-{phase}`,
+  `overview-mood-empty`
+- Insights: `insights-today-card`, `insights-current-phase-badge`,
+  `insights-today-focus`, `insights-today-pattern`, `insights-today-empty`,
+  `insights-pattern-{symptom-<id>|mood|cycle}`, `insights-patterns-empty`,
+  `insights-phase-tips-card`, `insights-phase-tab-{phase}`,
+  `insights-phase-tip-{category}`, `insights-phase-summary-title`,
+  `insights-phase-no-data`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
   `settings-dev-reset`, `settings-darkmode-switch`,
@@ -140,13 +144,14 @@ selectors so flows don't break when copy changes.
 
 1. starts `expo start --web` on `SMOKE_EXPO_PORT` (default 8091) in CI mode,
 2. starts the header proxy on `SMOKE_PROXY_PORT` (default 8092),
-3. launches Chromium via Playwright (420×900 viewport),
+3. launches Chromium via Playwright (390×844 at 2x for design-grade screenshots),
 4. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
-5. walks Track (period/ovulation toggles, flow/symptom, mood auto-save + ✓
-   Saved, save/dialog), Calendar (day modal, fertility forecast), Insights
-   (stats, mood trend + phase rows from seeded data), Settings,
-6. reloads and asserts persistence (including mood valence/strength from the
-   DB),
+5. walks Overview (cycle hero, variation, chart, symptom/mood trends),
+   Insights (Today focus + personal pattern, pattern cards, phase tips from
+   seeded data), Calendar (day modal entry + save/dialog, fertility forecast),
+   Settings,
+6. reloads and asserts the calendar entry and mood valence/strength persist in
+   the DB,
 7. saves a symptom on a clean next-month day, then clears it and asserts the
    row and the grey day mark both disappear,
 8. opens the private calendar from Settings → Privacy (resets the PIN via
@@ -187,7 +192,8 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 `npm test` runs Jest (`jest-expo` preset). Existing coverage: backup envelope
 and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
-dialog component, private-access PIN hashing/lockout and intimacy summaries.
+dialog component, cycle trends/phase tracks, narrative cards/Today patterns,
+private-access PIN hashing/lockout and intimacy summaries.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
 logic (like `DevSeedService`) so it can be tested without the DB.

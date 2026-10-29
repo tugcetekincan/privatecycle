@@ -28,13 +28,19 @@ current when the workflow changes. Deeper runbooks live in
 app/                    expo-router screens
   _layout.tsx           providers, migration gate, dev-seed gate, dev globals
   (tabs)/index.tsx      Calendar (month grid, day modal, period + fertility forecast)
-  (tabs)/track.tsx      Daily logging (period/ovulation/flow/symptoms/mood)
-  (tabs)/insights.tsx   Cycle stats, symptom patterns by phase, phase tips
+  (tabs)/track.tsx      Overview (read-only cycle stats, symptom + mood trends;
+                        route stays /track for stability)
+  (tabs)/insights.tsx   Today card, data-derived pattern cards, phase tips
   (tabs)/settings.tsx   Preferences, backup UI, Privacy section, Developer section (__DEV__)
   private/index.tsx     PIN-locked intimacy calendar (outside the tab bar)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo), MoodPicker (faces + tags),
                         PrivateGate (PIN gate), PrivateCalendar (month + day sheet)
+components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
+                        IconTile, SettingsRow, EmptyState, PrimaryButton,
+                        ScreenFade (the shared design-language primitives)
+design/                 DESIGN.md (authoritative visual language), tokens.ts,
+                        and the HTML design studies
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady,
                         usePrivateScreenProtection (native screenshot block)
@@ -42,7 +48,9 @@ services/               DataService (SQLite owner), BackupService,
                         AnalyticsService, DevSeedService, CycleModel
                         (shared cycle windows, ovulation + phase math),
                         FertilityService (forecast built on CycleModel),
-                        CyclePhaseTips (phase tips + current phase),
+                        CyclePhaseTips (phase tips + current phase + Today focus),
+                        CycleTrends (cycle length summary + phase track segments),
+                        CycleNarrative (Today pattern + insight cards),
                         SymptomInsights (symptom/phase math), Symptoms
                         (shared catalog), PrivateAccessService (PIN gate),
                         IntimacyService (private calendar summaries),
@@ -188,18 +196,17 @@ is a gitignored drop box for a user export — the app's normal
 - A day with nothing tracked has **no row**: `saveTodayData`, `saveMoodData`
   and `saveManyDailyData` delete/skip fully cleared days (see `dayHasContent`),
   and migration v4 removes the empty rows older versions left behind. The
-  calendar's grey "No Period" mark and Track's "Has Data" badge follow row
-  presence, so never re-add an empty-row upsert.
+  calendar's grey "No Period" mark follows row presence, so never re-add an
+  empty-row upsert.
 - Mood detail is additive: `mood_valence` (1-5, 0 = unset) and `mood_tags`
   (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
   so the calendar and insights keep working. Feeling ids/labels live in
   `MOOD_OPTIONS` (`services/MoodTags.ts`); the phase summary and trend series
   are pure helpers in `services/MoodInsights.ts`. Phases come from the shared
   cycle model (`services/CycleModel.ts`), the same source as the calendar's
-  ovulation dates — never reintroduce fixed day-14 thresholds. The mood picker
-  (Track and the calendar day modal) auto-saves mood-only via
-  `DataService.saveMoodData` so unsaved period/symptom edits are never
-  overwritten.
+  ovulation dates — never reintroduce fixed day-14 thresholds. The calendar
+  day modal's mood picker auto-saves mood-only via `DataService.saveMoodData`
+  so unsaved period/symptom edits are never overwritten.
 
 **Dates**
 - Day keys are **local-time** `YYYY-MM-DD` from
@@ -212,9 +219,9 @@ is a gitignored drop box for a user export — the app's normal
 - Ovulation/fertile-window forecasting and cycle phases are pure math in
   `services/CycleModel.ts` (day helpers in `services/dateKey.ts`), exposed
   through `DataService.getFertilityForecast()`. Recorded ovulation beats the
-  prediction for the cycle it belongs to. The Insights phase buckets derive
-  from the same model, so calendar and insights cannot disagree about an
-  ovulation date.
+  prediction for the cycle it belongs to. The Overview phase buckets and
+  Insights phase tips derive from the same model, so calendar, Overview and
+  Insights cannot disagree about an ovulation date.
 
 **Backups**
 - `BackupData` JSON is a public interface: users keep these files. Only add
@@ -245,6 +252,14 @@ is a gitignored drop box for a user export — the app's normal
   the explicit "Intimacy" title renders only after unlock.
 
 **UI**
+- Read `design/DESIGN.md` before adding or changing UI. Use
+  `design/tokens.ts` (spacing, radii, typography, shadows) and the
+  `components/ui/*` primitives instead of one-off card/header styles.
+- Daily entry lives only in the Calendar day modal. Overview (`track.tsx`) and
+  Insights are read-only; do not bring the old inline Track form back.
+- The Calendar grid is a soft card with rounded day cells; tracked non-period
+  days are a tiny muted dot, not a grey fill. Today is a transparent ring so a
+  period fill remains visible.
 - Theming via `useTheme()` only; no hardcoded colors except the intentional
   period-pink accents and per-item palettes (`FLOW_LEVELS`, `MOODS`).
 - Dialogs go through `useDialog()` (`showSuccess`, `showConfirm`, `showChoice`,
@@ -252,9 +267,11 @@ is a gitignored drop box for a user export — the app's normal
 - Add `testID` to every new interactive element, kebab-case
   (`area-element` / `area-element-{id}`). See the verify skill for the current
   inventory. Text selectors are a last resort.
+- New screens must use the design language doc's new-feature checklist:
+  ScreenHeader, SectionHeader, Card tokens, literal uppercase labels, semantic
+  phase colors, honest empty states and sample sizes.
 - Platform differences belong either behind `Platform.OS` checks with a web
-  fallback (see `track.tsx` date input and `BackupService`) or in
-  platform-specific files.
+  fallback (see `BackupService`) or in platform-specific files.
 - Write uppercase headings as literal strings, never with
   `textTransform: 'uppercase'`: React Native Android applies the transform
   with the device locale, so Turkish devices render dotted İ (`FEELİNGS`).
@@ -265,9 +282,10 @@ is a gitignored drop box for a user export — the app's normal
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, dialog + mood picker components, mood tags/insights,
-  fertility forecast + cycle phases, cycle phase tips, symptom patterns,
-  private-access PIN/lockout, intimacy summaries and private backup sections.
-  Extend rather than duplicate.
+  fertility forecast + cycle phases, cycle phase tips, cycle trends + phase
+  tracks, cycle narrative cards/Today patterns, symptom patterns, private-access
+  PIN/lockout, intimacy summaries and private backup sections. Extend rather
+  than duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
@@ -345,8 +363,6 @@ anything; don't. Bump rules, verification and recovery details:
   codegen dir (see the guard step).
 - `arm64-v8a` only in CI releases (speed), so x86 devices need a local build.
 - Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
-- `@react-native-community/datetimepicker` has no web implementation — the
-  Track screen renders an `<input type="date">` on web instead.
 - The private calendar adds native `expo-secure-store`, `expo-crypto` and
   `expo-screen-capture`. Run `npm run prebuild:android:dev` and
   `npm run android:dev` after changing them. Web resolves the AsyncStorage
