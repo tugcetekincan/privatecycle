@@ -178,7 +178,11 @@ jobs:
 
       - name: Tune Gradle for CI
         run: |
-          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          # `expo prebuild` ends gradle.properties with
+          # `expo.inlineModules.watchedDirectories=[]` and no trailing newline.
+          # Appending with >> would glue the JVM args onto that JSON value and
+          # break expo-modules-autolinking, so replace the existing line.
+          sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g|' android/gradle.properties
 
       - name: Decode release keystore
         env:
@@ -262,7 +266,9 @@ jobs:
 
       - name: Tune Gradle for CI (nightly)
         run: |
-          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          # Same replace-in-place as the stable build: never append to the
+          # generated gradle.properties, whose last line is a JSON value.
+          sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g|' android/gradle.properties
 
       - name: Decode release keystore (nightly)
         env:
