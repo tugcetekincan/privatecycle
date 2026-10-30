@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 const isWeb = Platform.OS === 'web';
 import { 
   Settings as SettingsIcon, 
@@ -32,11 +32,13 @@ import {
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
 import { BackupService, BackupSettings } from '@/services/BackupService';
+import { NotificationService } from '@/services/NotificationService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
 import { seedDemoData, resetDemoData } from '@/services/DevSeedService';
 import { useTheme } from '@/hooks/useTheme';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
 import { useDialog } from '@/hooks/useDialog';
+import { useNotificationSettings } from '@/hooks/useNotificationSettings';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { Card } from '@/components/ui/Card';
@@ -49,6 +51,11 @@ export default function SettingsTab() {
   const { theme, toggleTheme, isDark } = useTheme();
   const router = useRouter();
   const { triggerAutoBackup } = useAutoBackup();
+  const {
+    settings: notificationSettings,
+    loading: notificationSettingsLoading,
+    refresh: refreshNotifications,
+  } = useNotificationSettings();
   const { 
     showSuccess, 
     showError, 
@@ -57,7 +64,6 @@ export default function SettingsTab() {
     showChoice, 
     DialogComponent 
   } = useDialog();
-  const [notifications, setNotifications] = useState(true);
   const [privateMode, setPrivateMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [backupSettings, setBackupSettings] = useState<BackupSettings>({
@@ -76,6 +82,34 @@ export default function SettingsTab() {
   useEffect(() => {
     loadBackupData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshNotifications();
+    }, [refreshNotifications])
+  );
+
+  const activeNotificationCount = [
+    notificationSettings.periodReminder,
+    notificationSettings.lateCheckIn,
+    notificationSettings.fertileWindow,
+    notificationSettings.phaseTips,
+    notificationSettings.loggingReminder,
+    notificationSettings.backupReminder,
+    notificationSettings.weeklySummary,
+  ].filter(Boolean).length;
+
+  const notificationSummary = notificationSettingsLoading
+    ? 'Loading…'
+    : isWeb
+      ? 'Available in the Android and iOS app'
+      : !notificationSettings.configured
+        ? 'Set up reminders, privacy and tone'
+        : notificationSettings.enabled
+          ? `${activeNotificationCount} reminder${
+              activeNotificationCount === 1 ? '' : 's'
+            } on`
+          : 'Off';
 
   const loadBackupData = async () => {
     try {
@@ -105,6 +139,7 @@ export default function SettingsTab() {
     try {
       const filePath = await BackupService.exportBackup({ saveToDevice: true, shareFile: false });
       await loadBackupData();
+      void NotificationService.syncSchedule();
       showSuccess('Success', 'Backup created and saved successfully!');
     } catch (error) {
       console.error('Error creating backup:', error);
@@ -118,6 +153,7 @@ export default function SettingsTab() {
     setLoading(true);
     try {
       await BackupService.exportBackup({ shareFile: true });
+      void NotificationService.syncSchedule();
     } catch (error) {
       console.error('Error exporting backup:', error);
       showError('Error', 'Failed to export backup');
@@ -136,6 +172,7 @@ export default function SettingsTab() {
           const result = await BackupService.importBackup();
           if (result.success) {
             await loadBackupData();
+            void NotificationService.syncSchedule();
             showSuccess(
               'Import Successful',
               result.message + (result.stats ? `\n\nBackup Details:\n• Version: ${result.stats.version}\n• Date: ${result.stats.timestamp}\n• Days: ${result.stats.totalDays}\n• Private activity: ${result.stats.includesPrivateData ? 'included' : 'not included'}` : '')
@@ -205,6 +242,7 @@ export default function SettingsTab() {
               await BackupService.clearAllData();
               await PrivateAccessService.reset();
               await loadBackupData();
+              void NotificationService.syncSchedule();
               showSuccess('Success', 'All data, private activity, and backups have been cleared.');
             } catch (error) {
               showError('Error', 'Failed to clear all data');
@@ -237,6 +275,7 @@ export default function SettingsTab() {
     try {
       const result = await seedDemoData({ force: true });
       await loadBackupData();
+      void NotificationService.syncSchedule();
       showSuccess('Demo Data Loaded', `${result.days} days of sample data were generated.`);
     } catch (error) {
       console.error('Error loading demo data:', error);
@@ -264,6 +303,7 @@ export default function SettingsTab() {
         try {
           await resetDemoData();
           await loadBackupData();
+          void NotificationService.syncSchedule();
           showSuccess('Data Reset', 'All tracking data and private activity have been deleted.');
         } catch (error) {
           console.error('Error resetting demo data:', error);
@@ -292,19 +332,13 @@ export default function SettingsTab() {
           <SectionHeader title="APP SETTINGS" dotColor={theme.colors.primary} />
           <Card style={styles.sectionCard} padding={14}>
             <SettingsRow
+              testID="settings-notifications"
               icon={<Bell size={15} color={theme.colors.primary} />}
               tone="primary"
               title="Notifications"
-              subtitle="Period reminders and tips"
-              right={
-                <Switch
-                  testID="settings-notifications-switch"
-                  value={notifications}
-                  onValueChange={setNotifications}
-                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                  thumbColor={theme.colors.white}
-                />
-              }
+              subtitle={notificationSummary}
+              onPress={() => router.push('/notifications')}
+              right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
             />
             <SettingsRow
               last

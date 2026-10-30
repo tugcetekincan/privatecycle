@@ -389,6 +389,17 @@ try {
   await page.screenshot({ path: shot('06-settings'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
 
+  // --- Notifications: native-only feature shows an honest web notice. ---
+  await page.getByTestId('settings-notifications').click();
+  await page.getByTestId('notifications-web-notice').waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+  await page.screenshot({ path: shot('06b-notifications-web'), fullPage: true });
+  await page.getByTestId('notifications-back').click();
+  await page.getByTestId('settings-export').waitFor({ state: 'visible', timeout: 15_000 });
+  log('notifications web notice OK');
+
   // --- Verify seeded data survives a reload (persistence through the DB). ---
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.getByTestId('tab-overview').click();
