@@ -9,6 +9,11 @@ import {
   NotificationSettings,
 } from '@/services/NotificationSettings';
 
+// The setup screen loads preferences through AsyncStorage and animates on
+// focus; CI's shared runners can take longer than Jest's 5s default for the
+// first render.
+jest.setTimeout(15000);
+
 jest.mock('expo-router', () => {
   const ReactModule = require('react');
   return {
