@@ -28,3 +28,10 @@ export const addDays = (date: Date, days: number): Date => {
 /** Whole days between two local midnights (DST-safe). */
 export const daysBetween = (start: Date, end: Date): number =>
   Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+
+/**
+ * True when `date` falls on a local calendar day after `now`'s day. Data entry
+ * is limited to today and earlier, so future dates are view-only.
+ */
+export const isAfterToday = (date: Date, now: Date = new Date()): boolean =>
+  formatDateKey(date) > formatDateKey(now);

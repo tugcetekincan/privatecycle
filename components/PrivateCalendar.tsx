@@ -31,7 +31,7 @@ import { usePrivateGate } from '@/components/PrivateGate';
 import { usePrivateScreenProtection } from '@/hooks/usePrivateScreenProtection';
 import { DataService } from '@/services/DataService';
 import type { IntimateData, ProtectionMethod } from '@/services/DataService';
-import { formatDateKey, parseDateKey } from '@/services/dateKey';
+import { formatDateKey, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { PROTECTION_OPTIONS, summarizeIntimacy } from '@/services/IntimacyService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
 import {
@@ -166,6 +166,11 @@ export default function PrivateCalendar() {
   }
 
   function openDay(date: Date) {
+    if (isAfterToday(date)) {
+      showInfo('Future date', 'You can only log private activity for today or earlier.');
+      return;
+    }
+
     const dayKey = formatDateKey(date);
     const existing = data[dayKey];
     setSelectedDate(date);

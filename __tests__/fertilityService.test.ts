@@ -4,7 +4,7 @@ import {
   predictPeriodStarts,
 } from '@/services/FertilityService';
 import { buildCycleModel, phaseForDateInWindows } from '@/services/CycleModel';
-import { addDays, daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
+import { addDays, daysBetween, formatDateKey, isAfterToday, parseDateKey } from '@/services/dateKey';
 
 /** Local-midnight day key offset from a start key. */
 const day = (start: string, offset: number): string =>
@@ -21,6 +21,15 @@ describe('dateKey helpers', () => {
 
   it('counts whole days between local midnights', () => {
     expect(daysBetween(parseDateKey('2026-03-01'), parseDateKey('2026-03-29'))).toBe(28);
+  });
+
+  it('flags only local calendar days after today', () => {
+    const now = new Date(2026, 9, 30, 23, 59);
+    expect(isAfterToday(parseDateKey('2026-10-31'), now)).toBe(true);
+    expect(isAfterToday(parseDateKey('2026-11-01'), now)).toBe(true);
+    expect(isAfterToday(parseDateKey('2026-10-30'), now)).toBe(false);
+    expect(isAfterToday(new Date(2026, 9, 30, 0, 1), now)).toBe(false);
+    expect(isAfterToday(parseDateKey('2026-10-29'), now)).toBe(false);
   });
 });
 

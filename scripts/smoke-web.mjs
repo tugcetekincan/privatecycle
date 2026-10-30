@@ -273,7 +273,7 @@ try {
   // --- Calendar day modal: the only daily-entry path. ---
   await page.getByTestId('tab-calendar').click();
   await page.getByTestId('calendar-month-label').waitFor({ state: 'visible', timeout: 15_000 });
-  const sampleDay = `${monthPrefix}-15`;
+  const sampleDay = todayKey;
   const sampleBefore = await page.evaluate(async (dateKey) => {
     const data = await __privatecycle.DataService.getTodayData(dateKey);
     return data
@@ -441,42 +441,58 @@ try {
     }
   }
 
-  // --- Clearing a day's data must remove its row and its day mark. ---
-  // A day in the next month has no seeded data, so it starts clean. Prefer a
-  // day outside predicted period spans so the grey "No Period" mark is
-  // actually visible when the day has data.
+  // --- Future days are view-only: tapping one must not open the entry modal. ---
+  const pad = (n) => String(n).padStart(2, '0');
+  const monthLabel = (date) =>
+    `${date.toLocaleDateString('en-US', { month: 'long' })} ${date.getFullYear()}`;
+  const waitForMonth = async (date) => {
+    await page.waitForFunction(
+      (label) =>
+        document.querySelector('[data-testid="calendar-month-label"]')?.textContent === label,
+      monthLabel(date),
+      { timeout: 15_000 }
+    );
+    // navigateMonth ignores taps while its slide animation is running.
+    await page.waitForTimeout(150);
+  };
+
   await page.getByTestId('tab-calendar').click();
   await page.getByTestId('calendar-next-month').click();
   const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const nextMonthLabel =
-    `${nextMonth.toLocaleDateString('en-US', { month: 'long' })} ${nextMonth.getFullYear()}`;
-  await page.waitForFunction(
-    (label) =>
-      document.querySelector('[data-testid="calendar-month-label"]')?.textContent === label,
-    nextMonthLabel,
-    { timeout: 15_000 }
-  );
+  await waitForMonth(nextMonth);
 
-  const pad = (n) => String(n).padStart(2, '0');
-  const predictedKeys = new Set();
-  const forecast = await page.evaluate(() => __privatecycle.DataService.getFertilityForecast());
-  for (const start of forecast.futurePeriodStarts) {
-    const startDate = new Date(`${start}T12:00:00`);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(startDate);
-      d.setDate(d.getDate() + i);
-      predictedKeys.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
-    }
+  const futureKey = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}-01`;
+  await page.getByTestId(`calendar-day-${futureKey}`).click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  const futureDialogTitle = (await page.getByTestId('dialog-title').textContent())?.trim();
+  if (futureDialogTitle !== 'Future date') {
+    failures.push(`future day dialog title: expected "Future date", got "${futureDialogTitle}"`);
   }
-  const monthKey = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}`;
-  let clearedKey = `${monthKey}-10`;
-  for (let day = 1; day <= 28; day++) {
-    const candidate = `${monthKey}-${pad(day)}`;
-    if (!predictedKeys.has(candidate)) {
-      clearedKey = candidate;
-      break;
-    }
+  await page.getByTestId('dialog-button-ok').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  const dayModalOpened = await page.getByTestId('day-modal').isVisible().catch(() => false);
+  if (dayModalOpened) {
+    failures.push('future day opened the day entry modal');
   }
+  const futureRow = await page.evaluate(async (key) => {
+    const all = await __privatecycle.DataService.getAllDailyData();
+    return all[key] ?? null;
+  }, futureKey);
+  if (futureRow) {
+    failures.push(`future day has a data row: ${futureKey}`);
+  }
+  log('calendar: future day entry blocked');
+
+  // --- Clearing a day's data must remove its row and its day mark. ---
+  // Five months back is safely before the 126-day seed window, so the day
+  // starts clean and has no predicted marks.
+  const cleanMonth = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  for (let offset = 0; offset >= -5; offset--) {
+    await page.getByTestId('calendar-prev-month').click();
+    await waitForMonth(new Date(today.getFullYear(), today.getMonth() + offset, 1));
+  }
+  const monthKey = `${cleanMonth.getFullYear()}-${pad(cleanMonth.getMonth() + 1)}`;
+  const clearedKey = `${monthKey}-10`;
 
   const clearedCell = page.getByTestId(`calendar-day-${clearedKey}`);
   const dayRow = () =>
@@ -579,6 +595,43 @@ try {
   }
   await page.waitForTimeout(400);
   await page.screenshot({ path: shot('11-private-calendar'), fullPage: true });
+
+  // Future days are view-only in the private calendar too.
+  await page.getByTestId('private-next-month').click();
+  const privateNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  await page.waitForFunction(
+    (label) =>
+      document.querySelector('[data-testid="private-month-label"]')?.textContent === label,
+    monthLabel(privateNextMonth),
+    { timeout: 15_000 }
+  );
+  const privateFutureKey =
+    `${privateNextMonth.getFullYear()}-${pad(privateNextMonth.getMonth() + 1)}-01`;
+  await page.getByTestId(`private-day-${privateFutureKey}`).click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  const privateDialogTitle = (await page.getByTestId('dialog-title').textContent())?.trim();
+  if (privateDialogTitle !== 'Future date') {
+    failures.push(
+      `private future day dialog title: expected "Future date", got "${privateDialogTitle}"`
+    );
+  }
+  await page.getByTestId('dialog-button-ok').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  const privateModalOpened = await page
+    .getByTestId('private-day-modal')
+    .isVisible()
+    .catch(() => false);
+  if (privateModalOpened) {
+    failures.push('private future day opened the entry modal');
+  }
+  await page.getByTestId('private-prev-month').click();
+  await page.waitForFunction(
+    (label) =>
+      document.querySelector('[data-testid="private-month-label"]')?.textContent === label,
+    monthLabel(new Date(today.getFullYear(), today.getMonth(), 1)),
+    { timeout: 15_000 }
+  );
+  log('private calendar: future day entry blocked');
 
   await page.getByTestId('private-change-pin').click();
   await page.getByTestId('private-change-pin-modal').waitFor({

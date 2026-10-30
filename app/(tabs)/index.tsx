@@ -14,7 +14,7 @@ import {
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets, Egg } from 'lucide-react-native';
 import { DataService, DailyData } from '@/services/DataService';
 import { FertilityForecast } from '@/services/FertilityService';
-import { addDays, daysBetween, parseDateKey } from '@/services/dateKey';
+import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
 import { SYMPTOMS } from '@/services/Symptoms';
 import MoodPicker from '@/components/MoodPicker';
@@ -53,7 +53,7 @@ const { width: screenWidth } = Dimensions.get('window');
 
 export default function CalendarTab() {
   const { theme } = useTheme();
-  const { showSuccess, showError, DialogComponent } = useDialog();
+  const { showSuccess, showError, showInfo, DialogComponent } = useDialog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
@@ -162,6 +162,11 @@ export default function CalendarTab() {
   };
 
   const handleDayPress = async (date: Date) => {
+    if (isAfterToday(date)) {
+      showInfo('Future date', 'You can only log data for today or earlier.');
+      return;
+    }
+
     const dateKey = formatDateKey(date);
     const existingData = allDailyData[dateKey] || null;
     
