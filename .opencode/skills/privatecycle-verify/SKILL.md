@@ -117,7 +117,22 @@ Naming convention: `area-element`, kebab-case.
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
   `settings-dev-reset`, `settings-darkmode-switch`,
-  `settings-private-calendar`
+  `settings-private-calendar`, `settings-notifications`
+- Notifications: `notifications-back`, `notifications-web-notice`,
+  `notifications-master`, `notifications-master-switch`,
+  `notifications-privacy`, `notifications-tone`, `notifications-preview`,
+  `notifications-preview-title`, `notifications-preview-body`,
+  `notifications-period`, `notifications-period-switch`,
+  `notifications-period-lead`, `notifications-late`,
+  `notifications-late-switch`, `notifications-fertile`,
+  `notifications-fertile-switch`, `notifications-phase`,
+  `notifications-phase-switch`, `notifications-logging`,
+  `notifications-logging-switch`, `notifications-logging-cadence`,
+  `notifications-logging-time`, `notifications-backup`,
+  `notifications-backup-switch`, `notifications-weekly`,
+  `notifications-weekly-switch`, `notifications-enable`,
+  `notifications-test`, `notifications-permission-warning`,
+  `notifications-open-settings`
 - Private calendar gate: `private-gate-close`, `private-pin-setup-input`,
   `private-pin-setup-confirm`, `private-pin-setup-submit`,
   `private-pin-input`, `private-pin-unlock`, `private-pin-forgot`,
@@ -150,7 +165,7 @@ selectors so flows don't break when copy changes.
 5. walks Overview (cycle hero, variation, chart, symptom/mood trends),
    Insights (Today focus + personal pattern, pattern cards, phase tips from
    seeded data), Calendar (day modal entry + save/dialog, fertility forecast),
-   Settings,
+   Settings, and the Notifications web notice,
 6. reloads and asserts the calendar entry and mood valence/strength persist in
    the DB,
 7. saves a symptom on a clean next-month day, then clears it and asserts the
@@ -194,7 +209,8 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
 dialog component, cycle trends/phase tracks, narrative cards, today tips,
-private-access PIN hashing/lockout and intimacy summaries.
+notification settings/planner/screen, private-access PIN hashing/lockout and
+intimacy summaries.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
 logic (like `DevSeedService`) so it can be tested without the DB.

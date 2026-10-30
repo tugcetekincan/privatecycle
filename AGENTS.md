@@ -19,6 +19,7 @@ current when the workflow changes. Deeper runbooks live in
 - Expo SDK 58 / React Native 0.88.1, **New Architecture (the only option since SDK 55)**, TypeScript strict
 - `expo-router` v8 (file-based routes under `app/`), `useFocusEffect` re-exported by `expo-router` (no direct `@react-navigation/*` imports)
 - `expo-sqlite` (wa-sqlite on web), AsyncStorage for preferences only
+- `expo-notifications` for local, on-device reminders (no push backend)
 - Playwright + Jest for verification; Maestro for device flows
 - Node 22 locally and in CI (SDK 58 requires >=22.13; npm runs with `legacy-peer-deps` — see `.npmrc`)
 
@@ -32,7 +33,8 @@ app/                    expo-router screens
                         route stays /track for stability)
   (tabs)/insights.tsx   Today card, data-derived pattern cards, phase tips
   (tabs)/settings.tsx   Preferences, backup UI, Privacy section, Developer section (__DEV__)
-  private/index.tsx     PIN-locked intimacy calendar (outside the tab bar)
+  notifications.tsx     Reminder setup: privacy, voice, per-reminder toggles
+  private/index.tsx     PIN-protected intimacy calendar (outside the tab bar)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo), MoodPicker (faces + tags),
                         PrivateGate (PIN gate), PrivateCalendar (month + day sheet)
@@ -43,8 +45,13 @@ design/                 DESIGN.md (authoritative visual language), tokens.ts,
                         and the HTML design studies
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFrameworkReady,
+                        useNotifications (scheduling + tap routing),
+                        useNotificationSettings (local preference loader),
                         usePrivateScreenProtection (native screenshot block)
 services/               DataService (SQLite owner), BackupService,
+                        NotificationService (local delivery + permissions),
+                        NotificationPlanner (pure reminder dates/copy),
+                        NotificationSettings (stored preferences),
                         AnalyticsService, DevSeedService, CycleModel
                         (shared cycle windows, ovulation + phase math),
                         FertilityService (forecast built on CycleModel),
@@ -57,6 +64,7 @@ services/               DataService (SQLite owner), BackupService,
                         IntimacyService (private calendar summaries),
                         privateAccess/ (PIN hash + platform storage), devGlobals
 scripts/                web harness (see below), debug probe,
+                        make-notification-icon.mjs (96px Android icon),
                         release-version.mjs (per-commit release version)
 __tests__/              Jest suites
 maestro/                on-device smoke flow
@@ -149,9 +157,9 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   26–30 day cycles) used by `?seed=1|force`, `?reset=1`, the Settings
   Developer section, tests and smoke.
 - `services/devGlobals.ts` exposes `__privatecycle` (DataService,
-  BackupService, PrivateAccessService, seed helpers) on web dev builds for
-  inspection from the console/Playwright. Production and native builds are
-  unaffected.
+  BackupService, NotificationSettingsService, PrivateAccessService, seed
+  helpers) on web dev builds for inspection from the console/Playwright.
+  Production and native builds are unaffected.
 
 ## Real-data previews (local export)
 
@@ -257,6 +265,23 @@ is a gitignored drop box for a user export — the app's normal
 - No main-calendar marker and no Insight. The outside labels stay neutral;
   the explicit "Intimacy" title renders only after unlock.
 
+**Notifications**
+- Local-only via `expo-notifications`: there is no push server and no
+  account. `NotificationService` owns permissions, Android channels,
+  scheduling and tap routing; `NotificationPlanner` is pure and computes the
+  dates/copy from `CycleModel` + `BackupService` state.
+- All reminders are opt-in behind the master switch on `/notifications`.
+  Default to discreet lock-screen copy; detailed wording is an explicit
+  choice. Never include private-calendar data or PIN state in a notification.
+- Reschedule on app foreground and after cycle/backup changes. Keep the
+  rolling horizon below iOS's 64 pending-notification limit; cycle reminders
+  cover three predicted cycles and logging reminders two weeks.
+- Web has no reliable local scheduling: `/notifications` shows an explanatory
+  notice, and the root hook is a no-op.
+- No `SCHEDULE_EXACT_ALARM` permission; Android delivery is best-effort and
+  may be delayed by battery optimization. Copy is a wellness estimate, never
+  medical advice or contraception.
+
 **UI**
 - Read `design/DESIGN.md` before adding or changing UI. Use
   `design/tokens.ts` (spacing, radii, typography, shadows) and the
@@ -289,9 +314,9 @@ is a gitignored drop box for a user export — the app's normal
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, dialog + mood picker components, mood tags/insights,
   fertility forecast + cycle phases, cycle phase tips, cycle trends + phase
-  tracks, cycle narrative cards, today tips, symptom patterns, private-access
-  PIN/lockout, intimacy summaries and private backup sections. Extend rather
-  than duplicate.
+  tracks, cycle narrative cards, today tips, symptom patterns, notification
+  settings/planner/screen, private-access PIN/lockout, intimacy summaries and
+  private backup sections. Extend rather than duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.
@@ -308,6 +333,8 @@ A change is done when:
 - no new console warnings/errors in the smoke output beyond the known noise
   (`shadow*` / `pointerEvents` deprecations, React DevTools banner);
 - new UI has testIDs and new logic has tests;
+- notification changes are checked on a device/emulator for the permission
+  prompt and actual delivery (web only verifies the notice);
 - data/migration/backup changes are backward compatible (or the version bump
   and migration path are called out);
 - the relevant skills/AGENTS.md are updated if the workflow itself changed;
@@ -368,12 +395,15 @@ anything; don't. Bump rules, verification and recovery details:
   step. `ci.yml` skips it only when the restored caches already contain every
   codegen dir (see the guard step).
 - `arm64-v8a` only in CI releases (speed), so x86 devices need a local build.
-- Local Node is 18.x while CI uses 20; keep dependencies compatible with both.
+- Node 22.13+ is required locally (CI uses 22); Node 18 breaks Metro with
+  `configs.toReversed is not a function`.
 - The private calendar adds native `expo-secure-store`, `expo-crypto` and
-  `expo-screen-capture`. Run `npm run prebuild:android:dev` and
-  `npm run android:dev` after changing them. Web resolves the AsyncStorage
-  storage adapter and the no-op screen-protection hook, so the web smoke still
-  runs; screenshots there are not protected.
+  `expo-screen-capture`; notifications add `expo-notifications` (local-only,
+  no push service). Run `npm run prebuild:android:dev` and
+  `npm run android:dev` after changing any of them. Web resolves the
+  AsyncStorage storage adapter, the no-op screen-protection hook and the
+  notifications notice, so the web smoke still runs; screenshots there are not
+  protected.
 - **Three installable identities.** Stable `com.ncan.privatecycle` (release
   APK from the newest release), local dev `com.ncan.privatecycle.dev`
   ("PrivateCycle Dev", blue icon, debug-signed dev client,
@@ -385,9 +415,10 @@ anything; don't. Bump rules, verification and recovery details:
   targets one identity at a time: `android:dev` refuses to run when it was
   generated for another package, and `npm run prebuild:android` switches
   back. Details in the `privatecycle-mobile` skill.
-- This machine: the Android SDK lives at
-  `/opt/homebrew/share/android-commandlinetools` (platform-tools, NDK, CMake,
-  build-tools), and Maestro is installed. There is **no AVD** and no local
-  emulator package — install one first or use a physical device over adb
-  (`npm run e2e:mobile` then runs the validated Maestro flow). `adb` must be
-  on PATH, e.g. `export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
+- Android tooling on the Linux host: SDK at `$HOME/Android/Sdk`
+  (platform-tools, NDK, CMake, build-tools), AVD `privatecycle` exists;
+  `npm run emulator:start` boots it headless. Maestro is installed. On the Mac
+  host the SDK lives at `/opt/homebrew/share/android-commandlinetools` and
+  there is no local AVD, so use a physical device over adb.
+  `adb` must be on PATH, e.g.
+  `export ANDROID_HOME=$HOME/Android/Sdk`.

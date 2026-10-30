@@ -318,6 +318,21 @@ The calendar is a signature surface. See
 4. Cycle info card uses three list rows with primary values.
 5. Privacy note is a tinted success card with a shield icon, not an emoji.
 
+### Notifications
+
+1. Outside the tabs, reached from Settings → Notifications; back chevron,
+   "Notifications", "Reminders, privacy and tone", bell tile.
+2. First run is a setup flow: intro tint card, STYLE card (lock-screen detail
+   and voice), PREVIEW notification card, CYCLE REMINDERS and ROUTINES cards,
+   then a full-width "Enable notifications" button and the privacy note.
+3. Once configured, the same screen leads with the master switch, shows a
+   permission warning when the OS has blocked notifications, and keeps the
+   style/preview/reminder cards plus a "Send test notification" row.
+4. Switches use the primary track; sub-rows (lead time, cadence, time) appear
+   only when their reminder is on. Use literal uppercase section labels.
+5. Web shows a tinted "Available in the mobile app" notice and the style
+   preview; never a dead switch.
+
 ### Day modal
 
 - Bottom sheet, 20 top radius, `background`, 80% height, slide animation.
