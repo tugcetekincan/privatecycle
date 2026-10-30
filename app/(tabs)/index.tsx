@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets, Egg } from 'lucide-react-native';
 import { DataService, DailyData } from '@/services/DataService';
+import { NotificationService } from '@/services/NotificationService';
 import { FertilityForecast } from '@/services/FertilityService';
 import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
@@ -196,6 +197,7 @@ export default function CalendarTab() {
     try {
       await DataService.saveTodayData(editingData.date, editingData);
       await loadData(); // Reload all data to update the calendar
+      void NotificationService.syncSchedule();
       closeModal();
       // Let the native sheet finish dismissing before presenting the dialog,
       // otherwise the dialog can appear behind the closing modal.
@@ -242,6 +244,7 @@ export default function CalendarTab() {
       // Clearing a mood can remove the day's row entirely; reload so the
       // calendar's day marks are up to date when the modal closes.
       await loadData();
+      void NotificationService.syncSchedule();
     } catch (error) {
       console.error('Error auto-saving mood:', error);
     }

@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { useMigration } from '@/hooks/useMigration';
 import { useAutoBackup } from '@/hooks/useAutoBackup';
 import { useDevSeed } from '@/hooks/useDevSeed';
+import { useNotifications } from '@/hooks/useNotifications';
 import { installDevGlobals } from '@/services/devGlobals';
 
 installDevGlobals();
@@ -16,6 +17,7 @@ function RootLayoutContent() {
   const { isCompleted } = useMigration();
   const { ready: isDevSeedReady } = useDevSeed(isCompleted);
   useAutoBackup();
+  useNotifications(isCompleted && isDevSeedReady);
 
   if (!isCompleted || !isDevSeedReady) {
     return null;
