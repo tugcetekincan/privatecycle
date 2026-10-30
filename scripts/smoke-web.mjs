@@ -236,8 +236,15 @@ try {
   if (patternCards < 1) {
     failures.push(`expected at least 1 pattern card, got ${patternCards}`);
   }
-  const todayPattern = await page.getByTestId('insights-today-pattern').count();
-  log(`insights: personal Today row = ${todayPattern === 1 ? 'present' : 'not present'}`);
+  const todayTips = await page.getByTestId('insights-today-tips').count();
+  log(`insights: Today tips block = ${todayTips === 1 ? 'present' : 'not present'}`);
+  if (todayTips !== 1) {
+    failures.push("Insights Today card is missing today's tips");
+  }
+  const todayTipRows = await page.locator('[data-testid^="insights-today-tip-"]').count();
+  if (todayTipRows < 1) {
+    failures.push(`expected at least 1 Today tip, got ${todayTipRows}`);
+  }
 
   await page.getByTestId('insights-phase-tips-card').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('insights-phase-tab-follicular').click();

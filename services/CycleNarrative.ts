@@ -1,6 +1,6 @@
 /**
  * Pure, display-ready narrative for the Insights tab: the "Your patterns"
- * cards and the personal pattern shown inside Today.
+ * cards.
  *
  * The service does not query SQLite. It turns the already-computed symptom,
  * mood and cycle summaries into short, honest observations with their sample
@@ -60,12 +60,6 @@ export interface NarrativePattern {
   phase: CyclePhase | null;
 }
 
-export interface TodayPattern {
-  icon: string;
-  title: string;
-  body: string;
-}
-
 export interface NarrativeInput {
   symptomPatterns: SymptomPattern[];
   moodPhases: PhaseMoodSummary[];
@@ -74,7 +68,6 @@ export interface NarrativeInput {
 
 export interface NarrativeResult {
   patterns: NarrativePattern[];
-  todayPattern: TodayPattern | null;
 }
 
 /** Short, non-prescriptive suggestions keyed by symptom id. */
@@ -87,20 +80,6 @@ const SYMPTOM_TIPS: Record<string, string> = {
   backache: 'Warmth and stretching may ease lower-back tension.',
   breastache: 'A supportive bra and less caffeine may help.',
 };
-
-/** Shorter versions for the Today card's personal row. */
-const TODAY_TIPS: Record<string, string> = {
-  cramps: 'Keep water and a heat pack close.',
-  headache: 'Keep water and meals regular.',
-  bloating: 'Go easy on salt and caffeine.',
-  mood: 'Name the feeling and lower the stakes.',
-  fatigue: 'Protect sleep and keep meals steady.',
-  backache: 'Warmth and gentle stretching may help.',
-  breastache: 'A supportive bra and less caffeine may help.',
-};
-
-/** Symptom ids that read as plural in a sentence. */
-const PLURAL_SYMPTOMS = new Set(['cramps', 'headache', 'mood']);
 
 /** Display plurals that differ from the catalog label. */
 const PLURAL_LABELS: Record<string, string> = {
@@ -255,75 +234,10 @@ const cyclePatternCard = (periodStarts: string[]): NarrativePattern | null => {
   };
 };
 
-const todaySymptomPattern = (
-  patterns: SymptomPattern[],
-  currentPhase: CyclePhase
-): TodayPattern | null => {
-  const pattern = strongSymptomPatterns(patterns).find(
-    (entry) => entry.dominantPhase === currentPhase
-  );
-  if (!pattern || !pattern.dominantPhase) return null;
-
-  const meta = symptomMeta(pattern.id);
-  const plural = PLURAL_SYMPTOMS.has(pattern.id);
-  const label = PLURAL_LABELS[pattern.id] ?? sentenceCase(meta.label);
-  const noun = DAY_NOUNS[pattern.id] ?? `${meta.label.toLowerCase()} days`;
-  const dominantDays = pattern.phaseDays[pattern.dominantPhase];
-
-  return {
-    icon: meta.icon,
-    title: `${label} ${plural ? 'tend' : 'tends'} to show up now`,
-    body: `${dominantDays} of your ${pattern.days} ${noun} fell in ${phaseLabel(
-      pattern.dominantPhase
-    )}. ${TODAY_TIPS[pattern.id] ?? ''}`.trim(),
-  };
-};
-
-const todayMoodPattern = (
-  moodCard: NarrativePattern | null,
-  currentPhase: CyclePhase
-): TodayPattern | null => {
-  if (!moodCard || moodCard.phase !== currentPhase) return null;
-  return {
-    icon: moodCard.icon,
-    title: 'Your mood tends to dip now',
-    body: `${moodCard.body} Keep the day lighter where you can.`,
-  };
-};
-
 /**
- * When the current phase has no matching pattern, still surface the strongest
- * symptom pattern as context, phrased as a "usually" rather than a "now".
+ * Build the pattern cards (strongest symptom, mood contrast, cycle regularity).
  */
-const todayFallbackPattern = (patterns: SymptomPattern[]): TodayPattern | null => {
-  const pattern = strongSymptomPatterns(patterns)[0];
-  if (!pattern || !pattern.dominantPhase) return null;
-
-  const meta = symptomMeta(pattern.id);
-  const plural = PLURAL_SYMPTOMS.has(pattern.id);
-  const label = PLURAL_LABELS[pattern.id] ?? sentenceCase(meta.label);
-  const noun = DAY_NOUNS[pattern.id] ?? `${meta.label.toLowerCase()} days`;
-  const dominantDays = pattern.phaseDays[pattern.dominantPhase];
-
-  return {
-    icon: meta.icon,
-    title: `${label} usually ${
-      plural ? 'show' : 'shows'
-    } up in your ${phaseLabel(pattern.dominantPhase)} phase`,
-    body: `${dominantDays} of your ${pattern.days} ${noun} fell in ${phaseLabel(
-      pattern.dominantPhase
-    )}. ${TODAY_TIPS[pattern.id] ?? ''}`.trim(),
-  };
-};
-
-/**
- * Build the pattern cards (strongest symptom, mood contrast, cycle regularity)
- * and the one personal row that is relevant to the current phase.
- */
-export function buildNarrative(
-  input: NarrativeInput,
-  currentPhase: CyclePhase | null
-): NarrativeResult {
+export function buildNarrative(input: NarrativeInput): NarrativeResult {
   const moodCard = moodPatternCard(input.moodPhases);
   const patterns = [
     symptomPatternCard(input.symptomPatterns),
@@ -331,14 +245,5 @@ export function buildNarrative(
     cyclePatternCard(input.periodStarts),
   ].filter((pattern): pattern is NarrativePattern => pattern !== null);
 
-  const matchingToday = currentPhase
-    ? todaySymptomPattern(input.symptomPatterns, currentPhase) ??
-      todayMoodPattern(moodCard, currentPhase)
-    : null;
-
-  return {
-    patterns,
-    todayPattern:
-      matchingToday ?? (currentPhase ? todayFallbackPattern(input.symptomPatterns) : null),
-  };
+  return { patterns };
 }

@@ -108,7 +108,8 @@ Naming convention: `area-element`, kebab-case.
   `overview-symptom-empty`, `overview-mood-trend`, `overview-mood-phase-{phase}`,
   `overview-mood-empty`
 - Insights: `insights-today-card`, `insights-current-phase-badge`,
-  `insights-today-focus`, `insights-today-pattern`, `insights-today-empty`,
+  `insights-today-focus`, `insights-today-tips`, `insights-today-tip-{label}`,
+  `insights-today-empty`,
   `insights-pattern-{symptom-<id>|mood|cycle}`, `insights-patterns-empty`,
   `insights-phase-tips-card`, `insights-phase-tab-{phase}`,
   `insights-phase-tip-{category}`, `insights-phase-summary-title`,
@@ -192,7 +193,7 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 `npm test` runs Jest (`jest-expo` preset). Existing coverage: backup envelope
 and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
-dialog component, cycle trends/phase tracks, narrative cards/Today patterns,
+dialog component, cycle trends/phase tracks, narrative cards, today tips,
 private-access PIN hashing/lockout and intimacy summaries.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure

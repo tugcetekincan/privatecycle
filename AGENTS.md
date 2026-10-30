@@ -50,7 +50,8 @@ services/               DataService (SQLite owner), BackupService,
                         FertilityService (forecast built on CycleModel),
                         CyclePhaseTips (phase tips + current phase + Today focus),
                         CycleTrends (cycle length summary + phase track segments),
-                        CycleNarrative (Today pattern + insight cards),
+                        CycleNarrative (insight pattern cards),
+                        TodayTips (log-backed tips for the Today card),
                         SymptomInsights (symptom/phase math), Symptoms
                         (shared catalog), PrivateAccessService (PIN gate),
                         IntimacyService (private calendar summaries),
@@ -288,7 +289,7 @@ is a gitignored drop box for a user export — the app's normal
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, dialog + mood picker components, mood tags/insights,
   fertility forecast + cycle phases, cycle phase tips, cycle trends + phase
-  tracks, cycle narrative cards/Today patterns, symptom patterns, private-access
+  tracks, cycle narrative cards, today tips, symptom patterns, private-access
   PIN/lockout, intimacy summaries and private backup sections. Extend rather
   than duplicate.
 

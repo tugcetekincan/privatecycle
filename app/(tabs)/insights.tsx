@@ -10,6 +10,7 @@ import {
 import { Lightbulb } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
 import { DataService } from '@/services/DataService';
+import type { DailyData } from '@/services/DataService';
 import { CyclePhase, PHASE_LABELS } from '@/services/CycleModel';
 import {
   CYCLE_PHASE_TIPS,
@@ -18,6 +19,7 @@ import {
   TODAY_FOCUS,
 } from '@/services/CyclePhaseTips';
 import { buildNarrative, NarrativePattern } from '@/services/CycleNarrative';
+import { buildTodayTips } from '@/services/TodayTips';
 import { formatDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
 import ScreenHeader from '@/components/ui/ScreenHeader';
@@ -59,11 +61,16 @@ const EMPTY_STATS: InsightStats = {
 export default function InsightsTab() {
   const { theme } = useTheme();
   const [stats, setStats] = useState<InsightStats>(EMPTY_STATS);
+  const [todayLog, setTodayLog] = useState<DailyData | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<CyclePhase | null>(null);
 
   const loadInsights = useCallback(async () => {
-    const data = await DataService.getInsights();
+    const [data, today] = await Promise.all([
+      DataService.getInsights(),
+      DataService.getTodayData(formatDateKey(new Date())),
+    ]);
     setStats(data);
+    setTodayLog(today);
     setSelectedPhase(null);
   }, []);
 
@@ -80,14 +87,12 @@ export default function InsightsTab() {
     stats.periodStarts,
     stats.ovulationDays
   );
-  const narrative = buildNarrative(
-    {
-      symptomPatterns: stats.symptomPatterns,
-      moodPhases: stats.moodPhases,
-      periodStarts: stats.periodStarts,
-    },
-    currentStatus?.phase ?? null
-  );
+  const narrative = buildNarrative({
+    symptomPatterns: stats.symptomPatterns,
+    moodPhases: stats.moodPhases,
+    periodStarts: stats.periodStarts,
+  });
+  const todayTips = buildTodayTips(todayLog);
 
   const activePhase: CyclePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
   const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
@@ -220,16 +225,21 @@ export default function InsightsTab() {
               </View>
             </View>
 
-            {narrative.todayPattern && (
-              <View
-                testID="insights-today-pattern"
-                style={[styles.focusRow, styles.personalFocus]}>
-                <Text style={styles.focusEmoji}>{narrative.todayPattern.icon}</Text>
-                <View style={styles.focusCopy}>
-                  <Text style={styles.focusLabel}>YOUR PATTERN</Text>
-                  <Text style={styles.focusTitle}>{narrative.todayPattern.title}</Text>
-                  <Text style={styles.focusDesc}>{narrative.todayPattern.body}</Text>
-                </View>
+            {todayTips.length > 0 && (
+              <View testID="insights-today-tips" style={styles.todayTipsBlock}>
+                <Text style={styles.todayTipsLabel}>TODAY'S TIPS</Text>
+                {todayTips.map((tip) => (
+                  <View
+                    key={`${tip.label}-${tip.text}`}
+                    testID={`insights-today-tip-${tip.label.toLowerCase().replace(/\s+/g, '-')}`}
+                    style={styles.todayTipRow}>
+                    <Text style={styles.todayTipEmoji}>{tip.icon}</Text>
+                    <View style={styles.todayTipCopy}>
+                      <Text style={styles.todayTipLabel}>{tip.label}</Text>
+                      <Text style={styles.todayTipText}>{tip.text}</Text>
+                    </View>
+                  </View>
+                ))}
               </View>
             )}
             </GradientCard>
@@ -238,7 +248,7 @@ export default function InsightsTab() {
               <Text style={styles.todayKicker}>TODAY</Text>
               <Text style={styles.todayTitle}>Your phase will appear here</Text>
               <Text style={styles.todaySummary}>
-                Log a period in Calendar to see today's phase, focus and personal pattern.
+                Log a period in Calendar to see today's phase, focus and tips.
               </Text>
             </Card>
           )}
@@ -443,9 +453,42 @@ const createStyles = (theme: any) =>
       padding: 10,
       marginTop: 11,
     },
-    personalFocus: {
+    todayTipsBlock: {
       backgroundColor: theme.isDark ? theme.colors.tealSoft : '#f3fbf9',
+      borderWidth: 1,
       borderColor: theme.isDark ? theme.colors.borderStrong : theme.colors.tealSoft,
+      borderRadius: radii.button,
+      padding: 10,
+      marginTop: 11,
+      gap: 8,
+    },
+    todayTipsLabel: {
+      ...typography.micro,
+      color: theme.colors.teal,
+    },
+    todayTipRow: {
+      flexDirection: 'row',
+      gap: 9,
+      alignItems: 'flex-start',
+    },
+    todayTipEmoji: {
+      fontSize: 18,
+      lineHeight: 21,
+    },
+    todayTipCopy: {
+      flex: 1,
+    },
+    todayTipLabel: {
+      fontSize: 9,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      color: theme.colors.teal,
+    },
+    todayTipText: {
+      ...typography.caption,
+      lineHeight: 17,
+      color: theme.colors.text,
+      marginTop: 1,
     },
     focusEmoji: {
       fontSize: 19,

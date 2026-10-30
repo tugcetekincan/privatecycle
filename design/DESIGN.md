@@ -300,8 +300,8 @@ The calendar is a signature surface. See
 ### Insights
 
 1. Screen header: "Insights", "What your log is telling you", lightbulb icon.
-2. Today gradient card: phase/day pill, tagline, summary, one focus row and one
-   personal-pattern row (when available).
+2. Today gradient card: phase/day pill, tagline, summary, one focus row and a
+   compact today's-tips block backed by today's symptoms/mood.
 3. `YOUR PATTERNS` section: up to three cards (symptom, mood, cycle) with mini
    visual, sample chip, stat and "TRY THIS"/"WHY IT MATTERS".
 4. `PHASE GUIDE` section: four phase chips, phase title/hormones, summary only

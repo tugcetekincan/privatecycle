@@ -32,10 +32,11 @@ const periodStarts = [
 
 describe('buildNarrative', () => {
   it('returns the three pattern cards in symptom, mood, cycle order', () => {
-    const result = buildNarrative(
-      { symptomPatterns: [headache], moodPhases, periodStarts },
-      'luteal'
-    );
+    const result = buildNarrative({
+      symptomPatterns: [headache],
+      moodPhases,
+      periodStarts,
+    });
 
     expect(result.patterns.map((pattern) => pattern.kind)).toEqual([
       'symptom',
@@ -92,47 +93,6 @@ describe('buildNarrative', () => {
     });
   });
 
-  it('uses the current phase for the personal Today row', () => {
-    const result = buildNarrative(
-      { symptomPatterns: [headache], moodPhases, periodStarts },
-      'luteal'
-    );
-
-    expect(result.todayPattern).toEqual({
-      icon: '🤕',
-      title: 'Headaches tend to show up now',
-      body: '8 of your 13 headache days fell in luteal. Keep water and meals regular.',
-    });
-  });
-
-  it('falls back to the mood pattern when no symptom matches today', () => {
-    const result = buildNarrative(
-      { symptomPatterns: [], moodPhases, periodStarts },
-      'luteal'
-    );
-
-    expect(result.todayPattern).toEqual({
-      icon: '🙂',
-      title: 'Your mood tends to dip now',
-      body:
-        'You average 4.4/5 in ovulation versus 3.1/5 in luteal. ' +
-        'Keep the day lighter where you can.',
-    });
-  });
-
-  it('falls back to the strongest pattern without claiming it is happening now', () => {
-    const result = buildNarrative(
-      { symptomPatterns: [headache], moodPhases, periodStarts },
-      'follicular'
-    );
-
-    expect(result.todayPattern).toEqual({
-      icon: '🤕',
-      title: 'Headaches usually show up in your luteal phase',
-      body: '8 of your 13 headache days fell in luteal. Keep water and meals regular.',
-    });
-  });
-
   it('hides cards whose samples are too small', () => {
     const weakSymptom: SymptomPattern = {
       ...headache,
@@ -146,25 +106,22 @@ describe('buildNarrative', () => {
       averageValence: entry.phase === 'luteal' ? 3.9 : 4.0,
     }));
 
-    const result = buildNarrative(
-      {
-        symptomPatterns: [weakSymptom],
-        moodPhases: weakMood,
-        periodStarts: ['2026-01-01', '2026-01-28'],
-      },
-      null
-    );
+    const result = buildNarrative({
+      symptomPatterns: [weakSymptom],
+      moodPhases: weakMood,
+      periodStarts: ['2026-01-01', '2026-01-28'],
+    });
 
     expect(result.patterns).toEqual([]);
-    expect(result.todayPattern).toBeNull();
   });
 
   it('returns an empty result when there is no data', () => {
-    const result = buildNarrative(
-      { symptomPatterns: [], moodPhases: [], periodStarts: [] },
-      null
-    );
+    const result = buildNarrative({
+      symptomPatterns: [],
+      moodPhases: [],
+      periodStarts: [],
+    });
 
-    expect(result).toEqual({ patterns: [], todayPattern: null });
+    expect(result).toEqual({ patterns: [] });
   });
 });
