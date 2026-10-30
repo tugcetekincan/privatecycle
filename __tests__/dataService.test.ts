@@ -28,6 +28,16 @@ describe('normalizeProtection', () => {
   });
 });
 
+describe('DataService.getNotificationStats', () => {
+  it('returns empty stats for an empty database', async () => {
+    await expect(DataService.getNotificationStats()).resolves.toEqual({
+      periodStarts: [],
+      ovulationDays: [],
+      trackedDays: 0,
+    });
+  });
+});
+
 describe('dayHasContent', () => {
   const emptyDay: DailyData = {
     date: '2026-10-16',

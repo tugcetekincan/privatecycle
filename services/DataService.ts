@@ -800,6 +800,37 @@ class SQLiteDataService {
   }
 
   /**
+   * Lightweight stats for notification planning. Unlike `getInsights` this
+   * does not build mood/symptom series, so rescheduling on foreground stays
+   * cheap even with a long history.
+   */
+  async getNotificationStats(): Promise<{
+    periodStarts: string[];
+    ovulationDays: string[];
+    trackedDays: number;
+  }> {
+    try {
+      const db = await this.ensureInitialized();
+      const [periodStarts, ovulationDays, tracked] = await Promise.all([
+        this.queryPeriodStarts(db),
+        this.queryOvulationDays(db),
+        db.getFirstAsync('SELECT COUNT(*) as count FROM daily_data') as Promise<{
+          count: number;
+        } | null>,
+      ]);
+
+      return {
+        periodStarts,
+        ovulationDays,
+        trackedDays: tracked?.count ?? 0,
+      };
+    } catch (error) {
+      console.error('Error loading notification stats:', error);
+      return { periodStarts: [], ovulationDays: [], trackedDays: 0 };
+    }
+  }
+
+  /**
    * Ovulation + fertile-window forecast derived from recorded data. The math
    * itself is pure (see FertilityService); this only loads the raw day lists.
    */
@@ -954,6 +985,10 @@ export class DataService {
 
   static async getInsights() {
     return sqliteDataService.getInsights();
+  }
+
+  static async getNotificationStats() {
+    return sqliteDataService.getNotificationStats();
   }
 
   static async getFertilityForecast(): Promise<FertilityForecast> {
