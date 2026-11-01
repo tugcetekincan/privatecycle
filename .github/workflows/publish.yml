@@ -1,0 +1,22 @@
+name: Publish new version
+
+# Actions -> Publish new version -> Run workflow -> main.
+# The version includes all conventional commits since the last release tag.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Serialize production releases; nightly pushes cannot cancel a publication.
+concurrency:
+  group: publish-production
+  cancel-in-progress: false
+
+jobs:
+  production:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/build-android.yml
+    with:
+      variant: production
+    secrets: inherit

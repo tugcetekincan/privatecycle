@@ -1,25 +1,48 @@
 ---
 name: PrivateCycle Release
-description: Shipping PrivateCycle — the automatic per-commit release pipeline, conventional-commit version rules, pre-flight checks, and verifying or fixing a published release. Use when asked to ship, release, tag a version, or check release health.
+description: Shipping PrivateCycle — automatic nightly Actions artifacts, manual production releases, conventional-commit version rules, pre-flight checks, and verifying or fixing a published release. Use when asked to ship, release, tag a version, or check release health.
 ---
 
 # PrivateCycle releases
 
-Releases are **automatic**: every push to `main` that CI does not skip
-publishes a GitHub Release `vX.Y.Z` with both APKs attached —
+There are two entry points, sharing `.github/workflows/build-android.yml`:
 
-- `PrivateCycle.apk` — stable identity (`com.ncan.privatecycle`);
-- `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`, installs
-  alongside the stable app for testing with imported real data.
+| Workflow | Trigger | Output |
+| --- | --- | --- |
+| **Nightly** (`ci.yml`) | Every push to `main` | Actions artifact containing `privatecycle_nightly_YYMMDD.apk` |
+| **Publish new version** (`publish.yml`) | Manual, on `main` | GitHub Release `vX.Y.Z` with only `PrivateCycle.apk` |
 
-`.github/workflows/ci.yml` is the only release path. Manual `v*` tags no
-longer trigger builds (the workflow creates the tag itself via
-`gh release create`), so do not push them.
+Each run verifies and builds exactly one signed arm64 APK. Nightlies use
+`com.ncan.privatecycle.nightly` and install alongside production
+(`com.ncan.privatecycle`). Nightlies never create tags or releases.
+
+## Getting a nightly
+
+Open **Actions → Nightly → the successful run → Artifacts**. Download
+`privatecycle_nightly_YYMMDD` and unzip `privatecycle_nightly_YYMMDD.apk`.
+The date is UTC, captured at the start of the build. Artifacts are retained
+for 30 days, and the run summary links the download. Same-day builds have
+the same filename but belong to separate runs. Rerunning a run replaces its
+artifact. There are no path exclusions or cancellation of earlier runs.
+
+## Publishing production
+
+1. Verify the intended `main` commit (pre-flight below).
+2. Open **Actions → Publish new version → Run workflow**.
+3. Leave the branch on **main** and run it; other branches skip the job.
+4. Once successful, download `PrivateCycle.apk` from the new GitHub Release.
+
+The workflow computes the version automatically, builds only production,
+and publishes a changelog covering all commits since the previous release.
+Production runs are serialized, and nightly pushes cannot cancel them.
+The selected commit stays pinned even if more commits land during the build.
+Manual `v*` tags do not trigger builds; the workflow creates the tag via
+`gh release create`.
 
 ## Version bump rules
 
-`scripts/release-version.mjs` derives the version from the conventional
-commits since the previous release tag:
+`scripts/release-version.mjs` derives the production version from all
+conventional commits since the previous release tag:
 
 - `feat: …` → minor (`v1.1.0` → `v1.2.0`);
 - `feat!:` / `fix(scope)!:` / a `BREAKING CHANGE:` footer → major (`v2.0.0`);
@@ -27,14 +50,27 @@ commits since the previous release tag:
   patch (`v1.1.1`).
 
 Merge commits are ignored. Reruns reuse the version when the commit is
-already released, and a version already tagged on another commit is skipped
-in favour of the next patch. Print what the next push will release:
+already released, and a version tagged on another commit is skipped in
+favour of the next patch. Preview the next manual release locally:
 
 ```sh
 node scripts/release-version.mjs
 ```
 
-## Pre-flight (all must pass before pushing)
+The production version is stamped into the APK (`APP_VERSION`) and used as
+the release tag. If tags change during the build and alter the computed
+version, publishing fails rather than attaching an APK with a mismatched
+version; rerun to rebuild it.
+
+Nightlies reuse the latest release's versionName (or `app.json` before the
+first release), without advancing or tagging it. Every build stamps a fresh
+build-time `versionCode` (unix minutes via `ANDROID_VERSION_CODE`) so APKs
+can update earlier installations of the same identity.
+
+## Pre-flight
+
+Before pushing, follow the verification ladder in `AGENTS.md` for the scope
+of the change. Before publishing production, run the full checks:
 
 ```sh
 npm ci
@@ -43,50 +79,47 @@ npm test
 npm run smoke:web
 ```
 
-Review `artifacts/screenshots/`. A push to `main` is a release, so treat
-pre-flight as the release gate. Pushes that only touch `**.md`,
-`.opencode/**`, `artifacts/**` or `maestro/**` are skipped by CI and do not
-release.
+Review `artifacts/screenshots/`. Workflow-only edits should also be checked
+with `actionlint`; do not use the publishing workflow as a test loop.
 
-## What CI does
+## Shared Android build
 
-1. checkout with full history; compute the version
-2. typecheck + Jest
-3. prebuild + `assembleRelease` (arm64-v8a) for the stable identity
-4. prebuild + `assembleRelease` for the nightly identity
-5. `gh release create` `vX.Y.Z` with both APKs and a changelog (commits since
-   the previous release); a rerun edits the release and re-uploads instead.
+1. Checkout with full history; determine APK name, version and versionCode.
+2. Typecheck + Jest.
+3. Prebuild the selected identity; restore variant-specific app outputs and
+   shared native-library/Gradle/ccache caches.
+4. Generate missing New Architecture codegen, then `assembleRelease`.
+5. Upload the nightly Actions artifact **or** publish the production release.
 
-Both APKs are stamped with the version (`versionName`, via `APP_VERSION`)
-and a monotonically increasing `versionCode` (unix minutes, via
-`ANDROID_VERSION_CODE`), so updater apps (Obtainium etc.) see every release.
-
-Required repository secrets: `ANDROID_KEYSTORE_BASE64`,
+Required repository secrets (unchanged): `ANDROID_KEYSTORE_BASE64`,
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+The nightly caller has only `contents: read`; production grants
+`contents: write` for publication.
 
-## After a push
+## After a build
 
-- Check the Actions run; the job summary links the published release.
-- On the release: both assets present, changelog sane, version matches the
-  bump level the commits imply.
+- Nightly: verify the run's artifact contains the correctly dated APK and
+  installs as PrivateCycle Nightly.
+- Production: follow the summary's release link; check `PrivateCycle.apk`,
+  changelog and version bump. New releases contain no nightly APK.
 - Usual build failures: codegen ordering and dependency alignment when
-  expo/RN versions changed.
+  Expo/RN versions change.
 
 ## Fixing a release
 
-- Bad assets or notes: re-run that workflow run (Actions → the run →
-  Re-run) — it republishes the same version and clobbers the assets.
+- Failed build: rerun the workflow run for that commit.
+- Bad published assets or notes: with explicit approval, rerun the original
+  **Publish new version** run. It reuses the version, edits notes and
+  replaces `PrivateCycle.apk`.
 - Wrong version, or a release that should not exist: deleting or re-tagging
-  a published release (`gh release delete vX.Y.Z --cleanup-tag`) is
-  destructive and needs explicit user approval; then re-run CI for the
-  commit again.
-- The old rolling `ci-latest` / `nightly` prereleases are retired;
-  `releases/latest` and the per-version tags are the download surface now.
+  a published release (`gh release delete vX.Y.Z --cleanup-tag`) needs
+  explicit approval; then rerun the production workflow for that commit.
+- Historical releases and their assets are left as-is. New nightlies live
+  only in Actions artifacts, not rolling prereleases or versioned releases.
 
 ## Version notes
 
-- Settings → About reads the real version via `expo-constants`: CI stamps
-  `APP_VERSION` into the config, and `app.json`'s `version` is the
-  local/fallback value.
+- Settings → About reads the real version via `expo-constants`; `APP_VERSION`
+  stays set during both prebuild and bundling. `app.json` is the local fallback.
 - Backup format version (`BackupService.BACKUP_VERSION`) is independent of
   the app version. Bump it only when the backup JSON shape changes.

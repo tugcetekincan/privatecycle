@@ -1,0 +1,329 @@
+name: Build Android APK
+
+# Shared by the automatic nightly and manual production workflows.
+# Each run verifies and builds exactly one signed APK (arm64-v8a).
+# Permissions come from the caller: nightlies only need contents: read;
+# the manual production workflow grants contents: write to publish a release.
+#
+# Caches (see steps below for the reasoning):
+#  - native-libs-v4: Gradle/CMake outputs of autolinked libraries and the
+#    Gradle plugin included builds (npm ci wipes node_modules, so restore
+#    happens after install).
+#  - app-build-v3: generated android/ outputs, isolated by app variant.
+#  - native-ccache-v1: compiled objects, so native recompiles stay cheap even
+#    though a fresh checkout makes Ninja think inputs are newer than outputs.
+# Cold builds are ~15 min; warm builds should stay well under 6.
+on:
+  workflow_call:
+    inputs:
+      variant:
+        description: App to build (nightly or production)
+        required: true
+        type: string
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: true
+      ANDROID_KEYSTORE_PASSWORD:
+        required: true
+      ANDROID_KEY_ALIAS:
+        required: true
+      ANDROID_KEY_PASSWORD:
+        required: true
+
+jobs:
+  verify-and-build:
+    name: Verify & build ${{ inputs.variant }} APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BUILD_VARIANT: ${{ inputs.variant }}
+      APP_VARIANT: ${{ inputs.variant == 'nightly' && 'nightly' || '' }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # The NDK toolchain maps NDK_CCACHE to CMAKE_<LANG>_COMPILER_LAUNCHER.
+      NDK_CCACHE: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPRESS: 'true'
+      CCACHE_MAXSIZE: 750M
+      CCACHE_LOGFILE: /tmp/ccache.log
+      # CI checkouts rewrite file timestamps on every run; without these,
+      # ccache's direct/preprocessed lookups can miss even for identical code.
+      CCACHE_SLOPPINESS: 'time_macros,include_file_mtime,include_file_ctime'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_BASEDIR: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history for the production version and changelog; nightlies
+          # use the latest release version without advancing or tagging it.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Compute build metadata
+        id: metadata
+        run: |
+          case "$BUILD_VARIANT" in
+            nightly)
+              DATE=$(date -u +%y%m%d)
+              APK_NAME="privatecycle_nightly_${DATE}.apk"
+              TAG=$(git describe --tags --match 'v*' --abbrev=0 HEAD 2>/dev/null || true)
+              VERSION=${TAG#v}
+              if [ -z "$VERSION" ]; then
+                VERSION=$(node -p "require('./app.json').expo.version")
+              fi
+              ;;
+            production)
+              VERSION=$(node scripts/release-version.mjs)
+              APK_NAME=PrivateCycle.apk
+              ;;
+            *)
+              echo "::error::Unknown build variant: $BUILD_VARIANT"
+              exit 1
+              ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk-name=$APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "artifact-name=${APK_NAME%.apk}" >> "$GITHUB_OUTPUT"
+          # Keep these in the environment for both prebuild and JS bundling,
+          # so Settings -> About and the native APK agree.
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_CODE=$(($(date +%s) / 60))" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Ensure ccache
+        run: |
+          command -v ccache >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq ccache
+          }
+          ccache --version | head -1
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          # Rolling key: ccache is a mutable cache, and actions/cache never
+          # overwrites an existing key, so include the run id and rely on
+          # restore-keys to fetch the newest snapshot.
+          key: native-ccache-v1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            native-ccache-v1-${{ runner.os }}-
+
+      # Native outputs of the autolinked libraries (reanimated, screens,
+      # gesture-handler, expo-modules-core) and of the Gradle plugin included
+      # builds live inside node_modules, which `npm ci` wipes - so restore
+      # them after install, before Gradle runs.
+      - name: Restore native library builds
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/*/android/build
+            node_modules/*/android/.cxx
+            node_modules/*/android/.gradle
+            node_modules/@*/*/android/build
+            node_modules/@*/*/android/.cxx
+            node_modules/@*/*/android/.gradle
+            node_modules/@react-native/gradle-plugin/**/build
+            node_modules/@react-native/gradle-plugin/**/.gradle
+            node_modules/expo-modules-autolinking/android/**/build
+            node_modules/expo-modules-autolinking/android/**/.gradle
+            node_modules/expo-modules-core/expo-module-gradle-plugin/**/build
+            node_modules/expo-modules-core/expo-module-gradle-plugin/**/.gradle
+            node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/build
+            node_modules/expo-dev-launcher/expo-dev-launcher-gradle-plugin/**/.gradle
+          key: native-libs-v4-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            native-libs-v4-${{ runner.os }}-
+
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --no-install
+
+      # android/ is generated fresh on every run. Without these caches Gradle
+      # recompiles all New Architecture C++ from scratch (the ~15 min cost).
+      # Never restore another variant's applicationId / generated outputs.
+      - name: Restore app build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/.gradle
+            android/build
+            android/app/build
+            android/app/.cxx
+          key: app-build-v3-${{ inputs.variant }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'app.config.js', 'plugins/**') }}
+          restore-keys: |
+            app-build-v3-${{ inputs.variant }}-${{ runner.os }}-
+
+      - name: Tune Gradle for CI
+        run: |
+          # `expo prebuild` ends gradle.properties with
+          # `expo.inlineModules.watchedDirectories=[]` and no trailing newline.
+          # Appending with >> would glue the JVM args onto that JSON value and
+          # break expo-modules-autolinking, so replace the existing line.
+          sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g|' android/gradle.properties
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
+      # The app's CMakeLists add_subdirectory()s every library's generated
+      # codegen dir. If the restored caches already contain all of them the
+      # explicit codegen pass can be skipped; otherwise materialize them first.
+      - name: Check cached codegen outputs
+        id: codegen-dirs
+        run: |
+          autolink=android/app/build/generated/autolinking/src/main/jni/Android-autolinking.cmake
+          missing=false
+          if [ ! -f "$autolink" ]; then
+            missing=true
+          else
+            while IFS= read -r dir; do
+              [ -d "$dir" ] || missing=true
+            done < <(sed -n 's/^add_subdirectory("\([^"]*\)".*/\1/p' "$autolink")
+          fi
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+          echo "codegen dirs missing: $missing"
+
+      - name: Generate New Architecture codegen
+        if: steps.codegen-dirs.outputs.missing == 'true'
+        working-directory: android
+        run: ./gradlew generateCodegenArtifactsFromSchema
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease --build-cache \
+            -x lintVitalRelease -x lintVitalAnalyzeRelease \
+            -PreactNativeArchitectures=arm64-v8a \
+            -PMYAPP_RELEASE_STORE_FILE=release.keystore \
+            -PMYAPP_RELEASE_STORE_PASSWORD="$ANDROID_KEYSTORE_PASSWORD" \
+            -PMYAPP_RELEASE_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
+            -PMYAPP_RELEASE_KEY_PASSWORD="$ANDROID_KEY_PASSWORD"
+
+      - name: Stage APK
+        env:
+          APK_NAME: ${{ steps.metadata.outputs.apk-name }}
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
+
+      - name: Upload nightly artifact
+        if: inputs.variant == 'nightly'
+        id: nightly-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact-name }}
+          path: dist/${{ steps.metadata.outputs.apk-name }}
+          if-no-files-found: error
+          compression-level: 0 # APKs are already compressed.
+          retention-days: 30
+          overwrite: true # Allow re-running the same Actions run.
+
+      # Only the manual production workflow can publish. Use the version
+      # stamped into the APK, and fail if the tags changed during the build.
+      - name: Publish release
+        if: inputs.variant == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT_VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          git fetch --tags --force origin
+          VERSION=$(node scripts/release-version.mjs)
+          TAG="v$VERSION"
+
+          if [ "$VERSION" != "$BUILT_VERSION" ]; then
+            echo "::error::Release version changed from v$BUILT_VERSION to v$VERSION during the build; rerun to rebuild."
+            exit 1
+          fi
+
+          PREV_TAG=$(git describe --tags --match 'v*' --abbrev=0 HEAD^ 2>/dev/null || true)
+          {
+            echo "Production \`PrivateCycle.apk\` (\`com.ncan.privatecycle\`). Nightly builds are available in the Nightly workflow's Actions artifacts."
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log --no-merges --pretty=format:'- %h %s — %an' "$PREV_TAG..HEAD"
+            else
+              git log --no-merges --pretty=format:'- %h %s — %an' HEAD
+            fi
+            echo
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+              echo
+            fi
+            echo "_Built from \`${GITHUB_SHA:0:7}\` on $(date -u '+%Y-%m-%d %H:%M UTC')._"
+          } > changelog.md
+          echo "----- changelog preview -----"
+          cat changelog.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file changelog.md
+            gh release upload "$TAG" dist/PrivateCycle.apk --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --notes-file changelog.md \
+              dist/PrivateCycle.apk
+          fi
+          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
+      - name: Cache diagnostics
+        if: always()
+        run: |
+          du -sh .ccache 2>/dev/null || true
+          ccache --show-stats 2>/dev/null || true
+          if [ -f /tmp/ccache.log ]; then
+            echo "--- build dir hashes seen by ccache ---"
+            grep -oE '\.cxx/RelWithDebInfo/[a-z0-9]+' /tmp/ccache.log | sort -u | head
+            echo "--- sample compiler invocation ---"
+            grep -m1 -oE 'Command line: .*' /tmp/ccache.log | cut -c1-300 || true
+          fi
+
+      - name: Job summary
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          APK_NAME: ${{ steps.metadata.outputs.apk-name }}
+          ARTIFACT_URL: ${{ steps.nightly-artifact.outputs.artifact-url }}
+        run: |
+          {
+            echo "## PrivateCycle $BUILD_VARIANT"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            if [ "$BUILD_VARIANT" = nightly ]; then
+              echo "- APK: [\`$APK_NAME\`]($ARTIFACT_URL) (inside the artifact ZIP; retained for 30 days)"
+            else
+              echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"
+            fi
+            echo "- Trigger: \`${GITHUB_EVENT_NAME}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

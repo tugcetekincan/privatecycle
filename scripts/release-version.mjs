@@ -9,16 +9,17 @@
 //
 // A `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer also bumps major; merge
 // commits are ignored. Every non-empty window advances at least a patch, so
-// each push to main gets its own version. The mapping is deterministic: a
-// rerun of an already-released commit reuses its tag, and if the computed
-// tag already exists on a different commit (a stale rerun after a newer push
-// released) the patch is bumped past it so no tag is ever hijacked.
+// each new production release advances the version. The mapping is
+// deterministic: a rerun of an already-released commit reuses its tag. If the
+// computed tag already exists on a different commit (a stale rerun after a
+// newer release), the patch is bumped past it so no tag is ever hijacked.
 //
 // Prints the plain version (no `v`) to stdout; diagnostics go to stderr.
-// Used by .github/workflows/ci.yml, which stamps it into the APKs'
-// versionName (APP_VERSION via app.config.js) and tags the release with it.
+// Used by the manual publish.yml workflow through build-android.yml, which
+// stamps it into the production APK's versionName (APP_VERSION via
+// app.config.js) and tags the release with it. Nightlies never create tags.
 //
-// Run locally to see what the next push will release:
+// Run locally to preview the next manual production release:
 //   node scripts/release-version.mjs
 
 import { execFileSync } from 'node:child_process';

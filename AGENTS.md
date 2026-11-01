@@ -67,11 +67,12 @@ services/               DataService (SQLite owner), BackupService,
                         privateAccess/ (PIN hash + platform storage), devGlobals
 scripts/                web harness (see below), debug probe,
                         make-notification-icon.mjs (96px Android icon),
-                        release-version.mjs (per-commit release version)
+                        release-version.mjs (production release version)
 __tests__/              Jest suites
 maestro/                on-device smoke flow
 .opencode/skills/       agent runbooks (keep updated)
-.github/workflows/      ci.yml (per-push verify + versioned release)
+.github/workflows/      ci.yml (per-push nightly), publish.yml (manual production),
+                        build-android.yml (shared verification + Android build)
 plugins/withAndroidSigning.js   Expo config plugin for release signing
 ```
 
@@ -82,7 +83,7 @@ plugins/withAndroidSigning.js   Expo config plugin for release signing
 | `npm ci` | install exact deps (use after pulling changes) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Jest unit suite (`jest-expo` preset) |
-| `node scripts/release-version.mjs` | version the next push to `main` releases |
+| `node scripts/release-version.mjs` | preview the next manual production version |
 | `npm run smoke:web` | headless end-to-end + screenshots (~1–3 min) |
 | `npm run dev:web` | interactive app at http://localhost:8082 |
 | `npm run debug:web` | headless probe: console, failed requests, DB check |
@@ -118,10 +119,10 @@ the current branch. Commit messages are one-liners — imperative and scoped
 (`fix: …`, `feat: …`, `test: …`, `docs: …`), no body; the details belong in
 the diff and the report. Don't leave verified work sitting uncommitted or
 unpushed — once the user says yes, land it promptly. If the user has
-explicitly pre-authorized committing, the round trip can be skipped. Releases
-are automatic (every pushed commit), but manually deleting, retagging or
-overwriting a published release still needs explicit approval — see
-`privatecycle-release`.
+explicitly pre-authorized committing, the round trip can be skipped. Pushes
+build nightly artifacts automatically; production releases are manual through
+Actions → Publish new version. Deleting, retagging or overwriting a published
+release needs explicit approval — see `privatecycle-release`.
 
 ## The verification ladder
 
@@ -340,7 +341,7 @@ is a gitignored drop box for a user export — the app's normal
 - Keep changes consistent with the surrounding style; no drive-by refactors.
 - Do not edit `node_modules/`, `.expo/`, `artifacts/`, `android/`, `ios/`.
 - Deleting or overwriting published releases/tags needs explicit approval
-  (`privatecycle-release`); the per-push releases themselves are automatic.
+  (`privatecycle-release`); per-push nightly artifacts are automatic.
 
 ## Definition of done
 
@@ -363,42 +364,47 @@ A change is done when:
 ## CI
 
 Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then
-builds two signed release APKs (arm64-v8a, release keystore) and attaches
-both to **one versioned GitHub Release** — the Releases page is the download
-source; workflow artifacts are not used:
+builds only the signed nightly APK (arm64-v8a, release keystore). The
+**Nightly** Actions run has an artifact named `privatecycle_nightly_YYMMDD`,
+whose ZIP contains `privatecycle_nightly_YYMMDD.apk` (UTC build date, retained
+for 30 days). Each run owns its artifacts, so same-day pushes do not collide.
+There are no path exclusions or cancellations of earlier nightly runs.
+Nightlies never create tags or GitHub Releases.
 
-- `PrivateCycle.apk` — stable identity;
-- `PrivateCycle-Nightly.apk` — `com.ncan.privatecycle.nightly`, installable
-  next to the stable app to test with imported real data.
-
-The version comes from `scripts/release-version.mjs`, which analyzes the
-conventional commits since the previous release tag: `feat:` bumps minor, a
-`!` in the header or a `BREAKING CHANGE:` footer bumps major, everything else
-bumps patch — so every released push advances the version, and rerunning CI
-for an already-released commit reuses it. The version is stamped into both
-APKs as `versionName` (`APP_VERSION` via `app.config.js`; Settings → About
-reads it back) and used as the release tag.
+The nightly identity is `com.ncan.privatecycle.nightly`, installable next to
+the stable app to test with imported real data. It reuses the latest release
+version as `versionName` (or `app.json` before the first release).
 
 Every build also stamps a build-time `versionCode` (unix minutes, wired
 through `ANDROID_VERSION_CODE` in `app.config.js`), so each APK is
 installable over the previous one — updater apps that compare versionCodes
 rely on this.
 
-`workflow_dispatch` re-runs it on demand; pushes that only touch markdown,
-`artifacts/`, `maestro/` or `.opencode/` are skipped; superseded runs are
-cancelled — the cancelled commits are simply folded into the next release
-(window and bump both come from git history). Cold builds are ~15 min; warm
-builds reuse cross-run caches (Gradle home, `native-libs-v4`, `app-build-v2`,
-ccache) and are much faster. Cache keys are versioned — **bump the version
-suffix when the cached paths change**, because GitHub's cache entries are
+Both workflows call `build-android.yml` for verification and one Android
+build. Cold builds are ~15 min; warm builds reuse cross-run caches (Gradle
+home, `native-libs-v4`, variant-scoped `app-build-v3`, ccache) and are much
+faster. Cache keys are versioned — **bump the version suffix when the cached
+paths change**, because GitHub's cache entries are
 immutable and an old key would keep restoring the old layout.
 
 ## Releases
 
-Automatic: every push to `main` that CI does not skip publishes `vX.Y.Z`
-with both APKs (see "CI" above). Run the full verification ladder before
-pushing — a push is a release. Manually pushing `v*` tags no longer triggers
-anything; don't. Bump rules, verification and recovery details:
+Production is manual: **Actions → Publish new version → Run workflow → main**
+(`.github/workflows/publish.yml`). It verifies, builds only the stable
+`com.ncan.privatecycle` app, and publishes `PrivateCycle.apk` on a GitHub
+Release `vX.Y.Z`. Production runs are serialized and cannot be cancelled by
+nightly pushes. Selecting another branch skips the production job.
+
+The version comes from `scripts/release-version.mjs`, using all conventional
+commits since the previous production release tag: `feat:` bumps minor, a
+`!` in the header or a `BREAKING CHANGE:` footer bumps major, everything else
+bumps patch. Rerunning an already-released commit reuses its version. The
+version is stamped into the APK as `versionName` (`APP_VERSION` via
+`app.config.js`; Settings → About reads it back) and used as the release tag.
+
+Run the verification ladder appropriate to the change before pushing and the
+full ladder before publishing production. Manually pushing `v*` tags does
+not trigger builds. Bump rules, verification and recovery details:
 `privatecycle-release` skill.
 
 ## Environment & gotchas
@@ -410,7 +416,7 @@ anything; don't. Bump rules, verification and recovery details:
   fast. Timeouts already account for it.
 - CI needs `./gradlew generateCodegenArtifactsFromSchema` before
   `assembleRelease` (New Arch header-only TurboModules); don't remove that
-  step. `ci.yml` skips it only when the restored caches already contain every
+  step. `build-android.yml` skips it only when the restored caches contain every
   codegen dir (see the guard step).
 - `arm64-v8a` only in CI releases (speed), so x86 devices need a local build.
 - Node 22.13+ is required locally (CI uses 22); Node 18 breaks Metro with
@@ -426,8 +432,8 @@ anything; don't. Bump rules, verification and recovery details:
   APK from the newest release), local dev `com.ncan.privatecycle.dev`
   ("PrivateCycle Dev", blue icon, debug-signed dev client,
   `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
-  ("PrivateCycle Nightly", amber icon, release-signed, attached to every
-  release). They
+  ("PrivateCycle Nightly", amber icon, release-signed, downloaded from the
+  Nightly Actions artifacts). They
   coexist on one device with separate data sandboxes — import a backup
   exported from the stable app to test with realistic data. `android/`
   targets one identity at a time: `android:dev` refuses to run when it was

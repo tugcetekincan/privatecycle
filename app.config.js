@@ -4,16 +4,15 @@
  *
  *   dev     - "PrivateCycle Dev": debug-signed dev client for local work
  *             (Metro, fast refresh). See scripts/android-dev.sh.
- *   nightly - "PrivateCycle Nightly": release build published by CI on every
- *             push to main as part of the versioned release (standing next to
- *             the stable APK), standalone with the JS bundle embedded.
+ *   nightly - "PrivateCycle Nightly": signed APK uploaded to Actions on every
+ *             push to main, standalone with the JS bundle embedded.
  *
  * Each variant has its own applicationId, so it coexists with the stable app
  * (and with the other variants) and has a separate data sandbox — importing
  * a backup there never touches real data.
  *
- * CI and release builds never set APP_VARIANT, so they keep the base identity
- * from app.json.
+ * Manual production builds leave APP_VARIANT empty, keeping the base
+ * identity from app.json.
  */
 const VARIANTS = {
   dev: {
@@ -60,9 +59,10 @@ const withVersionCode = (config) => {
 };
 
 /**
- * CI stamps APP_VERSION (the release version derived from the conventional
- * commits, e.g. `1.1.3`) so the APK's versionName matches the GitHub release
- * it ships in — Settings -> About reads it back via expo-constants. Local
+ * Production stamps APP_VERSION from conventional commits (e.g. `1.1.3`)
+ * so versionName matches the GitHub release. Nightlies reuse the latest
+ * release version (app.json's version before the first release) and get a
+ * fresh versionCode. Settings -> About reads it via expo-constants. Local
  * builds keep app.json's version.
  */
 const withVersion = (config) => {
