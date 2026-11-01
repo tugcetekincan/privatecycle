@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { radii, spacing, typography } from '@/design/tokens';
 
@@ -11,6 +11,7 @@ interface PrimaryButtonProps {
   testID?: string;
   variant?: ButtonVariant;
   disabled?: boolean;
+  loading?: boolean;
   icon?: React.ReactNode;
   style?: ViewStyle;
 }
@@ -22,6 +23,7 @@ export default function PrimaryButton({
   testID,
   variant = 'primary',
   disabled = false,
+  loading = false,
   icon,
   style,
 }: PrimaryButtonProps) {
@@ -46,8 +48,9 @@ export default function PrimaryButton({
     <TouchableOpacity
       testID={testID}
       accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       activeOpacity={0.8}
-      disabled={disabled}
+      disabled={disabled || loading}
       onPress={onPress}
       style={[
         styles.button,
@@ -58,7 +61,7 @@ export default function PrimaryButton({
         },
         style,
       ]}>
-      {icon}
+      {loading ? <ActivityIndicator color={colors.text} size="small" /> : icon}
       <Text style={[typography.body, styles.text, { color: colors.text }]}>{title}</Text>
     </TouchableOpacity>
   );
@@ -70,6 +73,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.button,
     borderWidth: 1,
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -78,5 +82,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 15,
     fontWeight: '700',
+    textAlign: 'center',
+    flexShrink: 1,
   },
 });

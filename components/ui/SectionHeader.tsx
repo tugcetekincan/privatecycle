@@ -25,12 +25,12 @@ export default function SectionHeader({
     <View testID={testID} style={[styles.row, style]}>
       <View style={styles.left}>
         {dotColor && <View style={[styles.dot, { backgroundColor: dotColor }]} />}
-        <Text style={[typography.sectionLabel, { color: theme.colors.textSecondary }]}>
+        <Text accessibilityRole="header" style={[typography.sectionLabel, styles.label, { color: theme.colors.textSecondary }]}>
           {title}
         </Text>
       </View>
       {meta && (
-        <Text style={[typography.sectionMeta, { color: theme.colors.textSecondary }]}>{meta}</Text>
+        <Text style={[typography.sectionMeta, styles.meta, { color: theme.colors.textSecondary }]}>{meta}</Text>
       )}
     </View>
   );
@@ -52,6 +52,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flexShrink: 1,
   },
+  label: { flexShrink: 1 },
+  meta: { flexShrink: 1, textAlign: 'right' },
   dot: {
     width: 6,
     height: 6,

@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '@/hooks/useTheme';
@@ -55,6 +55,7 @@ export function GradientCard({
 }: GradientCardProps) {
   const { theme } = useTheme();
   const gradientId = `pc-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const start = from ?? theme.colors.surface;
   const end = to ?? theme.colors.primarySoft;
 
@@ -68,6 +69,9 @@ export function GradientCard({
         style,
       ]}>
       <View
+        onLayout={({ nativeEvent: { layout } }) => setSize(previous =>
+          previous.width === layout.width && previous.height === layout.height
+            ? previous : { width: layout.width, height: layout.height })}
         style={[
           styles.clip,
           {
@@ -78,8 +82,8 @@ export function GradientCard({
         <Svg
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
-          width="100%"
-          height="100%">
+          width={size.width}
+          height={size.height}>
           <Defs>
             <SvgLinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
               <Stop offset="0" stopColor={start} />

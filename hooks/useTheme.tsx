@@ -5,6 +5,10 @@ interface ThemeColors {
   background: string;
   surface: string;
   primary: string;
+  primaryText: string;
+  successText: string;
+  warningText: string;
+  tealText: string;
   secondary: string;
   text: string;
   textSecondary: string;
@@ -43,6 +47,10 @@ const lightColors: ThemeColors = {
   background: '#fafafa',
   surface: '#ffffff',
   primary: '#e91e63',
+  primaryText: '#ad1457',
+  successText: '#2e7d32',
+  warningText: '#935800',
+  tealText: '#00796b',
   secondary: '#f5f5f5',
   text: '#333333',
   textSecondary: '#666666',
@@ -70,6 +78,10 @@ const darkColors: ThemeColors = {
   background: '#121212',
   surface: '#1e1e1e',
   primary: '#e91e63',
+  primaryText: '#ffb3d1',
+  successText: '#a5d6a7',
+  warningText: '#ffbf66',
+  tealText: '#80cbc4',
   secondary: '#2a2a2a',
   text: '#ffffff',
   textSecondary: '#b3b3b3',
@@ -143,4 +155,4 @@ export const useTheme = (): ThemeContextType => {
     throw new Error('useTheme must be used within a ThemeProvider');
   }
   return context;
-}; 
+};

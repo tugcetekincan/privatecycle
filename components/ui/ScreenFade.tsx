@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   StyleSheet,
   ViewStyle,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface ScreenFadeProps {
   children: React.ReactNode;
@@ -20,17 +20,7 @@ interface ScreenFadeProps {
 export default function ScreenFade({ children, style }: ScreenFadeProps) {
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReduceMotion(enabled);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const reduceMotion = useReducedMotion();
 
   useFocusEffect(
     useCallback(() => {

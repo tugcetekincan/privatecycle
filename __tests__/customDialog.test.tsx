@@ -44,4 +44,14 @@ describe('CustomDialog', () => {
     expect(screen.getByTestId('dialog-title')).toBeTruthy();
     expect(screen.getByTestId('dialog-button-ok')).toBeTruthy();
   });
+
+  it('dismisses before an action opens a follow-up dialog', () => {
+    const order: string[] = [];
+    const screen = renderDialog({
+      onDismiss: () => order.push('dismiss'),
+      buttons: [{ text: 'Continue', onPress: () => order.push('next dialog') }],
+    });
+    fireEvent.press(screen.getByText('Continue'));
+    expect(order).toEqual(['dismiss', 'next dialog']);
+  });
 });

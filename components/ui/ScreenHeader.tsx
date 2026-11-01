@@ -17,7 +17,7 @@ export default function ScreenHeader({ title, subtitle, icon, testID }: ScreenHe
   return (
     <View testID={testID} style={styles.header}>
       <View style={styles.copy}>
-        <Text style={[typography.pageTitle, { color: theme.colors.text }]}>{title}</Text>
+        <Text accessibilityRole="header" style={[typography.pageTitle, { color: theme.colors.text }]}>{title}</Text>
         {subtitle && (
           <Text style={[typography.pageSubtitle, styles.subtitle, { color: theme.colors.textSecondary }]}>
             {subtitle}
@@ -43,10 +43,11 @@ const styles = StyleSheet.create({
     gap: spacing.base,
     paddingHorizontal: spacing.xxl,
     paddingTop: spacing.xxl,
-    paddingBottom: spacing.xxs,
+    paddingBottom: spacing.base,
   },
   copy: {
     flex: 1,
+    minWidth: 0,
   },
   subtitle: {
     marginTop: 2,

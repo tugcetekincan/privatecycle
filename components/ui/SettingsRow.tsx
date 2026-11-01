@@ -16,6 +16,7 @@ interface SettingsRowProps {
   titleColor?: string;
   /** Optional accessibility label for the row action. */
   accessibilityLabel?: string;
+  disabled?: boolean;
 }
 
 /** A quiet settings row with a 30px tinted icon tile and optional trailing action. */
@@ -30,6 +31,7 @@ export default function SettingsRow({
   last = false,
   titleColor,
   accessibilityLabel,
+  disabled = false,
 }: SettingsRowProps) {
   const { theme } = useTheme();
 
@@ -60,6 +62,7 @@ export default function SettingsRow({
     styles.row,
     last && styles.last,
     { borderBottomColor: theme.colors.border },
+    disabled && { opacity: 0.5 },
   ];
 
   if (onPress) {
@@ -67,7 +70,10 @@ export default function SettingsRow({
       <TouchableOpacity
         testID={testID}
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={accessibilityLabel ?? title}
+        accessibilityHint={subtitle}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
         activeOpacity={0.7}
         onPress={onPress}
         style={rowStyle}>
@@ -88,8 +94,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 50,
-    paddingVertical: spacing.sm,
+    minHeight: 56,
+    paddingVertical: spacing.base,
     borderBottomWidth: 1,
   },
   last: {

@@ -5,8 +5,10 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
+  ScrollView,
 } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { floatingShadow, radii, spacing, typography } from '@/design/tokens';
 import { Check, X, AlertTriangle, Info, HelpCircle } from 'lucide-react-native';
 
@@ -36,6 +38,7 @@ const CustomDialog: React.FC<DialogProps> = ({
   children,
 }) => {
   const { theme } = useTheme();
+  const reducedMotion = useReducedMotion();
   const styles = createStyles(theme);
 
   const getIcon = () => {
@@ -81,11 +84,10 @@ const CustomDialog: React.FC<DialogProps> = ({
   };
 
   const handleButtonPress = (button: DialogButton) => {
+    // Dismiss first: the action may synchronously open a follow-up dialog.
+    onDismiss?.();
     if (button.onPress) {
       button.onPress();
-    }
-    if (onDismiss) {
-      onDismiss();
     }
   };
 
@@ -134,16 +136,17 @@ const CustomDialog: React.FC<DialogProps> = ({
     <Modal
       visible={visible}
       transparent={true}
-      animationType="fade"
+      animationType={reducedMotion ? 'none' : 'fade'}
       onRequestClose={onDismiss}
     >
       <View style={styles.overlay}>
-        <View testID="dialog" style={styles.dialog}>
+        <View testID="dialog" accessibilityViewIsModal style={styles.dialog}>
+          <ScrollView bounces={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: getIconBackgroundColor() }]}>
               {getIcon()}
             </View>
-            <Text testID="dialog-title" style={styles.title}>{title}</Text>
+            <Text testID="dialog-title" accessibilityRole="header" style={styles.title}>{title}</Text>
           </View>
 
           <View style={styles.content}>
@@ -157,6 +160,7 @@ const CustomDialog: React.FC<DialogProps> = ({
             {buttons.map((button, index) => (
               <TouchableOpacity
                 key={index}
+                accessibilityRole="button"
                 testID={`dialog-button-${button.text
                   .toLowerCase()
                   .replace(/[^a-z0-9]+/g, '-')
@@ -171,6 +175,7 @@ const CustomDialog: React.FC<DialogProps> = ({
               </TouchableOpacity>
             ))}
           </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -201,6 +206,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 14,
   },
+  scrollContent: { flexGrow: 1 },
   iconContainer: {
     width: 52,
     height: 52,
@@ -258,6 +264,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   buttonText: {
     fontSize: 15,
     fontWeight: '700',
+    textAlign: 'center',
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,
@@ -290,4 +297,4 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
 });
 
-export default CustomDialog; 
+export default CustomDialog;

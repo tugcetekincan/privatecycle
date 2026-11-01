@@ -118,7 +118,7 @@ export const useDialog = () => {
   const showChoice = useCallback((
     title: string,
     message: string,
-    choices: Array<{ text: string; onPress?: () => void }>,
+    choices: DialogButton[],
     showCancel: boolean = true
   ) => {
     const buttons: DialogButton[] = [];
@@ -133,7 +133,7 @@ export const useDialog = () => {
     choices.forEach(choice => {
       buttons.push({
         text: choice.text,
-        style: 'default',
+        style: choice.style ?? 'default',
         onPress: choice.onPress,
       });
     });
@@ -170,4 +170,4 @@ export const useDialog = () => {
     hideDialog,
     DialogComponent,
   };
-}; 
+};

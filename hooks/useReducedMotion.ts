@@ -1,0 +1,20 @@
+import { useEffect, useState } from 'react';
+import { AccessibilityInfo } from 'react-native';
+
+/** Start still while the preference loads; respond to OS changes in-place. */
+export function useReducedMotion() {
+  const [reduced, setReduced] = useState(true);
+  useEffect(() => {
+    let active = true;
+    let changed = false;
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', value => {
+      changed = true;
+      setReduced(value);
+    });
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => {
+      if (active && !changed) setReduced(value);
+    }).catch(() => {});
+    return () => { active = false; subscription.remove(); };
+  }, []);
+  return reduced;
+}

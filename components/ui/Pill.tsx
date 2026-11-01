@@ -17,10 +17,10 @@ export default function Pill({ label, tone = 'primary', dot, style, testID }: Pi
   const { theme } = useTheme();
 
   const palette: Record<PillTone, { background: string; color: string }> = {
-    primary: { background: theme.colors.primarySoft, color: theme.colors.primary },
-    success: { background: theme.colors.successSoft, color: theme.colors.success },
-    warning: { background: theme.colors.warningSoft, color: theme.colors.warning },
-    teal: { background: theme.colors.tealSoft, color: theme.colors.teal },
+    primary: { background: theme.colors.primarySoft, color: theme.colors.primaryText },
+    success: { background: theme.colors.successSoft, color: theme.colors.successText },
+    warning: { background: theme.colors.warningSoft, color: theme.colors.warningText },
+    teal: { background: theme.colors.tealSoft, color: theme.colors.tealText },
     neutral: { background: theme.colors.secondary, color: theme.colors.textSecondary },
   };
   const colors = palette[tone];
@@ -51,7 +51,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   text: {
-    fontSize: 10,
+    fontSize: 11,
+    flexShrink: 1,
     fontWeight: '700',
   },
 });
