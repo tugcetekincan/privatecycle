@@ -112,6 +112,12 @@ that the master switch turns off and cancels pending notifications, and that a
 tap opens Calendar or Insights. Disable battery optimization if the emulator
 delays a scheduled reminder; delivery is best-effort.
 
+Timezone: reminders use live `Intl` helpers, not Hermes's cached `Date` zone.
+After changing the device timezone, reopen the app (or leave it open for up to
+60 seconds) and confirm the reminder still targets the chosen local time. A
+zone change while the app is closed can leave the next Android reminder at the
+old local time until it is opened (see AGENTS.md).
+
 ## Maestro flows
 
 `maestro/smoke.yaml` covers launch → Calendar day-modal entry → Overview → Insights → Settings → back to calendar,

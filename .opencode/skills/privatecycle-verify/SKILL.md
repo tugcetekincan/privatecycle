@@ -209,8 +209,8 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
 dialog component, cycle trends/phase tracks, narrative cards, today tips,
-notification settings/planner/screen, private-access PIN hashing/lockout and
-intimacy summaries.
+notification settings/planner/scheduler/screen, private-access PIN
+hashing/lockout and intimacy summaries.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
 logic (like `DevSeedService`) so it can be tested without the DB.

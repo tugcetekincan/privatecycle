@@ -276,6 +276,15 @@ is a gitignored drop box for a user export — the app's normal
 - Reschedule on app foreground and after cycle/backup changes. Keep the
   rolling horizon below iOS's 64 pending-notification limit; cycle reminders
   cover three predicted cycles and logging reminders two weeks.
+- Timezone: Hermes caches the default `Date` zone after a device timezone
+  change (react-native#59131), so planner wall-clock math uses the live `Intl`
+  helpers in `services/dateKey.ts` (`getDeviceTimeZone`,
+  `getDateKeyInTimeZone`, `dateKeyAtTimeInTimeZone`, `addDaysToDateKey`). iOS
+  schedules CALENDAR triggers in that live zone (DST-safe); Android uses
+  absolute DATE triggers, and `useNotifications` rebuilds when the zone/offset
+  signature changes or the app foregrounds. A timezone/DST change while the app
+  is closed can leave the next reminder at the previous local time until it is
+  opened again.
 - Web has no reliable local scheduling: `/notifications` shows an explanatory
   notice, and the root hook is a no-op.
 - No `SCHEDULE_EXACT_ALARM` permission; Android delivery is best-effort and
