@@ -1,0 +1,54 @@
+# Run with Android font_scale=1.3; restore the device setting afterwards.
+appId: com.ncan.privatecycle.dev
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: 'Period Calendar|Reload'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: 'Reload'
+    commands:
+      - pressKey: Back
+- extendedWaitUntil:
+    visible:
+      id: 'calendar-prev-month'
+    timeout: 90000
+- takeScreenshot: artifacts/android-proof/21-large-calendar
+- tapOn:
+    id: 'calendar-prev-month'
+- tapOn: '15'
+- assertVisible:
+    id: 'day-modal-save'
+- takeScreenshot: artifacts/android-proof/22-large-day-sheet
+- pressKey: Back
+- tapOn:
+    id: 'tab-overview'
+- takeScreenshot: artifacts/android-proof/23-large-overview
+- tapOn:
+    id: 'tab-insights'
+- takeScreenshot: artifacts/android-proof/24-large-insights
+- scrollUntilVisible:
+    element:
+      id: 'insights-phase-tab-follicular'
+    direction: DOWN
+- tapOn:
+    id: 'insights-phase-tab-follicular'
+- assertVisible: 'Follicular Phase'
+- takeScreenshot: artifacts/android-proof/25-large-phase-guide
+- tapOn:
+    id: 'tab-settings'
+- takeScreenshot: artifacts/android-proof/26-large-settings
+- tapOn:
+    id: 'settings-notifications'
+- takeScreenshot: artifacts/android-proof/27-large-notifications
+- tapOn:
+    id: 'notifications-privacy'
+- assertVisible:
+    id: 'dialog-button-cancel'
+- takeScreenshot: artifacts/android-proof/28-large-dialog
+- tapOn:
+    id: 'dialog-button-cancel'
+- tapOn:
+    id: 'notifications-back'

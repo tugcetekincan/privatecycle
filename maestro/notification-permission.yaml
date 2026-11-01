@@ -1,0 +1,81 @@
+# Dev sandbox only: reset notification permission to exercise the OS prompt.
+appId: com.ncan.privatecycle.dev
+---
+- stopApp
+- launchApp:
+    permissions:
+      notifications: unset
+- extendedWaitUntil:
+    visible: 'Period Calendar|Reload'
+    timeout: 90000
+- runFlow:
+    when:
+      visible: 'Reload'
+    commands:
+      - pressKey: Back
+- extendedWaitUntil:
+    visible:
+      id: 'tab-settings'
+    timeout: 90000
+- tapOn:
+    id: 'tab-settings'
+- tapOn:
+    id: 'settings-notifications'
+- runFlow:
+    when:
+      notVisible:
+        id: 'notifications-master-switch'
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: 'notifications-enable'
+          direction: DOWN
+      - tapOn:
+          id: 'notifications-enable'
+- runFlow:
+    when:
+      visible:
+        id: 'notifications-master-switch'
+    commands:
+      - runFlow:
+          when:
+            visible: '.*reminders? on'
+          commands:
+            - tapOn:
+                id: 'notifications-master-switch'
+      - tapOn:
+          id: 'notifications-master-switch'
+- extendedWaitUntil:
+    visible:
+      id: 'com.android.permissioncontroller:id/permission_allow_button'
+    timeout: 15000
+- takeScreenshot: artifacts/android-proof/29-notification-permission
+- tapOn:
+    id: 'com.android.permissioncontroller:id/permission_allow_button'
+- runFlow:
+    when:
+      visible:
+        id: 'dialog-button-ok'
+    commands:
+      - tapOn:
+          id: 'dialog-button-ok'
+- scrollUntilVisible:
+    element:
+      id: 'notifications-test'
+    direction: DOWN
+- tapOn:
+    id: 'notifications-test'
+- assertVisible: 'Test scheduled'
+- tapOn:
+    id: 'dialog-button-ok'
+- swipe:
+    start: '50%, 0%'
+    end: '50%, 80%'
+    duration: 700
+- extendedWaitUntil:
+    visible: 'A gentle check-in is ready when you are.'
+    timeout: 30000
+- takeScreenshot: artifacts/android-proof/30-notification-delivered
+- tapOn: 'A gentle check-in is ready when you are.'
+- assertVisible:
+    id: 'tab-calendar'

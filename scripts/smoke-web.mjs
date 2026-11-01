@@ -174,6 +174,13 @@ try {
     .waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('calendar-today-caption').waitFor({ state: 'visible', timeout: 15_000 });
   log('calendar: today marker and caption rendered');
+  const currentMonthLabel = await page.getByTestId('calendar-month-label').textContent();
+  await page.getByTestId('calendar-prev-month').click();
+  await page.getByTestId('calendar-return-today').waitFor();
+  await page.waitForTimeout(350);
+  await page.getByTestId('calendar-return-today').click();
+  await page.waitForFunction(label => document.querySelector('[data-testid="calendar-month-label"]')?.textContent === label, currentMonthLabel);
+  log('calendar: month navigation and return to today passed');
 
   // --- Overview: the read-only trends tab. ---
   await page.getByTestId('tab-overview').click();
@@ -303,7 +310,9 @@ try {
   if (modalPeriodText.includes('No Period')) {
     await modalPeriodToggle.click();
   }
-  await page.getByTestId('day-modal-flow-medium').click();
+  if (await page.getByTestId('day-modal-flow-medium').getAttribute('aria-checked') !== 'true') {
+    await page.getByTestId('day-modal-flow-medium').click();
+  }
   if (!(sampleBefore?.symptoms ?? []).includes('cramps')) {
     await page.getByTestId('day-modal-symptom-cramps').click();
   }
@@ -702,6 +711,64 @@ try {
     );
   }
   log('private calendar flow OK');
+
+  // Polish regression: compact layout, dark surfaces, honest empty states,
+  // and a failed save that can be retried without losing the open entry.
+  await page.getByTestId('private-close').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const [tab, height] of [['calendar', 1200], ['overview', 1800], ['insights', 2400], ['settings', 1800]]) {
+    await page.setViewportSize({ width: 360, height });
+    await page.getByTestId(`tab-${tab}`).click();
+    if (tab === 'calendar' && await page.getByTestId('calendar-return-today').isVisible()) {
+      await page.getByTestId('calendar-return-today').click();
+    }
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: shot(`14-dark-${tab}`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId('settings-notifications').click();
+  await page.getByTestId('notifications-web-notice').waitFor();
+  await page.screenshot({ path: shot('15-dark-notifications') });
+  await page.getByTestId('notifications-back').click();
+  await page.getByTestId('settings-private-calendar').click();
+  await page.getByTestId('private-pin-input').fill('1234');
+  await page.getByTestId('private-pin-unlock').click();
+  await page.getByTestId('private-calendar').waitFor();
+  await page.screenshot({ path: shot('16-dark-private') });
+  await page.getByTestId(`private-day-${todayKey}`).click();
+  await page.getByTestId('private-day-modal').waitFor();
+  await page.screenshot({ path: shot('17-dark-private-sheet') });
+  await page.getByTestId('private-day-close').click();
+  await page.getByTestId('private-close').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`);
+  await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+  await page.screenshot({ path: shot('18-empty-calendar') });
+  await page.getByTestId('calendar-log-today').click();
+  await page.getByTestId('day-modal-period-toggle').click();
+  await page.evaluate(() => {
+    window.__originalSave = __privatecycle.DataService.saveTodayData;
+    __privatecycle.DataService.saveTodayData = async () => { throw new Error('Simulated write failure'); };
+  });
+  await page.getByTestId('day-modal-save').click();
+  await page.getByText('Could not save this day. Please try again.').waitFor();
+  await page.screenshot({ path: shot('19-save-retry') });
+  await page.evaluate(() => { __privatecycle.DataService.saveTodayData = window.__originalSave; });
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('dialog-button-ok').click();
+  const retried = await page.evaluate(key => __privatecycle.DataService.getTodayData(key), todayKey);
+  if (!retried?.isPeriod) failures.push('failed save retry lost the period selection');
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`);
+  await page.getByTestId('calendar-welcome').waitFor();
+  for (const tab of ['overview', 'insights', 'settings']) {
+    await page.getByTestId(`tab-${tab}`).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: shot(`20-empty-${tab}`) });
+  }
+  if ((await page.getByTestId('settings-average-cycle').textContent()) !== '—') failures.push('empty Settings shows a fabricated average');
+  log('polish: dark/360px, reduced motion, empty states and failed-save retry passed');
 } catch (error) {
   failures.push(`smoke run threw: ${error.message}`);
   console.error(expoLog.split('\n').slice(-25).join('\n'));

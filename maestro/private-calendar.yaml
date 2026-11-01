@@ -18,7 +18,7 @@ appId: com.ncan.privatecycle.dev
 
 # Dev-client onboarding (fresh installs) and the cold-start JS bundle.
 - extendedWaitUntil:
-    visible: 'Continue|Period Calendar'
+    visible: 'Continue|Period Calendar|Reload'
     timeout: 90000
 - runFlow:
     when:
@@ -39,6 +39,7 @@ appId: com.ncan.privatecycle.dev
 - assertVisible: 'Settings'
 - tapOn:
     id: 'settings-private-calendar'
+- takeScreenshot: artifacts/android-proof/20-private-gate-keyboard
 
 # Clean state should show setup. Keep the unlock branch so a developer can
 # rerun the flow without clearing state manually.
@@ -74,6 +75,53 @@ appId: com.ncan.privatecycle.dev
       id: 'private-calendar'
     timeout: 30000
 - assertVisible: 'Intimacy'
+
+# Entry sheets remain usable with the native keyboard. Native screenshots are
+# intentionally protected after unlock; assert against the accessibility tree.
+- tapOn:
+    id: 'private-prev-month'
+- tapOn: '15'
+- tapOn:
+    id: 'private-day-activity'
+- tapOn:
+    id: 'private-protection-protected'
+- tapOn:
+    id: 'private-note-input'
+- inputText: 'Device verification'
+- hideKeyboard
+- assertVisible:
+    id: 'private-day-save'
+- tapOn:
+    id: 'private-day-save'
+- assertNotVisible:
+    id: 'private-day-modal'
+- scrollUntilVisible:
+    element:
+      id: 'private-change-pin'
+    direction: DOWN
+- tapOn:
+    id: 'private-change-pin'
+- tapOn:
+    id: 'private-change-pin-current'
+- inputText: '1234'
+- hideKeyboard
+- tapOn:
+    id: 'private-change-pin-new'
+- inputText: '1234'
+- hideKeyboard
+- tapOn:
+    id: 'private-change-pin-confirm'
+- inputText: '1234'
+- hideKeyboard
+- tapOn:
+    id: 'private-change-pin-save'
+- assertVisible: 'PIN updated'
+- tapOn:
+    id: 'dialog-button-ok'
+- scrollUntilVisible:
+    element:
+      id: 'private-lock'
+    direction: UP
 
 # Lock, then prove the PIN is required again.
 - tapOn:

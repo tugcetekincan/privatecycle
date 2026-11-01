@@ -1,0 +1,176 @@
+# Visual and native interaction evidence. Run against the dev sandbox only.
+appId: com.ncan.privatecycle.dev
+---
+- launchApp
+- runFlow:
+    when:
+      visible: 'Reload'
+    commands:
+      - pressKey: Back
+- extendedWaitUntil:
+    visible:
+      id: 'tab-settings'
+    timeout: 90000
+- tapOn:
+    id: 'tab-settings'
+- scrollUntilVisible:
+    element:
+      id: 'settings-dev-seed'
+    direction: DOWN
+- tapOn:
+    id: 'settings-dev-seed'
+- tapOn:
+    id: 'dialog-button-load'
+- tapOn:
+    id: 'dialog-button-ok'
+- tapOn:
+    id: 'tab-calendar'
+- runFlow:
+    when:
+      visible:
+        id: 'calendar-return-today'
+    commands:
+      - tapOn:
+          id: 'calendar-return-today'
+- takeScreenshot: artifacts/android-proof/01-calendar
+- tapOn:
+    id: 'calendar-prev-month'
+- tapOn: '15'
+- assertVisible:
+    id: 'day-modal-save'
+- takeScreenshot: artifacts/android-proof/02-day-sheet
+- scrollUntilVisible:
+    element:
+      id: 'day-modal-symptom-cramps'
+    direction: DOWN
+- takeScreenshot: artifacts/android-proof/03-day-controls
+- pressKey: Back
+- assertNotVisible:
+    id: 'day-modal'
+- tapOn:
+    id: 'tab-overview'
+- takeScreenshot: artifacts/android-proof/04-overview
+- scrollUntilVisible:
+    element:
+      id: 'overview-mood-trend'
+    direction: DOWN
+- takeScreenshot: artifacts/android-proof/05-overview-mood
+- tapOn:
+    id: 'tab-insights'
+- takeScreenshot: artifacts/android-proof/06-insights
+- scrollUntilVisible:
+    element:
+      id: 'insights-phase-tab-follicular'
+    direction: DOWN
+- tapOn:
+    id: 'insights-phase-tab-follicular'
+- assertVisible: 'Follicular Phase'
+- takeScreenshot: artifacts/android-proof/07-phase-guide
+- tapOn:
+    id: 'tab-settings'
+- scrollUntilVisible:
+    element:
+      id: 'settings-notifications'
+    direction: UP
+- takeScreenshot: artifacts/android-proof/08-settings
+- tapOn:
+    id: 'settings-notifications'
+- takeScreenshot: artifacts/android-proof/09-notifications
+- tapOn:
+    id: 'notifications-privacy'
+- takeScreenshot: artifacts/android-proof/10-choice-dialog
+- tapOn:
+    id: 'dialog-button-cancel'
+- scrollUntilVisible:
+    element:
+      id: 'notifications-back'
+    direction: UP
+- runFlow:
+    when:
+      notVisible:
+        id: 'notifications-master-switch'
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: 'notifications-enable'
+          direction: DOWN
+      - tapOn:
+          id: 'notifications-enable'
+      - runFlow:
+          when:
+            visible: 'Allow'
+          commands:
+            - takeScreenshot: artifacts/android-proof/11-permission
+            - tapOn: 'Allow'
+      - tapOn:
+          id: 'dialog-button-ok'
+- scrollUntilVisible:
+    element:
+      id: 'notifications-test'
+    direction: DOWN
+- tapOn:
+    id: 'notifications-test'
+- assertVisible: 'Test scheduled'
+- tapOn:
+    id: 'dialog-button-ok'
+- scrollUntilVisible:
+    element:
+      id: 'notifications-back'
+    direction: UP
+- tapOn:
+    id: 'notifications-back'
+- tapOn:
+    id: 'settings-darkmode-switch'
+- scrollUntilVisible:
+    element:
+      id: 'settings-create-backup'
+    direction: DOWN
+- tapOn:
+    id: 'settings-create-backup'
+- assertVisible: 'Backup created and saved successfully!'
+- takeScreenshot: artifacts/android-proof/16-backup-created
+- tapOn:
+    id: 'dialog-button-ok'
+- tapOn:
+    id: 'settings-export'
+- takeScreenshot: artifacts/android-proof/17-export-share
+- pressKey: Back
+- tapOn:
+    id: 'settings-import'
+- tapOn:
+    id: 'dialog-button-import'
+- takeScreenshot: artifacts/android-proof/18-import-picker
+- pressKey: Back
+- assertNotVisible: 'Import Failed'
+- swipe:
+    start: '50%, 0%'
+    end: '50%, 80%'
+    duration: 700
+- takeScreenshot: artifacts/android-proof/19-delivered-notification
+- pressKey: Back
+- scrollUntilVisible:
+    element:
+      id: 'settings-notifications'
+    direction: UP
+- takeScreenshot: artifacts/android-proof/12-dark-settings
+- tapOn:
+    id: 'tab-calendar'
+- takeScreenshot: artifacts/android-proof/13-dark-calendar
+- tapOn:
+    id: 'tab-overview'
+- scrollUntilVisible:
+    element:
+      id: 'overview-cycle-hero'
+    direction: UP
+- takeScreenshot: artifacts/android-proof/14-dark-overview
+- tapOn:
+    id: 'tab-insights'
+- scrollUntilVisible:
+    element:
+      id: 'insights-today-card'
+    direction: UP
+- takeScreenshot: artifacts/android-proof/15-dark-insights
+- tapOn:
+    id: 'tab-settings'
+- tapOn:
+    id: 'settings-darkmode-switch'
