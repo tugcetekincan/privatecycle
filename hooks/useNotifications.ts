@@ -31,8 +31,21 @@ export function useNotifications(ready: boolean) {
 
     sync();
 
+    // Hermes's cached Date timezone does not update when the phone changes
+    // zones, but Intl does. Notice a live zone/offset change while the app is
+    // open and rebuild; foreground sync covers changes made while it was
+    // closed.
+    const timeZoneInterval = setInterval(() => {
+      void NotificationService.ensureTimeZoneSync();
+    }, 60_000);
+
     const appStateSubscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') sync();
+      if (state === 'active') {
+        sync();
+        // The throttled sync may skip a change made while the app was
+        // backgrounded; the live signature check catches it immediately.
+        void NotificationService.ensureTimeZoneSync();
+      }
     });
 
     const handleTarget = async (target: { id: string; url: string }) => {
@@ -63,6 +76,7 @@ export function useNotifications(ready: boolean) {
 
     return () => {
       mounted = false;
+      clearInterval(timeZoneInterval);
       appStateSubscription.remove();
       unsubscribe();
     };

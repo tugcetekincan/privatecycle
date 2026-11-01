@@ -2,13 +2,20 @@ import { Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { BackupService } from './BackupService';
 import { DataService } from './DataService';
-import { formatDateKey } from './dateKey';
+import {
+  formatDateKey,
+  getDateKeyInTimeZone,
+  getDateTimeInTimeZone,
+  getDeviceTimeZone,
+  getDeviceTimeZoneSignature,
+} from './dateKey';
 import { previewNotificationCopy } from './NotificationCopy';
 import {
   buildNotificationPlan,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_ID_PREFIX,
 } from './NotificationPlanner';
+import type { PlannedNotification } from './NotificationPlanner';
 import {
   NotificationSettings,
   NotificationSettingsService,
@@ -43,6 +50,8 @@ const isGranted = (status: Notifications.NotificationPermissionsStatus): boolean
 export class NotificationService {
   private static initPromise: Promise<void> | null = null;
   private static syncChain: Promise<number> = Promise.resolve(0);
+  /** Live timezone + offset signature used by the last completed sync. */
+  private static lastScheduledSignature: string | null = null;
 
   static get isSupported(): boolean {
     return Platform.OS !== 'web';
@@ -195,19 +204,25 @@ export class NotificationService {
       await this.initialize();
       const settings =
         settingsOverride ?? (await NotificationSettingsService.getSettings());
+      const signature = getDeviceTimeZoneSignature();
+      const timeZone = getDeviceTimeZone() ?? undefined;
 
       if (!settings.configured || !settings.enabled) {
         await this.cancelAppNotifications();
+        this.lastScheduledSignature = signature;
         return 0;
       }
 
       if ((await this.getPermissionState()) !== 'granted') {
         await this.cancelAppNotifications();
+        this.lastScheduledSignature = signature;
         return 0;
       }
 
       const now = new Date();
-      const todayKey = formatDateKey(now);
+      const todayKey = timeZone
+        ? getDateKeyInTimeZone(now, timeZone)
+        : formatDateKey(now);
       const [stats, todayData, backupSettings] = await Promise.all([
         DataService.getNotificationStats(),
         DataService.getTodayData(todayKey),
@@ -217,6 +232,7 @@ export class NotificationService {
       const plan = buildNotificationPlan({
         settings,
         now,
+        timeZone,
         periodStarts: stats.periodStarts,
         ovulationDays: stats.ovulationDays,
         todayHasData: todayData !== null,
@@ -239,11 +255,7 @@ export class NotificationService {
               data: item.data,
               sound: quiet ? false : true,
             },
-            trigger: {
-              type: Notifications.SchedulableTriggerInputTypes.DATE,
-              date: item.date,
-              channelId: item.channelId,
-            },
+            trigger: this.triggerFor(item, timeZone),
           });
           scheduled += 1;
         } catch (error) {
@@ -251,10 +263,73 @@ export class NotificationService {
         }
       }
 
+      this.lastScheduledSignature = signature;
       return scheduled;
     } catch (error) {
       console.error('Error syncing notifications:', error);
       return 0;
+    }
+  }
+
+  /**
+   * iOS calendar triggers use local date components in the live zone, so DST
+   * keeps the same wall-clock hour. Android has no one-off calendar trigger in
+   * expo-notifications and uses an absolute DATE timestamp; the zone watcher
+   * rebuilds it when the phone next runs.
+   */
+  private static triggerFor(
+    item: PlannedNotification,
+    timeZone?: string
+  ): Notifications.NotificationTriggerInput {
+    if (Platform.OS === 'ios') {
+      const parts = timeZone
+        ? getDateTimeInTimeZone(item.date, timeZone)
+        : {
+            year: item.date.getFullYear(),
+            month: item.date.getMonth() + 1,
+            day: item.date.getDate(),
+            hour: item.date.getHours(),
+            minute: item.date.getMinutes(),
+          };
+
+      return {
+        type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+        ...(timeZone ? { timezone: timeZone } : {}),
+        year: parts.year,
+        month: parts.month,
+        day: parts.day,
+        hour: parts.hour,
+        minute: parts.minute,
+        second: 0,
+        repeats: false,
+      };
+    }
+
+    return {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: item.date,
+      channelId: item.channelId,
+    };
+  }
+
+  /**
+   * Rebuild when the live device zone or UTC offset changed since the last
+   * sync. Hermes's cached Date zone is not used; Intl reflects a device
+   * timezone change immediately. `signatureOverride` is a test seam.
+   */
+  static async ensureTimeZoneSync(signatureOverride?: string | null): Promise<void> {
+    if (!this.isSupported) return;
+
+    const signature =
+      signatureOverride === undefined
+        ? getDeviceTimeZoneSignature()
+        : signatureOverride;
+    if (!signature || signature === this.lastScheduledSignature) return;
+
+    try {
+      await this.syncSchedule();
+    } catch (error) {
+      console.error('Error rebuilding notifications after a timezone change:', error);
     }
   }
 

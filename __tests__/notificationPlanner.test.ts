@@ -6,6 +6,12 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS,
   NotificationSettings,
 } from '@/services/NotificationSettings';
+import {
+  addDaysToDateKey,
+  dateKeyAtTimeInTimeZone,
+  getDateKeyInTimeZone,
+  getDateTimeInTimeZone,
+} from '@/services/dateKey';
 
 const baseSettings = (overrides: Partial<NotificationSettings> = {}): NotificationSettings => ({
   ...DEFAULT_NOTIFICATION_SETTINGS,
@@ -219,5 +225,75 @@ describe('buildNotificationPlan', () => {
         plan[index - 1].date.getTime()
       );
     }
+  });
+});
+
+describe('live timezone planning', () => {
+  const kiritimati = 'Pacific/Kiritimati';
+  const newYork = 'America/New_York';
+
+  it('uses the live zone for "today" and the logging time', () => {
+    const settings = baseSettings({
+      loggingReminder: true,
+      loggingCadence: 'daily',
+      loggingTime: '20:00',
+    });
+    const now = new Date('2026-01-01T22:30:00Z');
+
+    const kiritimatiFirst = planFor(settings, {
+      now,
+      timeZone: kiritimati,
+    }).find((item) => item.kind === 'logging');
+    const newYorkFirst = planFor(settings, {
+      now,
+      timeZone: newYork,
+    }).find((item) => item.kind === 'logging');
+
+    expect(kiritimatiFirst?.dateKey).toBe('2026-01-02');
+    expect(newYorkFirst?.dateKey).toBe('2026-01-01');
+    expect(getDateTimeInTimeZone(kiritimatiFirst!.date, kiritimati).hour).toBe(20);
+    expect(getDateTimeInTimeZone(newYorkFirst!.date, newYork).hour).toBe(20);
+    expect(kiritimatiFirst?.date.toISOString()).toBe('2026-01-02T06:00:00.000Z');
+    expect(newYorkFirst?.date.toISOString()).toBe('2026-01-02T01:00:00.000Z');
+  });
+
+  it('keeps cycle reminder times local in the provided zone', () => {
+    const now = new Date('2026-10-20T12:00:00Z');
+    const plan = planFor(
+      baseSettings({ periodReminder: true, periodLeadDays: 2 }),
+      { now, timeZone: 'Asia/Tokyo' }
+    );
+    const reminder = plan.find((item) => item.kind === 'period');
+
+    expect(reminder).toBeDefined();
+    expect(getDateTimeInTimeZone(reminder!.date, 'Asia/Tokyo').hour).toBe(9);
+    // 09:00 in Tokyo is 00:00 UTC.
+    expect(reminder?.date.getUTCHours()).toBe(0);
+  });
+
+  it('adds calendar days without going through the default timezone', () => {
+    expect(addDaysToDateKey('2026-01-31', 1)).toBe('2026-02-01');
+    expect(addDaysToDateKey('2026-03-01', -1)).toBe('2026-02-28');
+    expect(addDaysToDateKey('2025-12-31', 1)).toBe('2026-01-01');
+  });
+
+  it('builds local wall-clock instants in the live zone', () => {
+    const date = dateKeyAtTimeInTimeZone('2026-01-02', 20, 0, kiritimati);
+
+    expect(getDateKeyInTimeZone(date, kiritimati)).toBe('2026-01-02');
+    expect(getDateTimeInTimeZone(date, kiritimati).hour).toBe(20);
+    expect(date.toISOString()).toBe('2026-01-02T06:00:00.000Z');
+  });
+
+  it('keeps the same local hour across DST', () => {
+    const zone = 'Europe/Berlin';
+    const winter = dateKeyAtTimeInTimeZone('2026-01-15', 20, 0, zone);
+    const summer = dateKeyAtTimeInTimeZone('2026-07-15', 20, 0, zone);
+
+    expect(getDateTimeInTimeZone(winter, zone).hour).toBe(20);
+    expect(getDateTimeInTimeZone(summer, zone).hour).toBe(20);
+    // CET is UTC+1, CEST is UTC+2.
+    expect(winter.getUTCHours()).toBe(19);
+    expect(summer.getUTCHours()).toBe(18);
   });
 });

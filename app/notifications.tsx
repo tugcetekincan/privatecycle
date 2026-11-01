@@ -304,7 +304,7 @@ export default function NotificationsScreen() {
   const chooseLoggingTime = useCallback(() => {
     showChoice(
       'Logging time',
-      'Pick a time that usually works for you.',
+      "Pick a time that usually works for you. Times use your phone's local time zone.",
       ['08:00', '12:00', '18:00', '20:00', '22:00'].map((time) => ({
         text: time,
         onPress: () => void apply({ loggingTime: time }),
@@ -465,7 +465,7 @@ export default function NotificationsScreen() {
             testID="notifications-logging-time"
             icon={<Clock size={15} color={theme.colors.textSecondary} />}
             title="Time"
-            subtitle={settings.loggingTime}
+            subtitle={`${settings.loggingTime} (device time)`}
             onPress={chooseLoggingTime}
             right={<ChevronRight size={16} color={theme.colors.textSecondary} />}
           />

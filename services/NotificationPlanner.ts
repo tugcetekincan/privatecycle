@@ -3,7 +3,13 @@ import {
   CyclePhase,
   MENSTRUAL_PHASE_DAYS,
 } from './CycleModel';
-import { addDays, formatDateKey, parseDateKey } from './dateKey';
+import {
+  addDaysToDateKey,
+  dateKeyAtTimeInTimeZone,
+  formatDateKey,
+  getDateKeyInTimeZone,
+  parseDateKey,
+} from './dateKey';
 import {
   backupReminderCopy,
   fertileWindowCopy,
@@ -49,7 +55,13 @@ export interface PlannedNotification {
 
 export interface NotificationPlanInput {
   settings: NotificationSettings;
+  /** Reference "now" (absolute instant; local getters may be stale). */
   now: Date;
+  /**
+   * Live device timezone from `Intl` (not Hermes's cached default). When set,
+   * "today" and every trigger timestamp are computed in this zone.
+   */
+  timeZone?: string;
   /** Recorded period start day keys, ascending. */
   periodStarts: string[];
   /** Recorded ovulation day keys, ascending. */
@@ -92,18 +104,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MIN_LEAD_MS = 60 * 1000;
 
 const addDaysKey = (dateKey: string, days: number): string =>
-  formatDateKey(addDays(parseDateKey(dateKey), days));
+  addDaysToDateKey(dateKey, days);
 
-const atLocalTime = (dateKey: string, time: string): Date => {
+const atLocalTime = (dateKey: string, time: string, timeZone?: string): Date => {
   const [hour, minute] = time.split(':').map(Number);
+
+  if (timeZone) {
+    return dateKeyAtTimeInTimeZone(dateKey, hour, minute, timeZone);
+  }
+
   const date = parseDateKey(dateKey);
   date.setHours(hour, minute, 0, 0);
   return date;
 };
 
 /** Days until the next Sunday, 0 when today is Sunday. */
-const daysUntilSunday = (todayKey: string): number =>
-  (7 - parseDateKey(todayKey).getDay()) % 7;
+const daysUntilSunday = (todayKey: string): number => {
+  const [year, month, day] = todayKey.split('-').map(Number);
+  return (7 - new Date(Date.UTC(year, month - 1, day)).getUTCDay()) % 7;
+};
 
 const isFuture = (date: Date, now: Date): boolean =>
   date.getTime() > now.getTime() + MIN_LEAD_MS;
@@ -112,8 +131,9 @@ const isWithinHorizon = (date: Date, now: Date): boolean =>
   date.getTime() <= now.getTime() + HORIZON_DAYS * DAY_MS;
 
 export function buildNotificationPlan(input: NotificationPlanInput): PlannedNotification[] {
-  const { settings, now, periodStarts, ovulationDays, todayHasData } = input;
-  const todayKey = formatDateKey(now);
+  const { settings, now, periodStarts, ovulationDays, todayHasData, timeZone } = input;
+  // "Today" must come from the live Intl zone, not Hermes's cached Date zone.
+  const todayKey = timeZone ? getDateKeyInTimeZone(now, timeZone) : formatDateKey(now);
   const items: PlannedNotification[] = [];
   const seen = new Set<string>();
 
@@ -136,7 +156,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       add({
         id: `${NOTIFICATION_ID_PREFIX}period-${start}`,
         kind: 'period',
-        date: atLocalTime(dateKey, PERIOD_TIME),
+        date: atLocalTime(dateKey, PERIOD_TIME, timeZone),
         dateKey,
         title: copy.title,
         body: copy.body,
@@ -151,7 +171,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       add({
         id: `${NOTIFICATION_ID_PREFIX}late-${start}`,
         kind: 'latePeriod',
-        date: atLocalTime(dateKey, PERIOD_TIME),
+        date: atLocalTime(dateKey, PERIOD_TIME, timeZone),
         dateKey,
         title: copy.title,
         body: copy.body,
@@ -169,7 +189,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       add({
         id: `${NOTIFICATION_ID_PREFIX}fertile-${window.fertileWindowStart}`,
         kind: 'fertile',
-        date: atLocalTime(dateKey, PERIOD_TIME),
+        date: atLocalTime(dateKey, PERIOD_TIME, timeZone),
         dateKey,
         title: copy.title,
         body: copy.body,
@@ -197,7 +217,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
         add({
           id: `${NOTIFICATION_ID_PREFIX}phase-${entry.phase}-${entry.dateKey}`,
           kind: 'phase',
-          date: atLocalTime(entry.dateKey, PHASE_TIME),
+          date: atLocalTime(entry.dateKey, PHASE_TIME, timeZone),
           dateKey: entry.dateKey,
           title: copy.title,
           body: copy.body,
@@ -218,7 +238,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
         add({
           id: `${NOTIFICATION_ID_PREFIX}log-${dateKey}`,
           kind: 'logging',
-          date: atLocalTime(dateKey, settings.loggingTime),
+          date: atLocalTime(dateKey, settings.loggingTime, timeZone),
           dateKey,
           title: copy.title,
           body: copy.body,
@@ -234,7 +254,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
         add({
           id: `${NOTIFICATION_ID_PREFIX}log-${dateKey}`,
           kind: 'logging',
-          date: atLocalTime(dateKey, settings.loggingTime),
+          date: atLocalTime(dateKey, settings.loggingTime, timeZone),
           dateKey,
           title: copy.title,
           body: copy.body,
@@ -253,7 +273,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       add({
         id: `${NOTIFICATION_ID_PREFIX}weekly-${dateKey}`,
         kind: 'weeklySummary',
-        date: atLocalTime(dateKey, WEEKLY_SUMMARY_TIME),
+        date: atLocalTime(dateKey, WEEKLY_SUMMARY_TIME, timeZone),
         dateKey,
         title: copy.title,
         body: copy.body,
@@ -278,13 +298,15 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
     }
 
     if (dueMs !== null) {
-      let dateKey = formatDateKey(new Date(dueMs));
+      let dateKey = timeZone
+        ? getDateKeyInTimeZone(new Date(dueMs), timeZone)
+        : formatDateKey(new Date(dueMs));
       if (dateKey <= todayKey) dateKey = addDaysKey(todayKey, 1);
       const copy = backupReminderCopy(settings);
       add({
         id: `${NOTIFICATION_ID_PREFIX}backup-${dateKey}`,
         kind: 'backup',
-        date: atLocalTime(dateKey, BACKUP_TIME),
+        date: atLocalTime(dateKey, BACKUP_TIME, timeZone),
         dateKey,
         title: copy.title,
         body: copy.body,

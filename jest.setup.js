@@ -82,6 +82,7 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: {
     DATE: 'date',
     TIME_INTERVAL: 'timeInterval',
+    CALENDAR: 'calendar',
   },
   setNotificationHandler: jest.fn(),
   setNotificationChannelAsync: jest.fn(async () => null),
