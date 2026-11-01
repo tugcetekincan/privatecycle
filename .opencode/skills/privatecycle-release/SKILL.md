@@ -1,6 +1,6 @@
 ---
 name: PrivateCycle Release
-description: Shipping PrivateCycle — automatic nightly Actions artifacts, manual production releases, conventional-commit version rules, pre-flight checks, and verifying or fixing a published release. Use when asked to ship, release, tag a version, or check release health.
+description: Shipping PrivateCycle — automatic nightly prereleases, manual production releases, conventional-commit version rules, pre-flight checks, and verifying or fixing a published release. Use when asked to ship, release, tag a version, or check release health.
 ---
 
 # PrivateCycle releases
@@ -9,28 +9,30 @@ There are two entry points, sharing `.github/workflows/build-android.yml`:
 
 | Workflow | Trigger | Output |
 | --- | --- | --- |
-| **Nightly** (`ci.yml`) | Every push to `main` | Actions artifact containing `privatecycle_nightly_YYMMDD.apk` |
-| **Publish new version** (`publish.yml`) | Manual, on `main` | GitHub Release `vX.Y.Z` with only `PrivateCycle.apk` |
+| **Nightly** (`ci.yml`) | Every push to `main` | Prerelease `vX.Y.Z-nightly-YYMMDD-<sha>` with `Privatecycle-X.Y.Z-nightly-<sha>.apk` |
+| **Publish new version** (`publish.yml`) | Manual, on `main` | Release `vX.Y.Z` with `Privatecycle-X.Y.Z.apk` |
 
 Each run verifies and builds exactly one signed arm64 APK. Nightlies use
 `com.ncan.privatecycle.nightly` and install alongside production
-(`com.ncan.privatecycle`). Nightlies never create tags or releases.
+(`com.ncan.privatecycle`). Nightlies never advance or move production tags.
 
 ## Getting a nightly
 
-Open **Actions → Nightly → the successful run → Artifacts**. Download
-`privatecycle_nightly_YYMMDD` and unzip `privatecycle_nightly_YYMMDD.apk`.
-The date is UTC, captured at the start of the build. Artifacts are retained
-for 30 days, and the run summary links the download. Same-day builds have
-the same filename but belong to separate runs. Rerunning a run replaces its
-artifact. There are no path exclusions or cancellation of earlier runs.
+Open **Releases** and pick the newest prerelease, or **Actions → Nightly →
+the successful run** (its summary links the release). Download
+`Privatecycle-X.Y.Z-nightly-<sha>.apk`. `X.Y.Z` is the latest production
+version, the tag's date is UTC and the SHA is the commit the APK was built
+from. Every push gets its own tag, so same-day builds do not collide;
+rerunning a run edits that release and replaces its asset. Prereleases are
+never marked "Latest", so the Releases page still promotes production.
 
 ## Publishing production
 
 1. Verify the intended `main` commit (pre-flight below).
 2. Open **Actions → Publish new version → Run workflow**.
 3. Leave the branch on **main** and run it; other branches skip the job.
-4. Once successful, download `PrivateCycle.apk` from the new GitHub Release.
+4. Once successful, download `Privatecycle-X.Y.Z.apk` from the new GitHub
+   Release.
 
 The workflow computes the version automatically, builds only production,
 and publishes a changelog covering all commits since the previous release.
@@ -62,10 +64,17 @@ the release tag. If tags change during the build and alter the computed
 version, publishing fails rather than attaching an APK with a mismatched
 version; rerun to rebuild it.
 
-Nightlies reuse the latest release's versionName (or `app.json` before the
-first release), without advancing or tagging it. Every build stamps a fresh
-build-time `versionCode` (unix minutes via `ANDROID_VERSION_CODE`) so APKs
-can update earlier installations of the same identity.
+Nightlies reuse the latest production versionName (or `app.json` before the
+first release) and never advance it. Their tag appends
+`-nightly-YYMMDD-<sha>` and the APK name appends `-nightly-<sha>`.
+`release-version.mjs` ignores `*-nightly-*` tags when finding the base
+version, so prereleases can never leak into the next production bump.
+`scripts/release-metadata.mjs` owns the tag/filename format for both variants
+and is unit-tested.
+
+Every build stamps a fresh build-time `versionCode` (unix minutes via
+`ANDROID_VERSION_CODE`) so APKs can update earlier installations of the same
+identity.
 
 ## Pre-flight
 
@@ -89,19 +98,21 @@ with `actionlint`; do not use the publishing workflow as a test loop.
 3. Prebuild the selected identity; restore variant-specific app outputs and
    shared native-library/Gradle/ccache caches.
 4. Generate missing New Architecture codegen, then `assembleRelease`.
-5. Upload the nightly Actions artifact **or** publish the production release.
+5. Publish the release: a nightly prerelease or the production release.
 
 Required repository secrets (unchanged): `ANDROID_KEYSTORE_BASE64`,
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
-The nightly caller has only `contents: read`; production grants
-`contents: write` for publication.
+Both callers grant `contents: write`; the nightly caller only uses it to
+create or update its own prerelease tag.
 
 ## After a build
 
-- Nightly: verify the run's artifact contains the correctly dated APK and
-  installs as PrivateCycle Nightly.
-- Production: follow the summary's release link; check `PrivateCycle.apk`,
-  changelog and version bump. New releases contain no nightly APK.
+- Nightly: follow the summary's release link; check the tag, the versioned
+  APK asset and that the release is marked **Pre-release**. It installs as
+  PrivateCycle Nightly.
+- Production: follow the summary's release link; check
+  `Privatecycle-X.Y.Z.apk`, changelog, version bump and that it is **not**
+  marked pre-release. Nightlies are separate prereleases.
 - Usual build failures: codegen ordering and dependency alignment when
   Expo/RN versions change.
 
@@ -109,13 +120,13 @@ The nightly caller has only `contents: read`; production grants
 
 - Failed build: rerun the workflow run for that commit.
 - Bad published assets or notes: with explicit approval, rerun the original
-  **Publish new version** run. It reuses the version, edits notes and
-  replaces `PrivateCycle.apk`.
+  run (Nightly or **Publish new version**). The tag is derived from the
+  commit, so a rerun edits the same release and replaces its APK.
 - Wrong version, or a release that should not exist: deleting or re-tagging
-  a published release (`gh release delete vX.Y.Z --cleanup-tag`) needs
-  explicit approval; then rerun the production workflow for that commit.
-- Historical releases and their assets are left as-is. New nightlies live
-  only in Actions artifacts, not rolling prereleases or versioned releases.
+  a published release (`gh release delete <tag> --cleanup-tag`) needs
+  explicit approval; then rerun the workflow for that commit.
+- Historical releases and their assets are left as-is. Nightlies are
+  cumulative prereleases, one per commit.
 
 ## Version notes
 

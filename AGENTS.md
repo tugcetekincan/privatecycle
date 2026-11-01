@@ -67,7 +67,8 @@ services/               DataService (SQLite owner), BackupService,
                         privateAccess/ (PIN hash + platform storage), devGlobals
 scripts/                web harness (see below), debug probe,
                         make-notification-icon.mjs (96px Android icon),
-                        release-version.mjs (production release version)
+                        release-version.mjs (production release version),
+                        release-metadata.mjs (CI tag + APK filename)
 __tests__/              Jest suites
 maestro/                on-device smoke flow
 .opencode/skills/       agent runbooks (keep updated)
@@ -120,7 +121,7 @@ the current branch. Commit messages are one-liners — imperative and scoped
 the diff and the report. Don't leave verified work sitting uncommitted or
 unpushed — once the user says yes, land it promptly. If the user has
 explicitly pre-authorized committing, the round trip can be skipped. Pushes
-build nightly artifacts automatically; production releases are manual through
+build nightly prereleases automatically; production releases are manual through
 Actions → Publish new version. Deleting, retagging or overwriting a published
 release needs explicit approval — see `privatecycle-release`.
 
@@ -341,7 +342,7 @@ is a gitignored drop box for a user export — the app's normal
 - Keep changes consistent with the surrounding style; no drive-by refactors.
 - Do not edit `node_modules/`, `.expo/`, `artifacts/`, `android/`, `ios/`.
 - Deleting or overwriting published releases/tags needs explicit approval
-  (`privatecycle-release`); per-push nightly artifacts are automatic.
+  (`privatecycle-release`); per-push nightly prereleases are automatic.
 
 ## Definition of done
 
@@ -364,16 +365,23 @@ A change is done when:
 ## CI
 
 Every push to `main` runs `.github/workflows/ci.yml`: typecheck, Jest, then
-builds only the signed nightly APK (arm64-v8a, release keystore). The
-**Nightly** Actions run has an artifact named `privatecycle_nightly_YYMMDD`,
-whose ZIP contains `privatecycle_nightly_YYMMDD.apk` (UTC build date, retained
-for 30 days). Each run owns its artifacts, so same-day pushes do not collide.
-There are no path exclusions or cancellations of earlier nightly runs.
-Nightlies never create tags or GitHub Releases.
+builds only the signed nightly APK (arm64-v8a, release keystore) and publishes
+it as a GitHub **prerelease**:
+
+- tag `vX.Y.Z-nightly-YYMMDD-<sha>` (`X.Y.Z` is the latest production version,
+  the date is UTC, the SHA is 7 characters);
+- asset `Privatecycle-X.Y.Z-nightly-<sha>.apk`.
+
+The SHA suffix gives every push its own release, so same-day builds never
+collide; rerunning a run edits that release and replaces its asset.
+Prereleases never take the "Latest" badge and never advance production
+versioning. There are no path exclusions or cancellations of earlier nightly
+runs, and nightlies never move production tags.
 
 The nightly identity is `com.ncan.privatecycle.nightly`, installable next to
-the stable app to test with imported real data. It reuses the latest release
-version as `versionName` (or `app.json` before the first release).
+the stable app to test with imported real data. It reuses the latest production
+version as `versionName` (or `app.json` before the first release); the nightly
+suffix lives only in the release tag and APK filename.
 
 Every build also stamps a build-time `versionCode` (unix minutes, wired
 through `ANDROID_VERSION_CODE` in `app.config.js`), so each APK is
@@ -391,9 +399,9 @@ immutable and an old key would keep restoring the old layout.
 
 Production is manual: **Actions → Publish new version → Run workflow → main**
 (`.github/workflows/publish.yml`). It verifies, builds only the stable
-`com.ncan.privatecycle` app, and publishes `PrivateCycle.apk` on a GitHub
-Release `vX.Y.Z`. Production runs are serialized and cannot be cancelled by
-nightly pushes. Selecting another branch skips the production job.
+`com.ncan.privatecycle` app, and publishes `Privatecycle-X.Y.Z.apk` on a
+GitHub Release `vX.Y.Z`. Production runs are serialized and cannot be cancelled
+by nightly pushes. Selecting another branch skips the production job.
 
 The version comes from `scripts/release-version.mjs`, using all conventional
 commits since the previous production release tag: `feat:` bumps minor, a
@@ -433,7 +441,7 @@ not trigger builds. Bump rules, verification and recovery details:
   ("PrivateCycle Dev", blue icon, debug-signed dev client,
   `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
   ("PrivateCycle Nightly", amber icon, release-signed, downloaded from the
-  Nightly Actions artifacts). They
+  Nightly prereleases). They
   coexist on one device with separate data sandboxes — import a backup
   exported from the stable app to test with realistic data. `android/`
   targets one identity at a time: `android:dev` refuses to run when it was

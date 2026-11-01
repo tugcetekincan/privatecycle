@@ -55,7 +55,7 @@ has its own applicationId and data sandbox, so they coexist on one device:
 | Icon tint | pink | blue | amber |
 | Signed with | release key (CI) | debug key | release key (CI) |
 | JS source | embedded | Metro (dev client) | embedded |
-| How to get it | newest release | `npm run android:dev` | Nightly Actions artifact |
+| How to get it | newest production release | `npm run android:dev` | newest nightly prerelease |
 
 Local dev builds:
 
@@ -65,11 +65,10 @@ npm run android:dev            # build + install + start Metro (dev client)
 ```
 
 For testing features against imported real data **without a local build**,
-download the latest **Actions → Nightly** artifact and unzip
-`privatecycle_nightly_YYMMDD.apk` (rebuilt on every push to `main`; UTC date,
-artifacts retained for 30 days). Export a backup from
-the stable app (share sheet → Files), then import it in the nightly app via
-Settings → Import Backup. On the emulator
+download `Privatecycle-X.Y.Z-nightly-<sha>.apk` from the newest nightly
+prerelease (rebuilt on every push to `main`; the tag carries the UTC date, one
+release per commit). Export a backup from the stable app (share sheet → Files), then
+import it in the nightly app via Settings → Import Backup. On the emulator
 `adb push backup.json /sdcard/Download/` also works.
 
 - `android:dev` refuses to run when `android/` was generated for another
@@ -82,10 +81,10 @@ Settings → Import Backup. On the emulator
 - Switching back to the base identity locally:
   `npm run prebuild:android` then `npm run android` (or plain
   `npx expo run:android` after regenerating).
-- Release sanity check: pushes build only the nightly Actions artifact
-  (`ci.yml`); **Actions → Publish new version** builds only production and
-  publishes its versioned release (`publish.yml`). Both use
-  `build-android.yml`; don't reproduce that locally unless debugging CI.
+- Release sanity check: pushes publish only a nightly prerelease (`ci.yml`);
+  **Actions → Publish new version** builds only production and publishes its
+  versioned release (`publish.yml`). Both use `build-android.yml`; don't
+  reproduce that locally unless debugging CI.
 
 ## Screenshots and inspection
 
