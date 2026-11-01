@@ -44,6 +44,13 @@ const samplePrivate = (date: string) => ({
 });
 
 describe('BackupService', () => {
+  it('treats dismissing the picker as cancellation without restoring data', async () => {
+    const restore = jest.spyOn(BackupService, 'restoreFromBackup');
+    const result = await BackupService.importBackup();
+    expect(result).toMatchObject({ success: false, cancelled: true });
+    expect(restore).not.toHaveBeenCalled();
+    restore.mockRestore();
+  });
   beforeEach(() => {
     mockedDataService.getAllDailyData.mockResolvedValue({});
     mockedDataService.getIntimateData.mockResolvedValue({});

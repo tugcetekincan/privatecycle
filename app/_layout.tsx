@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -20,12 +20,16 @@ function RootLayoutContent() {
   useNotifications(isCompleted && isDevSeedReady);
 
   if (!isCompleted || !isDevSeedReady) {
-    return null;
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, backgroundColor: theme.colors.background }}>
+      <ActivityIndicator color={theme.colors.primary} accessibilityLabel="Opening your calendar" />
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>Opening your calendar…</Text>
+      <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+    </View>;
   }
   
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>

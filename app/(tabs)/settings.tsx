@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Switch,
   ActivityIndicator,
   Platform,
@@ -31,6 +30,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { DataService } from '@/services/DataService';
+import { summarizeCycleLengths } from '@/services/CycleTrends';
 import { BackupService, BackupSettings } from '@/services/BackupService';
 import { NotificationService } from '@/services/NotificationService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
@@ -64,7 +64,7 @@ export default function SettingsTab() {
     showChoice, 
     DialogComponent 
   } = useDialog();
-  const [privateMode, setPrivateMode] = useState(false);
+  const [cycleInfo, setCycleInfo] = useState<{ average: number | null; lastPeriod: number | null; cycles: number }>({ average: null, lastPeriod: null, cycles: 0 });
   const [loading, setLoading] = useState(false);
   const [backupSettings, setBackupSettings] = useState<BackupSettings>({
     autoBackupEnabled: false,
@@ -86,6 +86,7 @@ export default function SettingsTab() {
   useFocusEffect(
     useCallback(() => {
       void refreshNotifications();
+      void loadBackupData();
     }, [refreshNotifications])
   );
 
@@ -117,6 +118,9 @@ export default function SettingsTab() {
       const stats = await BackupService.getBackupStats();
       setBackupSettings(settings);
       setBackupStats(stats);
+      const data = await DataService.getInsights();
+      const summary = summarizeCycleLengths(data.periodStarts);
+      setCycleInfo({ average: summary.average === null ? null : Math.round(summary.average), lastPeriod: data.lastPeriodLength || null, cycles: summary.points.length });
     } catch (error) {
       console.error('Error loading backup data:', error);
     }
@@ -170,6 +174,7 @@ export default function SettingsTab() {
         setLoading(true);
         try {
           const result = await BackupService.importBackup();
+          if (result.cancelled) return;
           if (result.success) {
             await loadBackupData();
             void NotificationService.syncSchedule();
@@ -237,6 +242,7 @@ export default function SettingsTab() {
         },
         { 
           text: 'Delete Everything',
+          style: 'destructive',
           onPress: async () => {
             try {
               await BackupService.clearAllData();
@@ -257,7 +263,7 @@ export default function SettingsTab() {
   const showAbout = () => {
     const version = Constants.expoConfig?.version ?? 'unknown';
     showInfo(
-      'About Period Tracker',
+      'About PrivateCycle',
       `A simple and private period tracking app to help you monitor your menstrual cycle, symptoms, and overall health patterns.\n\nVersion ${version}`
     );
   };
@@ -320,7 +326,7 @@ export default function SettingsTab() {
   const styles = createStyles(theme);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScreenFade>
         <ScrollView style={styles.scrollView}>
           <ScreenHeader
@@ -348,6 +354,7 @@ export default function SettingsTab() {
               right={
                 <Switch
                   testID="settings-darkmode-switch"
+                  accessibilityLabel="Dark mode"
                   value={isDark}
                   onValueChange={toggleTheme}
                   trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -357,32 +364,32 @@ export default function SettingsTab() {
             />
           </Card>
 
-          <SectionHeader title="CYCLE SETTINGS" dotColor={theme.colors.warning} />
+          <SectionHeader title="YOUR CYCLE" dotColor={theme.colors.warning} />
           <Card style={styles.sectionCard} padding={16}>
             <Text style={[typography.cardTitle, styles.cardTitle, { color: theme.colors.text }]}>
               Cycle information
             </Text>
             <Text style={[typography.caption, styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-              Your current defaults
+              {cycleInfo.cycles > 0 ? `From your last ${cycleInfo.cycles} recorded ${cycleInfo.cycles === 1 ? 'cycle' : 'cycles'}` : 'Log two period starts to see your average'}
             </Text>
             <View style={styles.cycleInfo}>
               <View style={styles.cycleInfoItem}>
                 <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
                   Average cycle length
                 </Text>
-                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>28 days</Text>
+                <Text testID="settings-average-cycle" style={[typography.rowTitle, { color: theme.colors.primary }]}>{cycleInfo.average === null ? '—' : `${cycleInfo.average} days`}</Text>
               </View>
               <View style={styles.cycleInfoItem}>
                 <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
-                  Period length
+                  Last period length
                 </Text>
-                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>5 days</Text>
+                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>{cycleInfo.lastPeriod === null ? '—' : `${cycleInfo.lastPeriod} days`}</Text>
               </View>
               <View style={styles.cycleInfoItem}>
                 <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
-                  Luteal phase
+                  Luteal estimate
                 </Text>
-                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>14 days</Text>
+                <Text style={[typography.rowTitle, { color: theme.colors.textSecondary }]}>~14 days</Text>
               </View>
             </View>
           </Card>
@@ -444,6 +451,7 @@ export default function SettingsTab() {
                 right={
                   <Switch
                     testID="settings-auto-backup-switch"
+                    accessibilityLabel="Automatic backups"
                     value={backupSettings.autoBackupEnabled}
                     onValueChange={(value) => updateBackupSettings({ autoBackupEnabled: value })}
                     trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -455,6 +463,7 @@ export default function SettingsTab() {
 
             {!isWeb && backupSettings.autoBackupEnabled && (
               <SettingsRow
+                testID="settings-backup-frequency"
                 icon={<Clock size={15} color={theme.colors.textSecondary} />}
                 title="Backup frequency"
                 subtitle={`Currently: ${backupSettings.autoBackupFrequency}`}
@@ -486,6 +495,7 @@ export default function SettingsTab() {
             {!isWeb && (
               <SettingsRow
                 testID="settings-create-backup"
+                disabled={loading}
                 icon={<HardDrive size={15} color={theme.colors.primary} />}
                 tone="primary"
                 title="Create backup"
@@ -503,6 +513,7 @@ export default function SettingsTab() {
 
             <SettingsRow
               testID="settings-export"
+              disabled={loading}
               icon={<Download size={15} color={theme.colors.primary} />}
               tone="primary"
               title="Export backup"
@@ -520,6 +531,7 @@ export default function SettingsTab() {
             <SettingsRow
               last={isWeb}
               testID="settings-import"
+              disabled={loading}
               icon={<Upload size={15} color={theme.colors.success} />}
               tone="success"
               title="Import backup"
@@ -659,7 +671,7 @@ export default function SettingsTab() {
         </ScrollView>
       </ScreenFade>
       <DialogComponent />
-    </SafeAreaView>
+    </View>
   );
 }
 

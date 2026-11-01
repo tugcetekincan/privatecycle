@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
 } from 'react-native';
 import { Lightbulb } from 'lucide-react-native';
@@ -193,7 +192,7 @@ export default function InsightsTab() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScreenFade>
         <ScrollView style={styles.scrollView}>
           <ScreenHeader
@@ -278,14 +277,14 @@ export default function InsightsTab() {
                   </View>
                   <View style={styles.patternCopy}>
                     <Text style={styles.patternTitle}>{pattern.title}</Text>
-                    <Text style={styles.patternBody}>{pattern.body}</Text>
-                    <Pill label={pattern.sampleLabel} tone="neutral" style={styles.samplePill} />
                   </View>
                   <View style={styles.patternStat}>
                     <Text style={styles.patternStatValue}>{pattern.statValue}</Text>
                     <Text style={styles.patternStatLabel}>{pattern.statLabel}</Text>
                   </View>
                 </View>
+                <Text style={styles.patternBody}>{pattern.body}</Text>
+                <Pill label={pattern.sampleLabel} tone="neutral" style={styles.samplePill} />
 
                 {renderPatternVisual(pattern)}
 
@@ -322,14 +321,15 @@ export default function InsightsTab() {
                 <TouchableOpacity
                   key={phase}
                   testID={`insights-phase-tab-${phase}`}
-                  style={[styles.phaseTab, isSelected && styles.phaseTabSelected]}
+                  style={[styles.phaseTab, isSelected && { backgroundColor: theme.colors.surface, borderColor: phaseColors[phase] }]}
                   onPress={() => setSelectedPhase(phase)}
-                  accessibilityRole="button"
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${PHASE_LABELS[phase]}${isCurrent ? ', current phase' : ''}`}
                   accessibilityState={{ selected: isSelected }}>
                   <Text
                     style={[
                       styles.phaseTabText,
-                      isSelected && styles.phaseTabTextSelected,
+                      isSelected && { color: theme.colors.text, fontWeight: '800' },
                     ]}>
                     {PHASE_LABELS[phase]}
                   </Text>
@@ -337,7 +337,7 @@ export default function InsightsTab() {
                     <View
                       style={[
                         styles.currentPhaseDot,
-                        isSelected && styles.currentPhaseDotSelected,
+                        { backgroundColor: phaseColors[phase] },
                       ]}
                     />
                   )}
@@ -391,7 +391,7 @@ export default function InsightsTab() {
         </Card>
         </ScrollView>
       </ScreenFade>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -430,7 +430,7 @@ const createStyles = (theme: any) =>
       fontSize: 9,
       fontWeight: '800',
       letterSpacing: 0.4,
-      color: theme.colors.primary,
+      color: theme.colors.primaryText,
     },
     todayTitle: {
       ...typography.todayTitle,
@@ -464,7 +464,7 @@ const createStyles = (theme: any) =>
     },
     todayTipsLabel: {
       ...typography.micro,
-      color: theme.colors.teal,
+      color: theme.colors.tealText,
     },
     todayTipRow: {
       flexDirection: 'row',
@@ -482,7 +482,7 @@ const createStyles = (theme: any) =>
       fontSize: 9,
       fontWeight: '800',
       letterSpacing: 0.4,
-      color: theme.colors.teal,
+      color: theme.colors.tealText,
     },
     todayTipText: {
       ...typography.caption,
@@ -499,7 +499,7 @@ const createStyles = (theme: any) =>
     },
     focusLabel: {
       ...typography.micro,
-      color: theme.colors.primary,
+      color: theme.colors.primaryText,
     },
     focusTitle: {
       ...typography.rowTitle,
@@ -521,7 +521,7 @@ const createStyles = (theme: any) =>
     },
     patternTop: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       gap: 9,
     },
     patternIcon: {
@@ -546,10 +546,9 @@ const createStyles = (theme: any) =>
       color: theme.colors.text,
     },
     patternBody: {
-      ...typography.caption,
-      lineHeight: 17,
+      ...typography.body,
       color: theme.colors.textSecondary,
-      marginTop: 2,
+      marginTop: 10,
     },
     samplePill: {
       marginTop: 6,
@@ -585,7 +584,7 @@ const createStyles = (theme: any) =>
       marginTop: 4,
     },
     miniPhaseLegendText: {
-      fontSize: 8,
+      fontSize: 10,
       color: theme.colors.textSecondary,
     },
     compareBars: {
@@ -598,8 +597,8 @@ const createStyles = (theme: any) =>
       gap: 7,
     },
     compareLabel: {
-      width: 62,
-      fontSize: 9,
+      width: 70,
+      fontSize: 11,
       color: theme.colors.textSecondary,
     },
     compareTrack: {
@@ -616,7 +615,7 @@ const createStyles = (theme: any) =>
     compareValue: {
       width: 24,
       textAlign: 'right',
-      fontSize: 9,
+      fontSize: 11,
       fontWeight: '700',
       color: theme.colors.text,
     },
@@ -660,7 +659,7 @@ const createStyles = (theme: any) =>
       color: theme.colors.textSecondary,
     },
     patternTip: {
-      flexDirection: 'row',
+      flexDirection: 'column',
       gap: 6,
       alignItems: 'flex-start',
       borderTopWidth: 1,
@@ -672,7 +671,7 @@ const createStyles = (theme: any) =>
       fontSize: 9,
       fontWeight: '800',
       letterSpacing: 0.4,
-      color: theme.colors.primary,
+      color: theme.colors.primaryText,
     },
     patternTipText: {
       flex: 1,
@@ -685,14 +684,20 @@ const createStyles = (theme: any) =>
     },
     phaseGuideCard: {
       marginHorizontal: 20,
+      marginBottom: 24,
     },
     phaseTabsRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 6,
       marginBottom: 14,
     },
     phaseTab: {
       flex: 1,
+      minHeight: 44,
+      minWidth: 66,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       paddingVertical: 8,
       paddingHorizontal: 2,
       borderRadius: 8,
@@ -730,6 +735,7 @@ const createStyles = (theme: any) =>
     },
     guidePhaseRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
       alignItems: 'baseline',
       gap: 8,
@@ -787,7 +793,7 @@ const createStyles = (theme: any) =>
       fontSize: 9,
       fontWeight: '800',
       letterSpacing: 0.5,
-      color: theme.colors.primary,
+      color: theme.colors.primaryText,
     },
     tipTitle: {
       ...typography.rowTitle,
@@ -801,8 +807,8 @@ const createStyles = (theme: any) =>
       marginTop: 2,
     },
     guideNote: {
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: 11,
+      lineHeight: 16,
       color: theme.colors.textSecondary,
       fontStyle: 'italic',
       marginTop: 12,

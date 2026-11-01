@@ -4,8 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
-  Dimensions,
 } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { TrendingUp } from 'lucide-react-native';
@@ -39,8 +37,6 @@ import { radii, spacing, typography } from '@/design/tokens';
 
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
 const OVULATION_COLOR = '#009688';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 const CHART_HEIGHT = 84;
 const CHART_LABEL_HEIGHT = 18;
@@ -131,7 +127,7 @@ function MoodTrendChart({
   };
 
   return (
-    <Svg width={width} height={height}>
+    <Svg width="100%" height={height} viewBox={`-4 -4 ${width + 8} ${height + 8}`} accessibilityLabel="Mood from rough to great over the last 60 days">
       {series.map((point, index) =>
         point.isPeriod ? (
           <Rect
@@ -244,7 +240,7 @@ export default function OverviewTab() {
     cycleSummary.average !== null ? barHeight(cycleSummary.average) : null;
 
   const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
-  const chartWidth = screenWidth - 80;
+  const chartWidth = 310;
   const cycleMeta =
     stats.totalPeriods > 0
       ? `${stats.totalPeriods} ${plural(
@@ -259,7 +255,7 @@ export default function OverviewTab() {
       : 'No periods yet';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScreenFade>
         <ScrollView style={styles.scrollView}>
           <ScreenHeader
@@ -294,7 +290,7 @@ export default function OverviewTab() {
                   <View
                     style={[styles.phasePillDot, { backgroundColor: phaseColors[currentStatus.phase] }]}
                   />
-                  <Text style={[styles.phasePillText, { color: phaseColors[currentStatus.phase] }]}>
+                  <Text style={[styles.phasePillText, { color: theme.colors.text }]}>
                     {PHASE_LABELS[currentStatus.phase]} phase
                   </Text>
                 </View>
@@ -411,6 +407,7 @@ export default function OverviewTab() {
                 <View style={styles.cycleBars}>
                   {cycleSummary.points.map((point, index) => (
                     <View key={point.start} style={styles.cycleBarColumn}>
+                      <Text style={[typography.caption, { color: theme.colors.textSecondary, marginBottom: 4 }]}>{point.length}</Text>
                       <View
                         style={[
                           styles.cycleBar,
@@ -662,7 +659,7 @@ export default function OverviewTab() {
         </View>
         </ScrollView>
       </ScreenFade>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -860,12 +857,14 @@ const createStyles = (theme: any) =>
     },
     cardHeader: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: 8,
     },
     cardTitleRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: 7,
     },
@@ -901,12 +900,12 @@ const createStyles = (theme: any) =>
       color: theme.colors.warning,
     },
     cycleChart: {
-      height: CHART_HEIGHT + CHART_LABEL_HEIGHT,
+      height: CHART_HEIGHT + CHART_LABEL_HEIGHT + 24,
       position: 'relative',
       marginTop: 6,
     },
     cycleBars: {
-      height: CHART_HEIGHT,
+      height: CHART_HEIGHT + 24,
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 8,
@@ -998,6 +997,7 @@ const createStyles = (theme: any) =>
     },
     symptomFooter: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: 8,
@@ -1035,18 +1035,18 @@ const createStyles = (theme: any) =>
       color: theme.colors.textSecondary,
     },
     symptomFootnote: {
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: 11,
+      lineHeight: 16,
       color: theme.colors.textSecondary,
       fontStyle: 'italic',
       marginTop: 9,
     },
     trendWrap: {
-      alignItems: 'center',
+      alignItems: 'stretch',
       marginTop: 4,
     },
     trendCaption: {
-      fontSize: 10,
+      fontSize: 11,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       marginTop: 6,

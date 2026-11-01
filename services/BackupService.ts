@@ -217,7 +217,7 @@ export class BackupService {
     }
   }
 
-  static async importBackup(filePath?: string): Promise<{ success: boolean; message: string; stats?: any }> {
+  static async importBackup(filePath?: string): Promise<{ success: boolean; message: string; cancelled?: boolean; stats?: any }> {
     try {
       let backupFilePath = filePath;
       
@@ -228,7 +228,7 @@ export class BackupService {
         });
 
         if (result.canceled) {
-          return { success: false, message: 'Import cancelled' };
+          return { success: false, cancelled: true, message: 'Import cancelled' };
         }
 
         if (!result.assets[0]?.uri) {
@@ -536,4 +536,4 @@ export class BackupService {
   }
 
 
-} 
+}

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   AppState,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   AlertTriangle,
@@ -316,10 +316,12 @@ export default function NotificationsScreen() {
   const reminderSwitch = (
     value: boolean,
     onChange: (value: boolean) => void,
-    testID: string
+    testID: string,
+    label: string
   ) => (
     <Switch
       testID={testID}
+      accessibilityLabel={label}
       value={value}
       onValueChange={onChange}
       disabled={busy}
@@ -384,7 +386,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.periodReminder,
           (value) => void apply({ periodReminder: value }),
-          'notifications-period-switch'
+          'notifications-period-switch',
+          'Period reminder'
         )}
       />
       {settings.periodReminder && (
@@ -406,7 +409,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.lateCheckIn,
           (value) => void apply({ lateCheckIn: value }),
-          'notifications-late-switch'
+          'notifications-late-switch',
+          'Late-period check-in'
         )}
       />
       <SettingsRow
@@ -418,7 +422,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.fertileWindow,
           (value) => void apply({ fertileWindow: value }),
-          'notifications-fertile-switch'
+          'notifications-fertile-switch',
+          'Fertile-window alert'
         )}
       />
       <SettingsRow
@@ -431,7 +436,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.phaseTips,
           (value) => void apply({ phaseTips: value }),
-          'notifications-phase-switch'
+          'notifications-phase-switch',
+          'Phase-change tips'
         )}
       />
     </Card>
@@ -448,7 +454,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.loggingReminder,
           (value) => void apply({ loggingReminder: value }),
-          'notifications-logging-switch'
+          'notifications-logging-switch',
+          'Logging reminder'
         )}
       />
       {settings.loggingReminder && (
@@ -480,7 +487,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.backupReminder,
           (value) => void apply({ backupReminder: value }),
-          'notifications-backup-switch'
+          'notifications-backup-switch',
+          'Backup reminder'
         )}
       />
       <SettingsRow
@@ -493,7 +501,8 @@ export default function NotificationsScreen() {
         right={reminderSwitch(
           settings.weeklySummary,
           (value) => void apply({ weeklySummary: value }),
-          'notifications-weekly-switch'
+          'notifications-weekly-switch',
+          'Weekly summary'
         )}
       />
     </Card>
@@ -511,7 +520,7 @@ export default function NotificationsScreen() {
         <Shield size={15} color={theme.colors.success} />
       </IconTile>
       <View style={styles.privacyCopy}>
-        <Text style={[typography.rowTitle, { color: theme.colors.success }]}>
+        <Text style={[typography.rowTitle, { color: theme.colors.successText }]}>
           Private by design
         </Text>
         <Text style={[typography.caption, styles.privacyText, { color: theme.colors.textSecondary }]}>
@@ -540,6 +549,7 @@ export default function NotificationsScreen() {
           </Text>
           <TouchableOpacity
             testID="notifications-open-settings"
+            style={{ minHeight: 44, justifyContent: 'center' }}
             onPress={() => void NotificationService.openSystemSettings()}
             accessibilityRole="button">
             <Text style={[typography.caption, styles.noticeLink, { color: theme.colors.warning }]}>
@@ -673,7 +683,8 @@ export default function NotificationsScreen() {
                   right={reminderSwitch(
                     settings.enabled,
                     (value) => void handleMasterToggle(value),
-                    'notifications-master-switch'
+                    'notifications-master-switch',
+                    'Notifications'
                   )}
                 />
               </Card>
@@ -745,15 +756,16 @@ const createStyles = (theme: any) =>
       gap: spacing.sm,
       paddingHorizontal: spacing.xxl,
       paddingTop: spacing.xxl,
-      paddingBottom: spacing.xxs,
+      paddingBottom: spacing.lg,
     },
     backButton: {
-      width: 34,
-      height: 34,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       alignItems: 'center',
       justifyContent: 'center',
       marginLeft: -spacing.xs,
+      backgroundColor: theme.colors.secondary,
     },
     headerCopy: {
       flex: 1,
