@@ -41,6 +41,8 @@ components/             CustomDialog (+ demo), MoodPicker (faces + tags),
 components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
                         IconTile, SettingsRow, EmptyState, PrimaryButton,
                         ScreenFade (the shared design-language primitives)
+                        Sheet (shared daily/private/PIN entry sheet with safe
+                        footer insets and reduced-motion support)
 design/                 DESIGN.md (authoritative visual language), tokens.ts,
                         and the HTML design studies
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
@@ -307,6 +309,13 @@ is a gitignored drop box for a user export — the app's normal
 - Add `testID` to every new interactive element, kebab-case
   (`area-element` / `area-element-{id}`). See the verify skill for the current
   inventory. Text selectors are a last resort.
+- Entry modals use `components/ui/Sheet.tsx`: a scrollable body, 44px close
+  control and sticky footer above Android's navigation inset. Use `compact`
+  for PIN changes. Keep save errors in the sheet so entries can be retried.
+- Semantic colored labels use `primaryText` / `successText` / `warningText` /
+  `tealText` for contrast. Original semantic colors remain the chart/mark fills.
+- `useReducedMotion` responds to live OS preference changes; shared sheets,
+  dialogs, screen fades and calendar month navigation all respect it.
 - New screens must use the design language doc's new-feature checklist:
   ScreenHeader, SectionHeader, Card tokens, literal uppercase labels, semantic
   phase colors, honest empty states and sample sizes.

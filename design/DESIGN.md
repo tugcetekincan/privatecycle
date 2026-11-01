@@ -73,6 +73,11 @@ These are intentional product choices, not styling accidents:
 
 ### Phase semantics
 
+Small colored text uses the semantic ink tokens (`primaryText`, `successText`,
+`warningText`, `tealText`): deeper shades in light mode, lighter shades in dark
+mode. Keep original phase colors for bars, dots and fills. This preserves the
+palette while keeping labels readable on soft surfaces.
+
 Use these consistently in the calendar, charts, legends and Insights:
 
 | Phase | Color |
@@ -258,7 +263,8 @@ The calendar is a signature surface. See
 
 - One 18px card contains: month nav, today pill, weekday row, day grid and
   legend.
-- Month nav: 30×30 `secondary` chevrons, month title 18/800.
+- Month nav: 44×44 `secondary` chevrons, month title 18/800. Outside the
+  current month, offer a labelled "Back to today" action.
 - Today pill: compact 999 pill, `todaySoft` background, `today` text, 9/800.
 - Weekday row: 9/800 uppercase, muted, 7 equal columns.
 - Day cell: 41px row, 34×34 squircle (radius 11), 13/600.
@@ -311,11 +317,12 @@ The calendar is a signature surface. See
 ### Settings
 
 1. Screen header: "Settings", "Preferences, privacy and backups", gear tile.
-2. Section label + card per group: App settings, Cycle settings, Privacy,
+2. Section label + card per group: App settings, Your cycle, Privacy,
    Support, Backup & restore.
 3. Rows use 30px icon tiles, 13/700 title, 11 muted subtitle, switch or
    chevron on the right.
-4. Cycle info card uses three list rows with primary values.
+4. Cycle info card uses recorded average cycle and last-period lengths with
+   `—` for missing data. Label the standard luteal estimate explicitly.
 5. Privacy note is a tinted success card with a shield icon, not an emoji.
 
 ### Notifications
@@ -335,12 +342,18 @@ The calendar is a signature surface. See
 
 ### Day modal
 
-- Bottom sheet, 20 top radius, `background`, 80% height, slide animation.
+- Use shared `Sheet`: 18 top radius, `background`, 86% height capped below
+  the status bar, quiet slide (none with reduced motion), and a small handle.
 - Header: date 18/800 + close button; 1px divider.
 - MoodPicker card, Period card, Ovulation card, Symptoms card.
 - Sticky footer with a primary Save button; the rest of the form uses the
   shared card/pill/row language.
+- Footer accounts for the Android system navigation inset. Close is 44×44;
+  errors stay beside Save, with selections preserved for retry. Use this same
+  sheet for private entries and PIN changes.
 - Keep the existing auto-save behavior for mood.
+- Mood shows "Saved" only after storage succeeds. Selected feeling chips have
+  a separate, reachable 44px clear action, rather than an overlapping badge.
 
 ### Private gate / private calendar
 

@@ -124,19 +124,31 @@ old local time until it is opened (see AGENTS.md).
 targeting the dev variant. Validated on the `privatecycle` AVD via
 `npm run e2e:mobile` (≈1 min). `maestro/private-calendar.yaml` stops and
 relaunches the app, then covers the private calendar: PIN setup or unlock with
-`1234`, lock, re-unlock, and leaves the calendar open for the FLAG_SECURE check
-below. Run with:
+`1234`, a private entry with the native keyboard, PIN change, lock and re-unlock.
+It leaves the calendar open for the FLAG_SECURE check below.
+`maestro/polish.yaml` seeds the dev sandbox and captures light/dark screens,
+notification setup/test delivery, backup creation, the share sheet and document
+picker cancellation. Start it in light mode. `maestro/large-text.yaml` captures
+the main screens, entry sheet and dialog with enlarged Android text.
+`maestro/notification-permission.yaml` resets notification permission in the
+dev sandbox, asserts the real Android permission prompt, and checks delivery
+and tap routing. Normal Maestro launches grant permissions automatically, so
+use this explicit flow to verify the prompt. Run with:
 
 ```sh
 npm run e2e:mobile                      # = ~/.maestro/bin/maestro test maestro/
 ~/.maestro/bin/maestro hierarchy        # inspect the view tree if selectors fail
 ```
 
-Notes:
-- The flow dismisses the dev client's one-time "Continue" onboarding overlay
-  and waits up to 90 s for the JS bundle after a cold start.
+For enlarged text, record `adb shell settings get system font_scale`, set it
+to `1.3` with `adb shell settings put system font_scale 1.3`, run
+`maestro test maestro/large-text.yaml`, then restore the recorded value.
 
 Notes:
+- The smoke/private flows dismiss the dev client's one-time "Continue"
+  onboarding overlay and wait up to 90 s for the JS bundle after a cold start.
+- Keep app modules unchanged while a native flow is running: Fast Refresh can
+  reset navigation halfway through an otherwise valid test.
 - Flows select by `id:`, which maps to React Native `testID` on Android. Keep
   testIDs stable (see the `privatecycle-verify` skill for the naming scheme).
 - Long screens need `scrollUntilVisible` before tapping elements below the

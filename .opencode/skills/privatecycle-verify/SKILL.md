@@ -71,6 +71,7 @@ The `?seed` query param is consumed before the first screen renders (see
 | Path | What |
 | --- | --- |
 | `artifacts/screenshots/*.png` | smoke flow screenshots at 390px / 2x (calendar, overview, insights, modal, settings) |
+| `artifacts/android-proof/*.png` | copied native captures, 130% text checks, permission/delivery and screenshot-protection evidence (see mobile skill) |
 | `artifacts/smoke-failure.txt` | URL, all console output and body text on failure |
 | `artifacts/expo.log` | Expo/Metro output from the last run |
 
@@ -82,7 +83,9 @@ repo workspace).
 Naming convention: `area-element`, kebab-case.
 
 - Tabs: `tab-calendar`, `tab-overview`, `tab-insights`, `tab-settings`
+- Missing route recovery: `not-found-calendar`
 - Calendar: `calendar-prev-month`, `calendar-next-month`,
+  `calendar-return-today`, `calendar-welcome`, `calendar-log-today`,
   `calendar-month-label`, `calendar-day-YYYY-MM-DD`,
   `calendar-today-YYYY-MM-DD`, `calendar-today-caption`,
   `calendar-day-mark-YYYY-MM-DD` (tracked non-period dot),
@@ -115,8 +118,9 @@ Naming convention: `area-element`, kebab-case.
   `insights-phase-tip-{category}`, `insights-phase-summary-title`,
   `insights-phase-no-data`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
+  `settings-average-cycle`, `settings-backup-frequency`,
   `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
-  `settings-dev-reset`, `settings-darkmode-switch`,
+  `settings-dev-reset`, `settings-darkmode-switch`, `settings-auto-backup-switch`,
   `settings-private-calendar`, `settings-notifications`
 - Notifications: `notifications-back`, `notifications-web-notice`,
   `notifications-master`, `notifications-master-switch`,
@@ -136,7 +140,7 @@ Naming convention: `area-element`, kebab-case.
 - Private calendar gate: `private-gate-close`, `private-pin-setup-input`,
   `private-pin-setup-confirm`, `private-pin-setup-submit`,
   `private-pin-input`, `private-pin-unlock`, `private-pin-forgot`,
-  `private-pin-error`, `private-pin-reset`
+  `private-pin-error`, `private-pin-reset`, `private-error-close`
 - Private calendar: `private-calendar`, `private-prev-month`,
   `private-next-month`, `private-month-label`, `private-day-YYYY-MM-DD`,
   `private-day-logged-YYYY-MM-DD`, `private-month-count`,
@@ -177,6 +181,11 @@ selectors so flows don't break when copy changes.
    reloads `/private` and asserts the gate reappears and the entry survives,
 9. fails on page errors / console errors, then kills the whole process tree.
 
+The smoke also captures all tabs at 360px in dark mode, private entry sheets,
+empty histories and a simulated storage failure followed by a successful
+retry. It checks return-to-today navigation and that Settings shows `—` rather
+than a fabricated average for an empty history. These are screenshots 14–20.
+
 Both scripts fail fast if their ports are occupied and kill Expo's process
 group on exit. If a run is interrupted, verify ports are free:
 `curl -s -o /dev/null -m 1 http://127.0.0.1:8091 && echo busy || echo free`.
@@ -211,6 +220,9 @@ seed generator determinism, date-key formatting, fertility forecast math,
 dialog component, cycle trends/phase tracks, narrative cards, today tips,
 notification settings/planner/scheduler/screen, private-access PIN
 hashing/lockout and intimacy summaries.
+Calendar interaction regressions cover month-end navigation, queued mood saves
+with truthful feedback, and failed-write retry; reduced-motion coverage checks
+live preference changes and stale initial reads.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
 logic (like `DevSeedService`) so it can be tested without the DB.
