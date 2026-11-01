@@ -17,7 +17,12 @@
 // Prints the plain version (no `v`) to stdout; diagnostics go to stderr.
 // Used by the manual publish.yml workflow through build-android.yml, which
 // stamps it into the production APK's versionName (APP_VERSION via
-// app.config.js) and tags the release with it. Nightlies never create tags.
+// app.config.js) and tags the release with it.
+//
+// Nightly prereleases (`vX.Y.Z-nightly-YYMMDD-<sha>`) are deliberately
+// ignored: they describe the same commits as the latest production release and
+// must never become the base for the next version. Only stable `vX.Y.Z` tags
+// participate in the bump window.
 //
 // Run locally to preview the next manual production release:
 //   node scripts/release-version.mjs
@@ -95,11 +100,18 @@ function baseVersionFromAppJson() {
   return '0.0.0';
 }
 
+// `--exclude` drops nightly prerelease tags; only production tags count.
+const STABLE_TAG_ARGS = [
+  '--tags',
+  '--match',
+  'v*',
+  '--exclude',
+  '*-nightly-*',
+  '--abbrev=0',
+];
+
 const head = runGit(['rev-parse', 'HEAD']);
-const previousTag = runGit(
-  ['describe', '--tags', '--match', 'v*', '--abbrev=0', 'HEAD'],
-  { optional: true }
-);
+const previousTag = runGit(['describe', ...STABLE_TAG_ARGS, 'HEAD'], { optional: true });
 
 let version;
 if (previousTag && runGit(['rev-parse', `${previousTag}^{commit}`]) === head) {

@@ -138,6 +138,23 @@ describe('release-version', () => {
       expect(nextVersion(dir)).toBe('1.0.2');
     });
 
+    test('ignores nightly prerelease tags when finding the base version', () => {
+      const dir = makeRepo();
+      taggedBaseline(dir);
+      commit(dir, 'feat: add insights');
+      tag(dir, 'v1.1.0-nightly-261101-a1b2c3d');
+      expect(nextVersion(dir)).toBe('1.1.0');
+    });
+
+    test('does not reuse a nightly tag at HEAD', () => {
+      const dir = makeRepo();
+      taggedBaseline(dir);
+      commit(dir, 'feat: add insights');
+      tag(dir, 'v1.1.0-nightly-261101-a1b2c3d');
+      commit(dir, 'fix: crash when saving');
+      expect(nextVersion(dir)).toBe('1.1.0');
+    });
+
     test('falls back to app.json when no release tags exist', () => {
       const dir = makeRepo();
       fs.writeFileSync(

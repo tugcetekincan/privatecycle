@@ -1,9 +1,13 @@
 name: Build Android APK
 
 # Shared by the automatic nightly and manual production workflows.
-# Each run verifies and builds exactly one signed APK (arm64-v8a).
-# Permissions come from the caller: nightlies only need contents: read;
-# the manual production workflow grants contents: write to publish a release.
+# Each run verifies, builds exactly one signed APK (arm64-v8a) and publishes it
+# as a GitHub Release:
+#   nightly    -> prerelease vX.Y.Z-nightly-YYMMDD-<sha>
+#                 asset Privatecycle-X.Y.Z-nightly-<sha>.apk
+#   production -> release    vX.Y.Z
+#                 asset Privatecycle-X.Y.Z.apk
+# Both callers grant contents: write for publication.
 #
 # Caches (see steps below for the reasoning):
 #  - native-libs-v4: Gradle/CMake outputs of autolinked libraries and the
@@ -56,8 +60,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history for the production version and changelog; nightlies
-          # use the latest release version without advancing or tagging it.
+          # Full history for the version window and changelog.
           fetch-depth: 0
 
       - name: Set up Node
@@ -69,30 +72,32 @@ jobs:
       - name: Compute build metadata
         id: metadata
         run: |
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
           case "$BUILD_VARIANT" in
             nightly)
-              DATE=$(date -u +%y%m%d)
-              APK_NAME="privatecycle_nightly_${DATE}.apk"
-              TAG=$(git describe --tags --match 'v*' --abbrev=0 HEAD 2>/dev/null || true)
-              VERSION=${TAG#v}
+              # Nightlies reuse the latest production version. Prerelease tags
+              # are excluded so a nightly never becomes the base for the next
+              # nightly or for a production bump.
+              BASE_TAG=$(git describe --tags --match 'v*' --exclude '*-nightly-*' --abbrev=0 HEAD 2>/dev/null || true)
+              VERSION=${BASE_TAG#v}
               if [ -z "$VERSION" ]; then
                 VERSION=$(node -p "require('./app.json').expo.version")
               fi
+              METADATA=$(node scripts/release-metadata.mjs nightly "$VERSION" "$(date -u +%y%m%d)" "$SHORT_SHA")
               ;;
             production)
-              VERSION=$(node scripts/release-version.mjs)
-              APK_NAME=PrivateCycle.apk
+              METADATA=$(node scripts/release-metadata.mjs production "$(node scripts/release-version.mjs)")
               ;;
             *)
               echo "::error::Unknown build variant: $BUILD_VARIANT"
               exit 1
               ;;
           esac
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "apk-name=$APK_NAME" >> "$GITHUB_OUTPUT"
-          echo "artifact-name=${APK_NAME%.apk}" >> "$GITHUB_OUTPUT"
-          # Keep these in the environment for both prebuild and JS bundling,
-          # so Settings -> About and the native APK agree.
+          echo "$METADATA" >> "$GITHUB_OUTPUT"
+          VERSION=$(printf '%s\n' "$METADATA" | sed -n 's/^version=//p')
+          # Keep APP_VERSION in the environment for both prebuild and JS
+          # bundling, so Settings -> About and the native APK agree. It stays
+          # plain X.Y.Z: the nightly suffix lives only in the tag and filename.
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "ANDROID_VERSION_CODE=$(($(date +%s) / 60))" >> "$GITHUB_ENV"
 
@@ -238,38 +243,68 @@ jobs:
           mkdir -p dist
           cp android/app/build/outputs/apk/release/app-release.apk "dist/$APK_NAME"
 
-      - name: Upload nightly artifact
+      # Nightlies publish a prerelease per commit. The SHA suffix keeps
+      # same-day pushes from overwriting each other; rerunning a run edits the
+      # same release and replaces its asset.
+      - name: Publish nightly prerelease
         if: inputs.variant == 'nightly'
-        id: nightly-artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.metadata.outputs.artifact-name }}
-          path: dist/${{ steps.metadata.outputs.apk-name }}
-          if-no-files-found: error
-          compression-level: 0 # APKs are already compressed.
-          retention-days: 30
-          overwrite: true # Allow re-running the same Actions run.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          APK_NAME: ${{ steps.metadata.outputs.apk-name }}
+        run: |
+          git fetch --tags --force origin
+          PREV_TAG=$(git describe --tags --match 'v*' --exclude '*-nightly-*' --abbrev=0 HEAD^ 2>/dev/null || true)
+          {
+            echo "Nightly build of \`com.ncan.privatecycle.nightly\` from \`${GITHUB_SHA:0:7}\`. It installs next to the stable app; this is a prerelease, not a production build."
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log --no-merges --pretty=format:'- %h %s — %an' "$PREV_TAG..HEAD"
+            else
+              git log --no-merges --pretty=format:'- %h %s — %an' HEAD
+            fi
+            echo
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${TAG}"
+              echo
+            fi
+            echo "_Built from \`${GITHUB_SHA:0:7}\` on $(date -u '+%Y-%m-%d %H:%M UTC')._"
+          } > nightly-notes.md
+          echo "----- nightly notes preview -----"
+          cat nightly-notes.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file nightly-notes.md
+            gh release upload "$TAG" "dist/$APK_NAME" --clobber
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease \
+              --title "$TAG" --notes-file nightly-notes.md "dist/$APK_NAME"
+          fi
+          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
 
       # Only the manual production workflow can publish. Use the version
       # stamped into the APK, and fail if the tags changed during the build.
-      - name: Publish release
+      - name: Publish production release
         if: inputs.variant == 'production'
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILT_VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          APK_NAME: ${{ steps.metadata.outputs.apk-name }}
         run: |
           git fetch --tags --force origin
           VERSION=$(node scripts/release-version.mjs)
-          TAG="v$VERSION"
 
-          if [ "$VERSION" != "$BUILT_VERSION" ]; then
-            echo "::error::Release version changed from v$BUILT_VERSION to v$VERSION during the build; rerun to rebuild."
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::Release version changed from $TAG to v$VERSION during the build; rerun to rebuild."
             exit 1
           fi
 
-          PREV_TAG=$(git describe --tags --match 'v*' --abbrev=0 HEAD^ 2>/dev/null || true)
+          PREV_TAG=$(git describe --tags --match 'v*' --exclude '*-nightly-*' --abbrev=0 HEAD^ 2>/dev/null || true)
           {
-            echo "Production \`PrivateCycle.apk\` (\`com.ncan.privatecycle\`). Nightly builds are available in the Nightly workflow's Actions artifacts."
+            echo "Production \`$APK_NAME\` (\`com.ncan.privatecycle\`). Nightly builds are published as prereleases by the Nightly workflow."
             echo
             echo "## Changes"
             echo
@@ -291,10 +326,10 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes-file changelog.md
-            gh release upload "$TAG" dist/PrivateCycle.apk --clobber
+            gh release upload "$TAG" "dist/$APK_NAME" --clobber
           else
-            gh release create "$TAG" --target "$GITHUB_SHA" --notes-file changelog.md \
-              dist/PrivateCycle.apk
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
+              --notes-file changelog.md "dist/$APK_NAME"
           fi
           echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
 
@@ -312,18 +347,17 @@ jobs:
 
       - name: Job summary
         env:
-          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
           APK_NAME: ${{ steps.metadata.outputs.apk-name }}
-          ARTIFACT_URL: ${{ steps.nightly-artifact.outputs.artifact-url }}
         run: |
           {
             echo "## PrivateCycle $BUILD_VARIANT"
             echo ""
             echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            echo "- APK: \`$APK_NAME\`"
             if [ "$BUILD_VARIANT" = nightly ]; then
-              echo "- APK: [\`$APK_NAME\`]($ARTIFACT_URL) (inside the artifact ZIP; retained for 30 days)"
-            else
-              echo "- Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}"
+              echo "- Marked as prerelease"
             fi
             echo "- Trigger: \`${GITHUB_EVENT_NAME}\`"
           } >> "$GITHUB_STEP_SUMMARY"

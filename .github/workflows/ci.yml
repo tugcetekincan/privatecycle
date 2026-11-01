@@ -1,13 +1,17 @@
 name: Nightly
 
-# Every main push produces a nightly Actions artifact, never a GitHub Release.
-# Runs are independent so a later push does not cancel an earlier APK build.
+# Every push to main publishes a nightly prerelease:
+#   tag   vX.Y.Z-nightly-YYMMDD-<sha>
+#   asset Privatecycle-X.Y.Z-nightly-<sha>.apk
+# X.Y.Z is the latest production version; the date is UTC and the SHA keeps
+# every push separately downloadable. Prereleases never take the "Latest"
+# badge and never advance production versioning.
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write # Publish the nightly prerelease.
 
 jobs:
   nightly:
