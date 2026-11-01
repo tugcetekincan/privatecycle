@@ -14,8 +14,6 @@ import { MoodTag, MoodValue, MOOD_OPTIONS, MOOD_TAG_MAX_LEVEL, cycleMoodTag, rem
 
 // Intentional period-pink accents (same hardcoded values used elsewhere in the app).
 const PINK = '#e91e63';
-const PINK_SOFT = '#fce4ec';
-const PINK_DEEP = '#c2185b';
 
 // On the web build some Linux font stacks (DejaVu Sans) claim emoji codepoints
 // and render them as monochrome line art. Pinning color-emoji families first
@@ -73,11 +71,9 @@ export default function MoodPicker({
     <View style={styles.card}>
       <View style={styles.titleRow}>
         <Text style={[styles.cardTitle, compact && styles.cardTitleCompact]}>Mood</Text>
-        {saved && (
-          <Text testID={`${testIDPrefix}-saved`} style={styles.savedPill}>
-            ✓ Saved
-          </Text>
-        )}
+        <Text testID={saved ? `${testIDPrefix}-saved` : undefined} accessibilityLiveRegion="polite" style={[styles.savedPill, !saved && { color: theme.colors.textSecondary, backgroundColor: theme.colors.secondary }]}>
+          {saved ? '✓ Saved' : 'Auto-saves'}
+        </Text>
       </View>
 
       <Text style={styles.sectionLabel}>THE DAY, OVERALL</Text>
@@ -112,7 +108,7 @@ export default function MoodPicker({
           const selected = tag !== undefined;
           const solid = tag?.level === MOOD_TAG_MAX_LEVEL;
           return (
-            <View key={option.id} style={styles.chipWrapper}>
+            <View key={option.id} style={[styles.chipWrapper, selected && styles.chipGroupSelected, solid && styles.chipGroupSolid]}>
               <TouchableOpacity
                 testID={`${testIDPrefix}-tag-${option.id}`}
                 accessibilityRole="button"
@@ -150,10 +146,10 @@ export default function MoodPicker({
                   testID={`${testIDPrefix}-tag-${option.id}-clear`}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${option.label}`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={4}
                   style={styles.clearBadge}
                   onPress={() => handleTagRemove(option.id)}>
-                  <Text style={styles.clearText}>×</Text>
+                  <Text style={[styles.clearText, solid && { color: theme.colors.white }]}>×</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -192,7 +188,7 @@ const createStyles = (theme: any) =>
       overflow: 'hidden',
       fontSize: 10,
       fontWeight: '800',
-      color: theme.colors.success,
+      color: theme.colors.successText,
       backgroundColor: theme.colors.successSoft,
       borderRadius: radii.pill,
       paddingHorizontal: 8,
@@ -248,9 +244,15 @@ const createStyles = (theme: any) =>
       marginTop: 16,
     },
     chipWrapper: {
-      position: 'relative',
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: radii.pill,
+      overflow: 'hidden',
     },
+    chipGroupSelected: { borderWidth: 1, borderColor: PINK, backgroundColor: theme.colors.primarySoft },
+    chipGroupSolid: { backgroundColor: PINK },
     chip: {
+      minHeight: 44,
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 8,
@@ -262,8 +264,8 @@ const createStyles = (theme: any) =>
       gap: 5,
     },
     chipSelected: {
-      backgroundColor: PINK_SOFT,
-      borderColor: PINK,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
     },
     chipSolid: {
       backgroundColor: PINK,
@@ -278,7 +280,7 @@ const createStyles = (theme: any) =>
       color: theme.colors.text,
     },
     chipTextSelected: {
-      color: PINK_DEEP,
+      color: theme.colors.primaryText,
       fontWeight: '600',
     },
     chipTextSolid: {
@@ -310,23 +312,16 @@ const createStyles = (theme: any) =>
       backgroundColor: '#fff',
     },
     clearBadge: {
-      position: 'absolute',
-      top: -8,
-      right: -8,
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: '#cfd3da',
+      width: 44,
+      height: 44,
+      borderLeftWidth: 1,
+      borderColor: theme.colors.primaryWeak,
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 10,
-      elevation: 4,
     },
     clearText: {
-      fontSize: 13,
-      lineHeight: 16,
-      color: '#8a8f98',
+      fontSize: 20,
+      lineHeight: 24,
+      color: theme.colors.primaryText,
     },
   });

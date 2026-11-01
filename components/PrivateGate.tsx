@@ -25,6 +25,7 @@ import { Lock, ShieldAlert, X } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { radii, spacing, typography } from '@/design/tokens';
 import ScreenFade from '@/components/ui/ScreenFade';
+import { Card } from '@/components/ui/Card';
 import { useDialog } from '@/hooks/useDialog';
 import { DataService } from '@/services/DataService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
@@ -70,6 +71,7 @@ export default function PrivateGate({ children }: PrivateGateProps) {
 
   const unlockedRef = useRef(false);
   const configuredRef = useRef(false);
+  const confirmInput = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   useEffect(() => {
     unlockedRef.current = unlocked;
@@ -293,6 +295,7 @@ export default function PrivateGate({ children }: PrivateGateProps) {
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled">
+          <Card style={{ width: '100%', maxWidth: 440, alignSelf: 'center' }} padding={24}>
           <View style={styles.lockCircle}>
             {isError ? (
               <ShieldAlert size={30} color={theme.colors.error} />
@@ -331,6 +334,7 @@ export default function PrivateGate({ children }: PrivateGateProps) {
                 <Text style={styles.primaryButtonText}>Delete private data and reset</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="private-error-close"
                 style={styles.secondaryButton}
                 onPress={closeRoute}
                 accessibilityRole="button">
@@ -339,9 +343,10 @@ export default function PrivateGate({ children }: PrivateGateProps) {
             </>
           ) : isSetup ? (
             <>
-              <Text style={styles.label}>Choose a PIN</Text>
+              <Text style={styles.label}>CHOOSE A PIN</Text>
               <TextInput
                 testID="private-pin-setup-input"
+                accessibilityLabel="Choose a PIN"
                 style={styles.input}
                 value={setupPin}
                 onChangeText={value => setSetupPin(sanitizePin(value))}
@@ -354,11 +359,14 @@ export default function PrivateGate({ children }: PrivateGateProps) {
                 placeholder={`${PIN_MIN_LENGTH}–${PIN_MAX_LENGTH} digits`}
                 placeholderTextColor={theme.colors.textSecondary}
                 returnKeyType="next"
+                onSubmitEditing={() => confirmInput.current?.focus()}
               />
 
-              <Text style={styles.label}>Confirm PIN</Text>
+              <Text style={styles.label}>CONFIRM PIN</Text>
               <TextInput
+                ref={confirmInput}
                 testID="private-pin-setup-confirm"
+                accessibilityLabel="Confirm PIN"
                 style={styles.input}
                 value={confirmPin}
                 onChangeText={value => setConfirmPin(sanitizePin(value))}
@@ -409,6 +417,7 @@ export default function PrivateGate({ children }: PrivateGateProps) {
             <>
               <TextInput
                 testID="private-pin-input"
+                accessibilityLabel="PIN"
                 style={styles.input}
                 value={enteredPin}
                 onChangeText={value => setEnteredPin(sanitizePin(value))}
@@ -453,6 +462,7 @@ export default function PrivateGate({ children }: PrivateGateProps) {
               </TouchableOpacity>
             </>
           )}
+          </Card>
           </ScrollView>
         </ScreenFade>
       </KeyboardAvoidingView>
@@ -478,8 +488,8 @@ const createStyles = (theme: any) =>
       paddingVertical: 8,
     },
     closeButton: {
-      width: 32,
-      height: 32,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       backgroundColor: theme.colors.secondary,
       alignItems: 'center',
@@ -488,8 +498,8 @@ const createStyles = (theme: any) =>
     content: {
       flexGrow: 1,
       justifyContent: 'center',
-      paddingHorizontal: 28,
-      paddingBottom: 40,
+      paddingHorizontal: 20,
+      paddingVertical: 24,
     },
     lockCircle: {
       width: 64,
@@ -521,9 +531,9 @@ const createStyles = (theme: any) =>
       marginBottom: 8,
     },
     input: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.secondary,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.borderStrong,
       borderRadius: radii.button,
       paddingHorizontal: 16,
       paddingVertical: 14,
@@ -546,7 +556,7 @@ const createStyles = (theme: any) =>
       marginBottom: 18,
     },
     webNote: {
-      fontSize: 10,
+      fontSize: 11,
       lineHeight: 15,
       color: theme.colors.textSecondary,
       textAlign: 'center',

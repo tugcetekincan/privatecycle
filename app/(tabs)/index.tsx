@@ -5,13 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   PanResponder,
   Animated,
-  Dimensions,
-  Modal,
+  useWindowDimensions,
 } from 'react-native';
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, X, Check, Droplets, Egg } from 'lucide-react-native';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, Droplets, Egg } from 'lucide-react-native';
 import { DataService, DailyData } from '@/services/DataService';
 import { NotificationService } from '@/services/NotificationService';
 import { FertilityForecast } from '@/services/FertilityService';
@@ -21,11 +19,14 @@ import { SYMPTOMS } from '@/services/Symptoms';
 import MoodPicker from '@/components/MoodPicker';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { Card } from '@/components/ui/Card';
 import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScreenFade from '@/components/ui/ScreenFade';
+import Sheet from '@/components/ui/Sheet';
+import EmptyState from '@/components/ui/EmptyState';
 import { cardShadow, radii, spacing, typography } from '@/design/tokens';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -50,11 +51,11 @@ const PREDICTED_PERIOD_DAYS = 7;
 // Fertile window convention: five days before ovulation + ovulation day.
 const FERTILE_WINDOW_DAYS_BEFORE = 5;
 
-const { width: screenWidth } = Dimensions.get('window');
-
 export default function CalendarTab() {
   const { theme } = useTheme();
-  const { showSuccess, showError, showInfo, DialogComponent } = useDialog();
+  const { width: screenWidth } = useWindowDimensions();
+  const reducedMotion = useReducedMotion();
+  const { showSuccess, showInfo, DialogComponent } = useDialog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
@@ -76,6 +77,10 @@ export default function CalendarTab() {
   } | null>(null);
   const [editingData, setEditingData] = useState<DailyData | null>(null);
   const [moodSaved, setMoodSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const moodSaveQueue = useRef(Promise.resolve());
+  const moodSaveRevision = useRef(0);
   const moodSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -88,6 +93,7 @@ export default function CalendarTab() {
 
   useEffect(
     () => () => {
+      moodSaveRevision.current += 1;
       if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     },
     []
@@ -170,6 +176,10 @@ export default function CalendarTab() {
 
     const dateKey = formatDateKey(date);
     const existingData = allDailyData[dateKey] || null;
+    moodSaveRevision.current += 1;
+    if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+    setSaveError('');
+    setMoodSaved(false);
     
     setSelectedDateData({ date, data: existingData });
     setEditingData(existingData || {
@@ -186,25 +196,33 @@ export default function CalendarTab() {
   };
 
   const closeModal = () => {
+    if (saving) return;
+    moodSaveRevision.current += 1;
+    if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     setModalVisible(false);
     setSelectedDateData(null);
     setEditingData(null);
   };
 
   const saveModalData = async () => {
-    if (!editingData || !selectedDateData) return;
-
+    if (!editingData || !selectedDateData || saving) return;
+    setSaving(true);
+    setSaveError('');
     try {
+      await moodSaveQueue.current;
       await DataService.saveTodayData(editingData.date, editingData);
       await loadData(); // Reload all data to update the calendar
       void NotificationService.syncSchedule();
-      closeModal();
+      setModalVisible(false);
+      setSelectedDateData(null);
+      setEditingData(null);
       // Let the native sheet finish dismissing before presenting the dialog,
       // otherwise the dialog can appear behind the closing modal.
-      setTimeout(() => showSuccess('Success', 'Data saved successfully!'), 350);
+      setTimeout(() => showSuccess('Day saved', 'Your calendar is up to date.'), 350);
     } catch (error) {
-      showError('Error', 'Failed to save data. Please try again.');
-      console.error('Error saving data:', error);
+      setSaveError('Could not save this day. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -222,8 +240,9 @@ export default function CalendarTab() {
   // Mood auto-saves on every tap, while the rest of the modal still goes
   // through the explicit Save button.
   const handleModalMoodChange = async (next: MoodValue) => {
-    if (!editingData) return;
+    if (!editingData || saving) return;
     const dateKey = editingData.date;
+    const revision = ++moodSaveRevision.current;
 
     setEditingData({
       ...editingData,
@@ -231,11 +250,9 @@ export default function CalendarTab() {
       moodValence: next.valence,
       moodTags: next.tags,
     });
-    setMoodSaved(true);
+    setMoodSaved(false);
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
-    moodSavedTimer.current = setTimeout(() => setMoodSaved(false), 2000);
-
-    try {
+    const save = moodSaveQueue.current.then(async () => {
       await DataService.saveMoodData(dateKey, {
         mood: primaryMoodId(next.tags),
         moodValence: next.valence,
@@ -245,9 +262,19 @@ export default function CalendarTab() {
       // calendar's day marks are up to date when the modal closes.
       await loadData();
       void NotificationService.syncSchedule();
-    } catch (error) {
-      console.error('Error auto-saving mood:', error);
-    }
+      // Only acknowledge the latest selection in the still-open entry.
+      if (revision !== moodSaveRevision.current) return;
+      setMoodSaved(true);
+      setSaveError('');
+      if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
+      moodSavedTimer.current = setTimeout(() => setMoodSaved(false), 2000);
+    });
+    moodSaveQueue.current = save.catch(() => {
+      if (revision !== moodSaveRevision.current) return;
+      setMoodSaved(false);
+      setSaveError('Mood could not be saved. Tap Save day to try again.');
+    });
+    await moodSaveQueue.current;
   };
 
   const getDaysInMonth = (date: Date) => {
@@ -327,24 +354,21 @@ export default function CalendarTab() {
     return null;
   };
 
-  const [animationDirection, setAnimationDirection] = useState<'prev' | 'next'>('next');
   const [nextMonthDate, setNextMonthDate] = useState<Date | null>(null);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     if (isAnimating) return;
     
     // Calculate the target date before starting animation
-    const targetDate = new Date(currentDate);
-    if (direction === 'prev') {
-      targetDate.setMonth(targetDate.getMonth() - 1);
-    } else {
-      targetDate.setMonth(targetDate.getMonth() + 1);
+    const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + (direction === 'prev' ? -1 : 1), 1);
+    if (reducedMotion) {
+      setCurrentDate(targetDate);
+      return;
     }
     
     const targetHeight = getCalendarHeight(targetDate);
     
     setIsAnimating(true);
-    setAnimationDirection(direction);
     setNextMonthDate(targetDate);
     
     const slideOutDistance = direction === 'next' ? -screenWidth : screenWidth;
@@ -440,6 +464,8 @@ export default function CalendarTab() {
         <DayComponent
           key={day}
           testID={`calendar-day-${dayKey}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}${isToday ? ', today' : ''}${isPeriod ? ', period' : isPredicted ? ', predicted period' : ''}${isOvulation ? ', ovulation recorded' : isFertile ? ', estimated fertile window' : ''}${isNoPeriod ? ', entry logged' : ''}`}
           style={[styles.dayCell, hasData && styles.clickableDay]}
           onPress={() => handleDayPress(dayDate)}
           activeOpacity={0.7}>
@@ -528,7 +554,7 @@ export default function CalendarTab() {
     currentDate.getMonth() === now.getMonth();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScreenFade>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           <ScreenHeader
@@ -536,11 +562,19 @@ export default function CalendarTab() {
             subtitle="Tap a day to log or edit"
             icon={<CalendarIcon size={21} color={theme.colors.primary} />}
           />
+          {forecast && Object.keys(allDailyData).length === 0 && (
+            <Card testID="calendar-welcome" style={{ marginHorizontal: spacing.xxl, marginBottom: spacing.base }}>
+              <EmptyState plain title="Your journal starts here" body="Log a period, a feeling, or a symptom. A little at a time, your own patterns will take shape." />
+              <PrimaryButton testID="calendar-log-today" title="Log today" onPress={() => handleDayPress(new Date())} />
+            </Card>
+          )}
 
           <View style={styles.calendarCard}>
             <View style={styles.calendarHeader}>
               <TouchableOpacity
                 testID="calendar-prev-month"
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
                 style={styles.monthButton}
                 onPress={() => navigateMonth('prev')}>
                 <ChevronLeft size={19} color={theme.colors.primary} />
@@ -550,6 +584,8 @@ export default function CalendarTab() {
               </Text>
               <TouchableOpacity
                 testID="calendar-next-month"
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
                 style={styles.monthButton}
                 onPress={() => navigateMonth('next')}>
                 <ChevronRight size={19} color={theme.colors.primary} />
@@ -568,6 +604,11 @@ export default function CalendarTab() {
                   })
                   .toUpperCase()}
               </Text>
+            )}
+            {!isViewingCurrentMonth && (
+              <TouchableOpacity testID="calendar-return-today" accessibilityRole="button" onPress={() => !isAnimating && setCurrentDate(new Date())} style={styles.returnToday}>
+                <Text style={[typography.caption, { color: theme.colors.today }]}>Back to today</Text>
+              </TouchableOpacity>
             )}
 
             <Animated.View
@@ -723,28 +764,17 @@ export default function CalendarTab() {
       </ScreenFade>
 
       {/* Day Details Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <Sheet
         visible={modalVisible}
-        onRequestClose={closeModal}>
-        <View style={styles.modalOverlay}>
-          <View testID="day-modal" style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {selectedDateData?.date.toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </Text>
-              <TouchableOpacity testID="day-modal-close" onPress={closeModal} style={styles.closeButton}>
-                <X size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScrollView}>
+        onClose={closeModal}
+        testID="day-modal"
+        closeTestID="day-modal-close"
+        title={selectedDateData?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) ?? 'Daily entry'}
+        subtitle="Mood saves as you go · Save your other changes below"
+        footer={<>
+          {saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: spacing.sm }}>{saveError}</Text> : null}
+          <PrimaryButton testID="day-modal-save" title={saving ? 'Saving…' : 'Save day'} loading={saving} onPress={saveModalData} icon={<Check size={18} color={theme.colors.white} />} />
+        </>}>
               {/* Mood (auto-saves on every tap) */}
               <MoodPicker
                 valence={editingData?.moodValence || 0}
@@ -760,6 +790,9 @@ export default function CalendarTab() {
                 <Text style={styles.modalCardTitle}>Period</Text>
                 <TouchableOpacity 
                   testID="day-modal-period-toggle"
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: Boolean(editingData?.isPeriod) }}
+                  accessibilityLabel="Period day"
                   style={[styles.periodButton, editingData?.isPeriod && styles.periodButtonActive]}
                   onPress={() => editingData && setEditingData({
                     ...editingData,
@@ -781,14 +814,15 @@ export default function CalendarTab() {
                         <TouchableOpacity
                           key={level.id}
                           testID={`day-modal-flow-${level.id}`}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: editingData.flowLevel === level.id }}
                           style={[
                             styles.flowButton,
-                            { backgroundColor: level.color },
                             editingData.flowLevel === level.id && styles.flowButtonActive
                           ]}
                           onPress={() => setEditingData({
                             ...editingData,
-                            flowLevel: level.id,
+                            flowLevel: editingData.flowLevel === level.id ? '' : level.id,
                           })}>
                           <Text style={[
                             styles.flowButtonText,
@@ -808,6 +842,9 @@ export default function CalendarTab() {
                 <Text style={styles.modalCardTitle}>Ovulation</Text>
                 <TouchableOpacity
                   testID="day-modal-ovulation-toggle"
+                  accessibilityRole="switch"
+                  accessibilityLabel="Ovulation recorded"
+                  accessibilityState={{ checked: Boolean(editingData?.isOvulation) }}
                   style={[styles.ovulationButton, editingData?.isOvulation && styles.ovulationButtonActive]}
                   onPress={() => editingData && setEditingData({
                     ...editingData,
@@ -833,6 +870,9 @@ export default function CalendarTab() {
                     <TouchableOpacity
                       key={symptom.id}
                       testID={`day-modal-symptom-${symptom.id}`}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={symptom.label}
+                      accessibilityState={{ checked: Boolean(editingData?.symptoms.includes(symptom.id)) }}
                       style={[
                         styles.symptomChip,
                         editingData?.symptoms.includes(symptom.id) && styles.symptomChipSelected,
@@ -849,21 +889,9 @@ export default function CalendarTab() {
                   ))}
                 </View>
               </Card>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <PrimaryButton
-                testID="day-modal-save"
-                title="Save"
-                onPress={saveModalData}
-                icon={<Check size={18} color={theme.colors.white} />}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      </Sheet>
       <DialogComponent />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -895,8 +923,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginBottom: 6,
   },
   monthButton: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
     borderRadius: radii.sm,
     backgroundColor: theme.colors.secondary,
     alignItems: 'center',
@@ -904,7 +932,10 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   monthYear: {
     color: theme.colors.text,
+    flexShrink: 1,
+    textAlign: 'center',
   },
+  returnToday: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   todayCaption: {
     alignSelf: 'center',
     overflow: 'hidden',
@@ -968,6 +999,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: radii.day,
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -1045,13 +1077,13 @@ const createStyles = (theme: any) => StyleSheet.create({
   fertilityValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: OVULATION_COLOR,
+    color: theme.colors.tealText,
     flexShrink: 1,
     textAlign: 'right',
   },
   fertilityNote: {
-    fontSize: 9,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 16,
     color: theme.colors.textSecondary,
     fontStyle: 'italic',
     marginTop: 8,
@@ -1113,7 +1145,7 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: 3,
   },
   legendText: {
-    fontSize: 9,
+    fontSize: 11,
     color: theme.colors.textSecondary,
   },
   sectionCard: {
@@ -1137,52 +1169,16 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   predictionInfoLabel: {
     fontSize: 12,
+    flexShrink: 1,
     color: theme.colors.textSecondary,
   },
   predictionInfoValue: {
     fontSize: 12,
     fontWeight: '700',
-    color: theme.colors.primary,
+    color: theme.colors.primaryText,
   },
   clickableDay: {
     opacity: 0.9,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: radii.hero,
-    borderTopRightRadius: radii.hero,
-    height: '80%',
-    paddingBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  modalTitle: {
-    ...typography.cardTitle,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.secondary,
-  },
-  modalScrollView: {
-    flex: 1,
-    paddingBottom: 16,
   },
   modalCard: {
     marginHorizontal: 20,
@@ -1233,12 +1229,15 @@ const createStyles = (theme: any) => StyleSheet.create({
     marginHorizontal: 4,
     borderRadius: radii.sm,
     alignItems: 'center',
-    opacity: 0.75,
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: theme.colors.secondary,
+    borderWidth: 1,
+    borderColor: theme.colors.borderStrong,
   },
   flowButtonActive: {
-    opacity: 1,
-    borderWidth: 2,
-    borderColor: theme.colors.text,
+    backgroundColor: theme.colors.primarySoft,
+    borderColor: theme.colors.primary,
   },
   flowButtonText: {
     fontSize: 13,
@@ -1246,7 +1245,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     color: theme.colors.text,
   },
   flowButtonTextActive: {
-    fontWeight: '600',
+    fontWeight: '800',
+    color: theme.colors.primaryText,
   },
   symptomsGrid: {
     flexDirection: 'row',
@@ -1254,13 +1254,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     gap: 8,
   },
   symptomChip: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.secondary,
     paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: radii.pill,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -1278,11 +1278,6 @@ const createStyles = (theme: any) => StyleSheet.create({
   symptomTextSelected: {
     color: theme.colors.white,
     fontWeight: '500',
-  },
-  modalFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
   },
 
 });

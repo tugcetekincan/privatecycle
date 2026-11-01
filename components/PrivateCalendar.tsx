@@ -1,9 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -26,6 +23,9 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import { cardShadow, radii, spacing, typography } from '@/design/tokens';
 import ScreenFade from '@/components/ui/ScreenFade';
+import Sheet from '@/components/ui/Sheet';
+import PrimaryButton from '@/components/ui/PrimaryButton';
+import SectionHeader from '@/components/ui/SectionHeader';
 import { useDialog } from '@/hooks/useDialog';
 import { usePrivateGate } from '@/components/PrivateGate';
 import { usePrivateScreenProtection } from '@/hooks/usePrivateScreenProtection';
@@ -76,6 +76,7 @@ export default function PrivateCalendar() {
   const [protection, setProtection] = useState<ProtectionMethod>('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [backupEnabled, setBackupEnabled] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -177,20 +178,23 @@ export default function PrivateCalendar() {
     setActivity(Boolean(existing));
     setProtection(existing?.protection ?? '');
     setNote(existing?.note ?? '');
+    setSaveError('');
     setModalVisible(true);
   }
 
   function closeDay() {
+    if (saving) return;
     setModalVisible(false);
     setSelectedDate(null);
     setSaving(false);
   }
 
   async function saveDay() {
-    if (!selectedDate) return;
+    if (!selectedDate || saving) return;
 
     const dateKey = formatDateKey(selectedDate);
     setSaving(true);
+    setSaveError('');
     try {
       if (activity) {
         await DataService.saveIntimateDay({
@@ -202,10 +206,10 @@ export default function PrivateCalendar() {
         await DataService.deleteIntimateDay(dateKey);
       }
       await loadData();
-      closeDay();
+      setModalVisible(false);
+      setSelectedDate(null);
     } catch (error) {
-      console.error('Error saving private calendar entry:', error);
-      showError('Error', 'Could not save this entry. Please try again.');
+      setSaveError('Could not save this entry. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -338,8 +342,7 @@ export default function PrivateCalendar() {
 
   const selectedDateLabel = selectedDate?.toLocaleDateString('en-US', {
     weekday: 'long',
-    year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
   });
   const existingEntry = selectedDate ? data[formatDateKey(selectedDate)] : undefined;
@@ -431,8 +434,8 @@ export default function PrivateCalendar() {
           </View>
         </View>
 
+        <SectionHeader title="PRIVATE SETTINGS" dotColor={theme.colors.teal} />
         <View style={styles.settingsCard}>
-          <Text style={styles.cardTitle}>Private settings</Text>
 
           <View style={styles.settingRow}>
             <View style={styles.settingTextWrap}>
@@ -444,6 +447,7 @@ export default function PrivateCalendar() {
             </View>
             <Switch
               testID="private-backup-switch"
+              accessibilityLabel="Include private calendar in backups"
               value={backupEnabled}
               onValueChange={handleBackupToggle}
               disabled={backupBusy}
@@ -479,28 +483,18 @@ export default function PrivateCalendar() {
         </ScrollView>
       </ScreenFade>
 
-      <Modal
-        animationType="slide"
-        transparent
+      <Sheet
         visible={modalVisible}
-        onRequestClose={closeDay}>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View testID="private-day-modal" style={[styles.modalSheet, styles.daySheet]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{selectedDateLabel}</Text>
-              <TouchableOpacity
-                testID="private-day-close"
-                onPress={closeDay}
-                style={styles.modalClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close day">
-                <X size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+        onClose={closeDay}
+        testID="private-day-modal"
+        closeTestID="private-day-close"
+        title={selectedDateLabel ?? 'Private entry'}
+        subtitle="Only visible in your private calendar"
+        footer={<>
+          {saveError ? <Text accessibilityRole="alert" style={styles.errorText}>{saveError}</Text> : null}
+          {existingEntry && <TouchableOpacity testID="private-day-delete" style={styles.deleteButton} onPress={deleteDay} accessibilityRole="button"><Trash2 size={18} color={theme.colors.error} /><Text style={styles.deleteButtonText}>Delete entry</Text></TouchableOpacity>}
+          <PrimaryButton testID="private-day-save" title={saving ? 'Saving…' : 'Save entry'} loading={saving} onPress={saveDay} icon={<Check size={18} color={theme.colors.white} />} />
+        </>}>
               <View style={styles.modalCard}>
                 <View style={styles.modalRow}>
                   <View style={styles.settingTextWrap}>
@@ -511,6 +505,7 @@ export default function PrivateCalendar() {
                   </View>
                   <Switch
                     testID="private-day-activity"
+                    accessibilityLabel="Activity logged"
                     value={activity}
                     onValueChange={setActivity}
                     trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
@@ -532,6 +527,7 @@ export default function PrivateCalendar() {
                             testID={`private-protection-${option.id}`}
                             style={[styles.chip, selected && styles.chipSelected]}
                             onPress={() => setProtection(selected ? '' : option.id)}
+                            accessibilityState={{ selected }}
                             accessibilityRole="button">
                             <Text
                               style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -547,6 +543,7 @@ export default function PrivateCalendar() {
                     <Text style={styles.modalCardTitle}>Note</Text>
                     <TextInput
                       testID="private-note-input"
+                      accessibilityLabel="Private note"
                       style={styles.noteInput}
                       value={note}
                       onChangeText={setNote}
@@ -564,66 +561,21 @@ export default function PrivateCalendar() {
                   Turn on activity to add protection or a note.
                 </Text>
               )}
-            </ScrollView>
+      </Sheet>
 
-            <View style={styles.modalFooter}>
-              {existingEntry && (
-                <TouchableOpacity
-                  testID="private-day-delete"
-                  style={styles.deleteButton}
-                  onPress={deleteDay}
-                  accessibilityRole="button">
-                  <Trash2 size={18} color={theme.colors.error} />
-                  <Text style={styles.deleteButtonText}>Delete entry</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                testID="private-day-save"
-                style={[styles.saveButton, saving && styles.buttonDisabled]}
-                onPress={saveDay}
-                disabled={saving}
-                accessibilityRole="button">
-                {saving ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <>
-                    <Check size={20} color={theme.colors.white} />
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal
-        animationType="slide"
-        transparent
+      <Sheet
         visible={changePinVisible}
-        onRequestClose={closeChangePin}>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View
-            testID="private-change-pin-modal"
-            style={[styles.modalSheet, styles.changePinSheet]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change PIN</Text>
-              <TouchableOpacity
-                testID="private-change-pin-close"
-                onPress={closeChangePin}
-                style={styles.modalClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close change PIN">
-                <X size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>Current PIN</Text>
+        compact
+        onClose={closeChangePin}
+        testID="private-change-pin-modal"
+        closeTestID="private-change-pin-close"
+        title="Change PIN"
+        subtitle="Choose a 4–6 digit PIN you can remember"
+        footer={<PrimaryButton testID="private-change-pin-save" title={pinBusy ? 'Updating…' : 'Update PIN'} loading={pinBusy} onPress={saveNewPin} />}>
+              <Text style={styles.label}>CURRENT PIN</Text>
               <TextInput
                 testID="private-change-pin-current"
+                accessibilityLabel="Current PIN"
                 style={styles.input}
                 value={currentPin}
                 onChangeText={value => setCurrentPin(sanitizePin(value))}
@@ -636,9 +588,10 @@ export default function PrivateCalendar() {
                 placeholderTextColor={theme.colors.textSecondary}
               />
 
-              <Text style={styles.label}>New PIN</Text>
+              <Text style={styles.label}>NEW PIN</Text>
               <TextInput
                 testID="private-change-pin-new"
+                accessibilityLabel="New PIN"
                 style={styles.input}
                 value={newPin}
                 onChangeText={value => setNewPin(sanitizePin(value))}
@@ -651,9 +604,10 @@ export default function PrivateCalendar() {
                 placeholderTextColor={theme.colors.textSecondary}
               />
 
-              <Text style={styles.label}>Confirm new PIN</Text>
+              <Text style={styles.label}>CONFIRM NEW PIN</Text>
               <TextInput
                 testID="private-change-pin-confirm"
+                accessibilityLabel="Confirm new PIN"
                 style={styles.input}
                 value={confirmPin}
                 onChangeText={value => setConfirmPin(sanitizePin(value))}
@@ -673,25 +627,7 @@ export default function PrivateCalendar() {
                   {pinError}
                 </Text>
               ) : null}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                testID="private-change-pin-save"
-                style={[styles.saveButton, pinBusy && styles.buttonDisabled]}
-                onPress={saveNewPin}
-                disabled={pinBusy}
-                accessibilityRole="button">
-                {pinBusy ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <Text style={styles.saveButtonText}>Update PIN</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </Sheet>
 
       <DialogComponent />
     </SafeAreaView>
@@ -715,8 +651,8 @@ const createStyles = (theme: any) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: 20,
-      paddingTop: 12,
-      paddingBottom: 10,
+      paddingTop: 20,
+      paddingBottom: 12,
     },
     headerText: {
       flex: 1,
@@ -735,8 +671,8 @@ const createStyles = (theme: any) =>
       alignItems: 'center',
     },
     iconButton: {
-      width: 32,
-      height: 32,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       backgroundColor: theme.colors.secondary,
       alignItems: 'center',
@@ -760,8 +696,8 @@ const createStyles = (theme: any) =>
       marginBottom: 10,
     },
     monthButton: {
-      width: 30,
-      height: 30,
+      width: 44,
+      height: 44,
       borderRadius: radii.sm,
       backgroundColor: theme.colors.secondary,
       alignItems: 'center',
@@ -769,6 +705,8 @@ const createStyles = (theme: any) =>
     },
     monthLabel: {
       ...typography.cardTitle,
+      flexShrink: 1,
+      textAlign: 'center',
       color: theme.colors.text,
     },
     weekdays: {
@@ -865,13 +803,13 @@ const createStyles = (theme: any) =>
     },
     settingsCard: {
       backgroundColor: theme.colors.surface,
-      marginHorizontal: 16,
-      marginTop: 12,
+      marginHorizontal: 20,
       paddingHorizontal: 16,
       paddingTop: 16,
       borderRadius: 16,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...cardShadow(theme),
     },
     cardTitle: {
       fontSize: 17,
@@ -890,8 +828,7 @@ const createStyles = (theme: any) =>
       marginRight: 12,
     },
     settingTitle: {
-      fontSize: 15,
-      fontWeight: '500',
+      ...typography.rowTitle,
       color: theme.colors.text,
     },
     settingSubtitle: {
@@ -922,48 +859,6 @@ const createStyles = (theme: any) =>
       textAlign: 'center',
       marginHorizontal: 24,
       marginTop: 16,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.45)',
-      justifyContent: 'flex-end',
-    },
-    modalSheet: {
-      backgroundColor: theme.colors.background,
-      borderTopLeftRadius: radii.hero,
-      borderTopRightRadius: radii.hero,
-      paddingBottom: 20,
-      width: '100%',
-    },
-    daySheet: {
-      height: '80%',
-    },
-    changePinSheet: {
-      height: '58%',
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-    },
-    modalTitle: {
-      ...typography.cardTitle,
-      color: theme.colors.text,
-      flex: 1,
-    },
-    modalClose: {
-      width: 32,
-      height: 32,
-      borderRadius: radii.sm,
-      backgroundColor: theme.colors.secondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalScroll: {
-      flex: 1,
     },
     modalCard: {
       backgroundColor: theme.colors.surface,
@@ -998,6 +893,8 @@ const createStyles = (theme: any) =>
       gap: 8,
     },
     chip: {
+      minHeight: 44,
+      justifyContent: 'center',
       paddingVertical: 9,
       paddingHorizontal: 14,
       borderRadius: radii.pill,
@@ -1033,13 +930,8 @@ const createStyles = (theme: any) =>
       color: theme.colors.textSecondary,
       marginTop: 6,
     },
-    modalFooter: {
-      paddingHorizontal: 20,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
-    },
     deleteButton: {
+      minHeight: 44,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1050,23 +942,6 @@ const createStyles = (theme: any) =>
       fontSize: 14,
       color: theme.colors.error,
       marginLeft: 6,
-    },
-    saveButton: {
-      backgroundColor: theme.colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 14,
-      borderRadius: radii.button,
-      gap: 8,
-    },
-    saveButtonText: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: theme.colors.white,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
     },
     label: {
       ...typography.micro,
