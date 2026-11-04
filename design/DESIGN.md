@@ -317,12 +317,11 @@ The calendar is a signature surface. See
 ### Settings
 
 1. Screen header: "Settings", "Preferences, privacy and backups", gear tile.
-2. Section label + card per group: App settings, Your cycle, Privacy,
-   Support, Backup & restore.
+2. Section label + card per group: App settings, Privacy, Support,
+   Backup & restore.
 3. Rows use 30px icon tiles, 13/700 title, 11 muted subtitle, switch or
    chevron on the right.
-4. Cycle info card uses recorded average cycle and last-period lengths with
-   `—` for missing data. Label the standard luteal estimate explicitly.
+4. Cycle stats live in Overview; Settings does not repeat them.
 5. Privacy note is a tinted success card with a shield icon, not an emoji.
 
 ### Notifications

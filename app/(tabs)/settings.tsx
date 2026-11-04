@@ -29,8 +29,6 @@ import {
   Database,
   ChevronRight,
 } from 'lucide-react-native';
-import { DataService } from '@/services/DataService';
-import { summarizeCycleLengths } from '@/services/CycleTrends';
 import { BackupService, BackupSettings } from '@/services/BackupService';
 import { NotificationService } from '@/services/NotificationService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
@@ -64,7 +62,6 @@ export default function SettingsTab() {
     showChoice, 
     DialogComponent 
   } = useDialog();
-  const [cycleInfo, setCycleInfo] = useState<{ average: number | null; lastPeriod: number | null; cycles: number }>({ average: null, lastPeriod: null, cycles: 0 });
   const [loading, setLoading] = useState(false);
   const [backupSettings, setBackupSettings] = useState<BackupSettings>({
     autoBackupEnabled: false,
@@ -118,9 +115,6 @@ export default function SettingsTab() {
       const stats = await BackupService.getBackupStats();
       setBackupSettings(settings);
       setBackupStats(stats);
-      const data = await DataService.getInsights();
-      const summary = summarizeCycleLengths(data.periodStarts);
-      setCycleInfo({ average: summary.average === null ? null : Math.round(summary.average), lastPeriod: data.lastPeriodLength || null, cycles: summary.points.length });
     } catch (error) {
       console.error('Error loading backup data:', error);
     }
@@ -362,36 +356,6 @@ export default function SettingsTab() {
                 />
               }
             />
-          </Card>
-
-          <SectionHeader title="YOUR CYCLE" dotColor={theme.colors.warning} />
-          <Card style={styles.sectionCard} padding={16}>
-            <Text style={[typography.cardTitle, styles.cardTitle, { color: theme.colors.text }]}>
-              Cycle information
-            </Text>
-            <Text style={[typography.caption, styles.cardSubtitle, { color: theme.colors.textSecondary }]}>
-              {cycleInfo.cycles > 0 ? `From your last ${cycleInfo.cycles} recorded ${cycleInfo.cycles === 1 ? 'cycle' : 'cycles'}` : 'Log two period starts to see your average'}
-            </Text>
-            <View style={styles.cycleInfo}>
-              <View style={styles.cycleInfoItem}>
-                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
-                  Average cycle length
-                </Text>
-                <Text testID="settings-average-cycle" style={[typography.rowTitle, { color: theme.colors.primary }]}>{cycleInfo.average === null ? '—' : `${cycleInfo.average} days`}</Text>
-              </View>
-              <View style={styles.cycleInfoItem}>
-                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
-                  Last period length
-                </Text>
-                <Text style={[typography.rowTitle, { color: theme.colors.primary }]}>{cycleInfo.lastPeriod === null ? '—' : `${cycleInfo.lastPeriod} days`}</Text>
-              </View>
-              <View style={styles.cycleInfoItem}>
-                <Text style={[typography.caption, styles.cycleInfoLabel, { color: theme.colors.textSecondary }]}>
-                  Luteal estimate
-                </Text>
-                <Text style={[typography.rowTitle, { color: theme.colors.textSecondary }]}>~14 days</Text>
-              </View>
-            </View>
           </Card>
 
           <SectionHeader title="PRIVACY" dotColor={theme.colors.teal} />
@@ -687,23 +651,6 @@ const createStyles = (theme: any) =>
     sectionCard: {
       marginHorizontal: 20,
       marginTop: 0,
-    },
-    cardTitle: {
-      marginBottom: 2,
-    },
-    cardSubtitle: {
-      marginBottom: 12,
-    },
-    cycleInfo: {
-      gap: 10,
-      marginTop: 10,
-    },
-    cycleInfoItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: 8,
-      paddingVertical: 2,
     },
     cycleInfoLabel: {
       flexShrink: 1,

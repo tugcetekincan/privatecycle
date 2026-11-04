@@ -118,10 +118,10 @@ Naming convention: `area-element`, kebab-case.
   `insights-phase-tip-{category}`, `insights-phase-summary-title`,
   `insights-phase-no-data`
 - Settings: `settings-export`, `settings-import`, `settings-create-backup`,
-  `settings-average-cycle`, `settings-backup-frequency`,
-  `settings-delete-backup`, `settings-clear-all`, `settings-dev-seed`,
-  `settings-dev-reset`, `settings-darkmode-switch`, `settings-auto-backup-switch`,
-  `settings-private-calendar`, `settings-notifications`
+  `settings-backup-frequency`, `settings-delete-backup`, `settings-clear-all`,
+  `settings-dev-seed`, `settings-dev-reset`, `settings-darkmode-switch`,
+  `settings-auto-backup-switch`, `settings-private-calendar`,
+  `settings-notifications`
 - Notifications: `notifications-back`, `notifications-web-notice`,
   `notifications-master`, `notifications-master-switch`,
   `notifications-privacy`, `notifications-tone`, `notifications-preview`,
