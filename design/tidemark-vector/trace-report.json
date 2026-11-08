@@ -1,0 +1,113 @@
+{
+  "sources": [
+    "design/tidemark-vector/production-reference.png",
+    "design/tidemark-vector/nightly-reference.png"
+  ],
+  "method": "Subpixel contours fitted with cubic Bezier curves; sampled five-stop vector gradients. Raster grain excluded.",
+  "icons": {
+    "production": {
+      "viewBox": "4.937 10.843 615.153 615.153",
+      "shapes": [
+        {
+          "name": "tile",
+          "cubic_segments": 59,
+          "contour_p95_source_px": 0.209,
+          "median_rgb": [
+            234.0,
+            229.0,
+            218.0
+          ]
+        },
+        {
+          "name": "wave-1",
+          "cubic_segments": 20,
+          "contour_p95_source_px": 0.199,
+          "median_rgb": [
+            34.0,
+            91.0,
+            96.0
+          ]
+        },
+        {
+          "name": "wave-2",
+          "cubic_segments": 26,
+          "contour_p95_source_px": 0.201,
+          "median_rgb": [
+            34.0,
+            91.0,
+            96.0
+          ]
+        },
+        {
+          "name": "wave-3",
+          "cubic_segments": 18,
+          "contour_p95_source_px": 0.181,
+          "median_rgb": [
+            34.0,
+            92.0,
+            97.0
+          ]
+        }
+      ],
+      "path_count": 4,
+      "file_bytes": 8678
+    },
+    "nightly": {
+      "viewBox": "10.266 10.843 616.225 616.225",
+      "shapes": [
+        {
+          "name": "tile",
+          "cubic_segments": 27,
+          "contour_p95_source_px": 0.177,
+          "median_rgb": [
+            24.0,
+            59.0,
+            65.0
+          ]
+        },
+        {
+          "name": "wave-1",
+          "cubic_segments": 19,
+          "contour_p95_source_px": 0.218,
+          "median_rgb": [
+            181.0,
+            207.0,
+            196.0
+          ]
+        },
+        {
+          "name": "wave-2",
+          "cubic_segments": 32,
+          "contour_p95_source_px": 0.189,
+          "median_rgb": [
+            181.0,
+            207.0,
+            196.0
+          ]
+        },
+        {
+          "name": "wave-3",
+          "cubic_segments": 17,
+          "contour_p95_source_px": 0.21,
+          "median_rgb": [
+            181.0,
+            207.0,
+            196.0
+          ]
+        },
+        {
+          "name": "nightly-marker",
+          "cubic_segments": 9,
+          "contour_p95_source_px": 0.138,
+          "median_rgb": [
+            217.0,
+            162.0,
+            75.0
+          ]
+        }
+      ],
+      "path_count": 5,
+      "file_bytes": 8392
+    }
+  }
+}

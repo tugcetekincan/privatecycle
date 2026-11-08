@@ -1,0 +1,31 @@
+{
+  "comparison": "SVG rendered in Chromium at the same 640 \u00d7 640 coordinates as the PNG crop. RGB errors exclude a three-pixel boundary band.",
+  "icons": {
+    "production": {
+      "wave_mask_intersection_over_union_percent": 99.6377,
+      "wave_mask_differing_pixels": 318,
+      "foreground_mean_absolute_rgb_error_out_of_255": 0.637,
+      "background_mean_absolute_rgb_error_out_of_255": 0.452,
+      "pure_vector": true,
+      "large_render_verified": "4096 \u00d7 4096",
+      "file_bytes": 8678
+    },
+    "nightly": {
+      "wave_mask_intersection_over_union_percent": 99.6399,
+      "wave_mask_differing_pixels": 318,
+      "foreground_mean_absolute_rgb_error_out_of_255": 0.555,
+      "background_mean_absolute_rgb_error_out_of_255": 0.507,
+      "pure_vector": true,
+      "large_render_verified": "4096 \u00d7 4096",
+      "file_bytes": 8392
+    }
+  },
+  "pixel_identical": false,
+  "known_difference": "Fine stochastic raster grain omitted; smooth gradients preserve sampled colours. Rasterizer edge antialiasing also differs.",
+  "browser_checks": {
+    "comparison_sliders": "passed",
+    "mobile_overflow": false,
+    "page_errors": 0,
+    "external_requests": 0
+  }
+}
