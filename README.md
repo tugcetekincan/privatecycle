@@ -12,10 +12,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tugcetekincan/privatecycle/releases/latest"><strong>Download for Android · v1.7.5</strong></a>
+  <a href="https://github.com/tugcetekincan/privatecycle/releases/latest"><strong>Download for Android</strong></a>
   &nbsp; · &nbsp;
   <a href="https://github.com/tugcetekincan/privatecycle/releases">Release notes &amp; nightly builds</a>
 </p>
+
+<table>
+  <tr>
+    <td align="center"><strong>Your calendar</strong></td>
+    <td align="center"><strong>Your patterns</strong></td>
+    <td align="center"><strong>A little perspective</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/calendar.png" width="260" alt="Calendar in light mode, with logged periods, predicted dates and a fertility forecast"></td>
+    <td><img src="docs/screenshots/overview.png" width="260" alt="Overview in light mode, showing cycle length, variation and symptom patterns"></td>
+    <td><img src="docs/screenshots/insights-dark.png" width="260" alt="Insights in dark mode, with today's cycle phase and patterns from the log"></td>
+  </tr>
+</table>
+
+<p align="center"><sub>Current development build, captured on the web with demo data. Light and dark themes included.</sub></p>
+
+## Dashboards & graphs
 
 <table>
   <tr>
