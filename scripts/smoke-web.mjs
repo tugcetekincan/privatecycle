@@ -56,6 +56,25 @@ function shot(name) {
   return path.join(SHOT_DIR, `${name}.png`);
 }
 
+// RN ScrollView owns the overflow, so fullPage alone only captures its viewport.
+async function fullScreenShot(name, scrollTestID) {
+  const viewport = page.viewportSize();
+  const scroll = page.getByTestId(scrollTestID);
+  try {
+    const contentHeight = await scroll.evaluate((element) => {
+      element.scrollTop = 0;
+      return element.scrollHeight;
+    });
+    await page.setViewportSize({ width: viewport.width, height: Math.ceil(contentHeight + 200) });
+    await page.waitForTimeout(300);
+    const clipped = await scroll.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
+    if (clipped) throw new Error(`${name}: screenshot would omit scroll content`);
+    await page.screenshot({ path: shot(name), fullPage: true });
+  } finally {
+    await page.setViewportSize(viewport);
+  }
+}
+
 for (const [name, port] of [
   ['SMOKE_EXPO_PORT', EXPO_PORT],
   ['SMOKE_PROXY_PORT', PROXY_PORT],
@@ -227,10 +246,7 @@ try {
   }
 
   await page.getByTestId('overview-cycle-hero').scrollIntoViewIfNeeded();
-  await page.setViewportSize({ width: 390, height: 1750 });
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: shot('02-overview'), fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await fullScreenShot('02-overview', 'overview-scroll');
 
   // --- Insights: today + patterns + tips, not the raw charts. ---
   await page.getByTestId('tab-insights').click();
@@ -279,10 +295,7 @@ try {
   }
 
   await page.getByTestId('insights-today-card').scrollIntoViewIfNeeded();
-  await page.setViewportSize({ width: 390, height: 2100 });
-  await page.waitForTimeout(300);
-  await page.screenshot({ path: shot('03-insights'), fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
+  await fullScreenShot('03-insights', 'insights-scroll');
 
   // --- Calendar day modal: the only daily-entry path. ---
   await page.getByTestId('tab-calendar').click();
@@ -768,6 +781,58 @@ try {
     await page.screenshot({ path: shot(`20-empty-${tab}`) });
   }
   log('polish: dark/360px, reduced motion, empty states and failed-save retry passed');
+  // --- Recorded cycle vs predicted boundary / overdue regression (PRIVATECYC-1). ---
+  await page.clock.setFixedTime(new Date(2026, 10, 1, 12));
+  for (const scenario of [
+    { name: 'overdue', starts: ['2026-08-28', '2026-09-25'], day: '38', expected: '2026-10-23', label: 'Expected 9 days ago' },
+    { name: 'expected', starts: ['2026-08-28', '2026-09-25', '2026-10-10'], day: '23', expected: '2026-11-01', label: 'Expected today' },
+  ]) {
+    await page.evaluate(async (starts) => {
+      await __privatecycle.DataService.clearAllData();
+      const rows = Object.fromEntries(starts.map((date) => [date, {
+        date, isPeriod: true, flowLevel: 'medium', symptoms: [], mood: '', isOvulation: false,
+      }]));
+      // Enough synthetic mood logs to keep the full trend visible in both previews.
+      for (const date of ['2026-09-26', '2026-09-27', '2026-09-28', '2026-09-29', '2026-11-01']) {
+        rows[date] = {
+          date, isPeriod: false, flowLevel: '', symptoms: date === '2026-11-01' ? ['cramps'] : [],
+          mood: 'tired', isOvulation: false, moodValence: 3, moodTags: [{ id: 'tired', level: 1 }],
+        };
+      }
+      await __privatecycle.DataService.saveManyDailyData(rows);
+    }, scenario.starts);
+    await page.goto(`http://127.0.0.1:${PROXY_PORT}/`, { waitUntil: 'domcontentloaded' });
+    const estimate = page.getByTestId(`calendar-period-estimate-${scenario.expected}`);
+    await estimate.waitFor({ state: 'visible', timeout: 30_000 });
+    if ((await estimate.textContent()) !== scenario.label) failures.push(`${scenario.name}: calendar expected-date copy`);
+    await page.screenshot({ path: shot(`15-${scenario.name}-calendar`), fullPage: true });
+    await page.getByTestId('tab-overview').click();
+    await page.getByTestId('overview-phase-uncertain').waitFor({ state: 'visible' });
+    // The empty Overview renders before its asynchronous SQLite read completes.
+    await page.waitForFunction(({ day, label }) =>
+      document.querySelector('[data-testid="overview-cycle-day"]')?.textContent === day &&
+      document.querySelector('[data-testid="overview-next-period"]')?.textContent === label,
+    { day: scenario.day, label: scenario.label });
+    if ((await page.getByTestId('overview-cycle-day').textContent()) !== scenario.day) failures.push(`${scenario.name}: cycle day reset`);
+    if ((await page.getByTestId('overview-next-period').textContent()) !== scenario.label) failures.push(`${scenario.name}: overview expected-date copy`);
+    await page.getByTestId('overview-phase-track-uncertain').waitFor({ state: 'visible' });
+    if (await page.getByTestId('overview-phase-track').count()) failures.push(`${scenario.name}: uncertain phase has a phase-specific timeline`);
+    await page.getByTestId('overview-cycle-chart').waitFor({ state: 'visible' });
+    await page.getByTestId('overview-symptom-patterns-card').waitFor({ state: 'visible' });
+    await page.getByTestId('overview-mood-trend').waitFor({ state: 'visible' });
+    await fullScreenShot(`16-${scenario.name}-overview`, 'overview-scroll');
+    await page.getByTestId('tab-insights').click();
+    const badge = page.getByTestId('insights-current-phase-badge');
+    await badge.waitFor({ state: 'visible' });
+    if (!(await badge.textContent()).includes(`PHASE UNCERTAIN · DAY ${scenario.day}`)) failures.push(`${scenario.name}: insights phase/day`);
+    const focus = page.getByTestId('insights-today-focus');
+    await focus.waitFor({ state: 'visible' });
+    if (!(await focus.textContent()).includes('Let your body set the pace')) failures.push(`${scenario.name}: neutral Today focus missing`);
+    await page.getByTestId('insights-today-tips').waitFor({ state: 'visible' });
+    await page.getByTestId('insights-phase-tips-card').waitFor({ state: 'visible' });
+    await fullScreenShot(`17-${scenario.name}-insights`, 'insights-scroll');
+  }
+  log('recorded-cycle boundary and overdue flows OK');
 } catch (error) {
   failures.push(`smoke run threw: ${error.message}`);
   console.error(expoLog.split('\n').slice(-25).join('\n'));

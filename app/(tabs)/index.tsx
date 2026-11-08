@@ -13,6 +13,7 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, Droplets, E
 import { DataService, DailyData } from '@/services/DataService';
 import { NotificationService } from '@/services/NotificationService';
 import { FertilityForecast } from '@/services/FertilityService';
+import { expectedPeriodLabel } from '@/services/CycleModel';
 import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
 import { SYMPTOMS } from '@/services/Symptoms';
@@ -133,7 +134,8 @@ export default function CalendarTab() {
     for (const start of fertility.futurePeriodStarts) {
       const startDate = parseDateKey(start);
       for (let offset = 0; offset < PREDICTED_PERIOD_DAYS; offset++) {
-        predictedPeriodKeys.add(formatDateKey(addDays(startDate, offset)));
+        const key = formatDateKey(addDays(startDate, offset));
+        if (key >= formatDateKey(new Date())) predictedPeriodKeys.add(key);
       }
     }
     setPredictedPeriodKeys(predictedPeriodKeys);
@@ -343,7 +345,8 @@ export default function CalendarTab() {
 
   const daysUntilLabel = (dateKey: string) => {
     const days = daysBetween(parseDateKey(formatDateKey(new Date())), parseDateKey(dateKey));
-    if (days <= 0) return 'Today';
+    if (days < 0) return expectedPeriodLabel(days);
+    if (days === 0) return 'Expected today';
     return days === 1 ? 'in 1 day' : `in ${days} days`;
   };
 
@@ -672,7 +675,7 @@ export default function CalendarTab() {
           {futurePeriods.length > 0 && (
             <>
               <SectionHeader
-                title="UPCOMING PERIODS"
+                title="PERIOD ESTIMATES"
                 meta="Next 3"
                 dotColor={theme.colors.primary}
               />
@@ -690,7 +693,7 @@ export default function CalendarTab() {
                         <Text style={styles.predictionInfoLabel}>
                           {formatPredictionDate(periodStart)}
                         </Text>
-                        <Text style={styles.predictionInfoValue}>
+                        <Text testID={`calendar-period-estimate-${periodStart}`} style={styles.predictionInfoValue}>
                           {daysUntilLabel(periodStart)}
                         </Text>
                       </View>

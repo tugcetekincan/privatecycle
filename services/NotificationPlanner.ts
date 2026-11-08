@@ -145,7 +145,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
     items.push(item);
   };
 
-  const model = buildCycleModel({ periodStarts, ovulationDays, today: now });
+  const model = buildCycleModel({ periodStarts, ovulationDays, today: parseDateKey(todayKey) });
   const futureStarts = model.futurePeriodStarts.slice(0, PREDICTED_CYCLES_TO_SCHEDULE);
   const windowByEnd = new Map(model.windows.map((window) => [window.end, window]));
 
@@ -165,7 +165,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       });
     }
 
-    if (settings.lateCheckIn) {
+    if (settings.lateCheckIn && start === model.currentCycle?.expectedPeriodStart) {
       const dateKey = addDaysKey(start, LATE_CHECK_IN_DAYS);
       const copy = lateCheckInCopy(settings);
       add({
@@ -198,7 +198,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
       });
     }
 
-    if (settings.phaseTips) {
+    if (settings.phaseTips && !window.predictedStart) {
       const phaseDates: { phase: CyclePhase; dateKey: string }[] = [
         { phase: 'menstrual', dateKey: window.start },
         {

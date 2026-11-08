@@ -252,7 +252,12 @@ describe('cycle windows', () => {
 
     expect(forecast.cycles.length).toBeGreaterThan(0);
     for (const cycle of forecast.cycles) {
-      expect(phaseForDateInWindows(cycle.ovulationDate, model.windows)).toBe('ovulation');
+      const window = model.windows.find((candidate) => candidate.end === cycle.periodStart)!;
+      expect(cycle.ovulationDate >= window.ovulationPhaseStart).toBe(true);
+      expect(cycle.ovulationDate <= window.ovulationPhaseEnd).toBe(true);
+      if (window.predictedStart) {
+        expect(phaseForDateInWindows(cycle.ovulationDate, model.windows)).toBeNull();
+      }
     }
   });
 });

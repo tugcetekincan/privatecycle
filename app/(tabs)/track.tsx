@@ -11,6 +11,7 @@ import { useFocusEffect } from 'expo-router';
 import { DataService } from '@/services/DataService';
 import {
   buildCycleModel,
+  expectedPeriodLabel,
   CyclePhase,
   PHASE_LABELS,
 } from '@/services/CycleModel';
@@ -193,7 +194,7 @@ export default function OverviewTab() {
     today,
   });
   const currentWindow = model.windows.find((window) => window.isCurrent) ?? null;
-  const segments = currentWindow ? phaseTrackSegments(currentWindow) : [];
+  const segments = currentWindow && currentStatus?.phase ? phaseTrackSegments(currentWindow) : [];
   const cycleLength = currentWindow
     ? daysBetween(parseDateKey(currentWindow.start), parseDateKey(currentWindow.end))
     : null;
@@ -210,7 +211,7 @@ export default function OverviewTab() {
   const variation = cycleSummary.halfRange;
 
   const nextPeriodStart =
-    forecast?.futurePeriodStarts.find((start) => start >= todayKey) ?? null;
+    currentStatus?.expectedPeriodStart ?? null;
   const nextPeriodIn = nextPeriodStart
     ? daysBetween(parseDateKey(todayKey), parseDateKey(nextPeriodStart))
     : null;
@@ -257,7 +258,7 @@ export default function OverviewTab() {
   return (
     <View style={styles.container}>
       <ScreenFade>
-        <ScrollView style={styles.scrollView}>
+        <ScrollView testID="overview-scroll" style={styles.scrollView}>
           <ScreenHeader
             title="Overview"
             subtitle="Cycle, symptoms and mood over time"
@@ -281,11 +282,11 @@ export default function OverviewTab() {
                 <Text testID="overview-cycle-day" style={styles.heroNumber}>
                   {currentStatus ? currentStatus.cycleDay : '—'}
                 </Text>
-                {cycleLength !== null && (
+                {cycleLength !== null && currentStatus?.phase && (
                   <Text style={styles.heroNumberUnit}>of ~{cycleLength}</Text>
                 )}
               </View>
-              {currentStatus ? (
+              {currentStatus?.phase ? (
                 <View style={styles.phasePill}>
                   <View
                     style={[styles.phasePillDot, { backgroundColor: phaseColors[currentStatus.phase] }]}
@@ -295,15 +296,17 @@ export default function OverviewTab() {
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.heroEmptyText}>Log your first period in Calendar</Text>
+                <Text testID="overview-phase-uncertain" style={styles.heroEmptyText}>
+                  {currentStatus ? 'Phase uncertain' : 'Log your first period in Calendar'}
+                </Text>
               )}
             </View>
 
             <View style={styles.heroSide}>
               <Text style={styles.heroSideLabel}>NEXT PERIOD</Text>
               <View style={styles.heroSideValueRow}>
-                <Text testID="overview-next-period" style={styles.heroSideValue}>
-                  {nextPeriodIn !== null ? (nextPeriodIn === 0 ? 'Today' : nextPeriodIn) : '—'}
+                <Text testID="overview-next-period" style={nextPeriodIn !== null && nextPeriodIn <= 0 ? styles.heroEmptyText : styles.heroSideValue}>
+                  {nextPeriodIn !== null ? (nextPeriodIn <= 0 ? expectedPeriodLabel(nextPeriodIn) : nextPeriodIn) : '—'}
                 </Text>
                 {nextPeriodIn !== null && nextPeriodIn > 0 && (
                   <Text style={styles.heroSideUnit}>days</Text>
@@ -314,7 +317,7 @@ export default function OverviewTab() {
           </View>
 
           {segments.length > 0 && currentStatus && (
-            <View style={styles.phaseTrackWrap}>
+            <View testID="overview-phase-track" style={styles.phaseTrackWrap}>
               <View style={styles.phaseTrack}>
                 {segments.map((segment, index) => (
                   <View
@@ -340,6 +343,19 @@ export default function OverviewTab() {
                   </Text>
                 ))}
               </View>
+            </View>
+          )}
+          {currentStatus && !currentStatus.phase && (
+            <View testID="overview-phase-track-uncertain" style={styles.phaseTrackWrap}>
+              <View style={[styles.phaseTrack, styles.phaseTrackUncertain]} />
+              <View style={styles.phaseTrackLabels}>
+                <Text style={styles.phaseTrackLabel}>Last recorded start</Text>
+                <Text style={styles.phaseTrackLabel}>Today · Day {currentStatus.cycleDay}</Text>
+              </View>
+              <Text style={styles.phaseTrackNote}>
+                {cycleLength !== null ? `Typical cycle ~${cycleLength} days. ` : ''}
+                Your cycle continues; its current phase is uncertain.
+              </Text>
             </View>
           )}
         </GradientCard>
@@ -783,6 +799,15 @@ const createStyles = (theme: any) =>
     },
     phaseTrackSegment: {
       height: 8,
+    },
+    phaseTrackUncertain: {
+      backgroundColor: theme.colors.border,
+      borderRadius: radii.pill,
+    },
+    phaseTrackNote: {
+      ...typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: spacing.sm,
     },
     phaseTrackSegmentFirst: {
       borderTopLeftRadius: 999,

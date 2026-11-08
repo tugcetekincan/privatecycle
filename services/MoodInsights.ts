@@ -53,7 +53,7 @@ export interface PhaseMoodSummary {
 /**
  * Cycle phase for a day. `periodStarts` and `ovulationDays` must be sorted
  * ascending (as the database queries return them). Returns null for days that
- * no recorded or predicted cycle covers.
+ * no recorded cycle covers (including days beyond the open cycle's expected end).
  *
  * Prefer building one model with `buildCycleModel` and reusing
  * `phaseForDateInWindows` when classifying many days.

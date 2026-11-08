@@ -10,12 +10,13 @@ import { Lightbulb } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
 import { DataService } from '@/services/DataService';
 import type { DailyData } from '@/services/DataService';
-import { CyclePhase, PHASE_LABELS } from '@/services/CycleModel';
+import { CyclePhase, expectedPeriodLabel, PHASE_LABELS } from '@/services/CycleModel';
 import {
   CYCLE_PHASE_TIPS,
   getCurrentPhaseStatus,
   PHASE_ORDER,
   TODAY_FOCUS,
+  UNCERTAIN_PHASE_FOCUS,
 } from '@/services/CyclePhaseTips';
 import { buildNarrative, NarrativePattern } from '@/services/CycleNarrative';
 import { buildTodayTips } from '@/services/TodayTips';
@@ -95,8 +96,8 @@ export default function InsightsTab() {
 
   const activePhase: CyclePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
   const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
-  const currentPhaseInfo = currentStatus ? CYCLE_PHASE_TIPS[currentStatus.phase] : null;
-  const todayFocus = currentStatus ? TODAY_FOCUS[currentStatus.phase] : null;
+  const currentPhaseInfo = currentStatus?.phase ? CYCLE_PHASE_TIPS[currentStatus.phase] : null;
+  const todayFocus = currentStatus?.phase ? TODAY_FOCUS[currentStatus.phase] : UNCERTAIN_PHASE_FOCUS;
   const showPhaseSummary = !currentStatus || activePhase !== currentStatus.phase;
 
   const phaseColors: { [phase in CyclePhase]: string } = {
@@ -194,7 +195,7 @@ export default function InsightsTab() {
   return (
     <View style={styles.container}>
       <ScreenFade>
-        <ScrollView style={styles.scrollView}>
+        <ScrollView testID="insights-scroll" style={styles.scrollView}>
           <ScreenHeader
             title="Insights"
             subtitle="What your log is telling you"
@@ -202,18 +203,22 @@ export default function InsightsTab() {
           />
 
           {/* Today */}
-          {currentStatus && currentPhaseInfo && todayFocus ? (
+          {currentStatus ? (
             <GradientCard testID="insights-today-card" style={styles.todayCard}>
             <View style={styles.todayTop}>
               <Text style={styles.todayKicker}>TODAY</Text>
               <View testID="insights-current-phase-badge" style={styles.todayPill}>
                 <Text style={styles.todayPillText}>
-                  {PHASE_BADGE_LABELS[currentStatus.phase]} · DAY {currentStatus.cycleDay}
+                  {currentStatus.phase ? PHASE_BADGE_LABELS[currentStatus.phase] : 'PHASE UNCERTAIN'} · DAY {currentStatus.cycleDay}
                 </Text>
               </View>
             </View>
-            <Text style={styles.todayTitle}>{sentenceCase(currentPhaseInfo.tagline)}</Text>
-            <Text style={styles.todaySummary}>{currentPhaseInfo.summary}</Text>
+            <Text style={styles.todayTitle}>
+              {currentPhaseInfo ? sentenceCase(currentPhaseInfo.tagline) : expectedPeriodLabel(currentStatus.daysUntilExpected)}
+            </Text>
+            <Text style={styles.todaySummary}>
+              {currentPhaseInfo ? currentPhaseInfo.summary : 'An estimate is not a recorded period. Your cycle continues from your last logged start. Log a new period in Calendar when it begins.'}
+            </Text>
 
             <View testID="insights-today-focus" style={styles.focusRow}>
               <Text style={styles.focusEmoji}>{todayFocus.emoji}</Text>

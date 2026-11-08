@@ -28,13 +28,15 @@ export const PHASE_LABELS: Record<CyclePhase, string> = {
 };
 
 export interface CycleWindow {
-  /** Recorded period start that opens the cycle. */
+  /** Forecast-only start; never evidence that a new cycle has begun. */
+  predictedStart?: boolean;
+  /** Period start that opens the window; check predictedStart before treating it as recorded. */
   start: string;
   /** Start of the next period; the cycle spans `[start, end)`. */
   end: string;
   /** True when `end` is a predicted start rather than a recorded one. */
   predictedEnd: boolean;
-  /** True for the window that contains today (or the last one when overdue). */
+  /** True only for the latest recorded start on or before today, even when overdue. */
   isCurrent: boolean;
   /** Recorded ovulation when present, otherwise `end - effectiveLutealLength`. */
   ovulationDate: string;
@@ -58,7 +60,8 @@ export interface CycleModelInput {
 }
 
 export interface CycleModel {
-  /** Recorded cycles plus the predicted cycles needed for phase lookups. */
+  currentCycle: CurrentCycleState | null;
+  /** Recorded cycle windows plus explicitly marked forecast-only windows. */
   windows: CycleWindow[];
   /** First six predicted period starts (the calendar horizon). */
   futurePeriodStarts: string[];
@@ -69,6 +72,23 @@ export interface CycleModel {
   /** Latest recorded ovulation in the open cycle, up to today. */
   currentCycleOvulation: string | null;
 }
+
+export interface CurrentCycleState {
+  start: string;
+  cycleDay: number;
+  expectedPeriodStart: string;
+  daysUntilExpected: number;
+  timing: 'upcoming' | 'expected' | 'overdue';
+  phase: CyclePhase | null;
+}
+
+/** Shared, non-diagnostic wording for the recorded cycle's next expected start. */
+export const expectedPeriodLabel = (days: number): string => {
+  if (days === 0) return 'Expected today';
+  const count = Math.abs(days);
+  const duration = `${count} ${count === 1 ? 'day' : 'days'}`;
+  return days < 0 ? `Expected ${duration} ago` : `Expected in ${duration}`;
+};
 
 const PREDICTED_CYCLES = 6;
 const DEFAULT_CYCLE_LENGTH = 28;
@@ -232,8 +252,9 @@ const buildWindow = (
  * Build the cycle windows used by both the forecast and the phase helpers.
  *
  * Windows exist for every recorded period start (the last one ends at the
- * first predicted start) and for the six predicted cycles after it, so phase
- * lookups keep working when the next period is overdue. Future-dated ovulation
+ * first predicted start) and for the six predicted cycles after it, so
+ * forecasts can extend beyond the recorded cycle. Phase lookups never treat those
+ * forecast-only starts as recorded periods. Future-dated ovulation
  * marks are ignored until their day arrives.
  */
 export const buildCycleModel = (input: CycleModelInput): CycleModel => {
@@ -243,6 +264,7 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
 
   if (periodStarts.length === 0) {
     return {
+      currentCycle: null,
       windows: [],
       futurePeriodStarts: [],
       averageLutealLength: average,
@@ -268,34 +290,47 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
 
   for (let index = 0; index < PREDICTED_CYCLES; index++) {
     windows.push(
-      buildWindow(boundaries[index], boundaries[index + 1], true, historicalOvulations, effective)
+      { ...buildWindow(boundaries[index], boundaries[index + 1], true, [], effective), predictedStart: true }
     );
   }
 
-  // The window containing today is current. When overdue past the last
-  // prediction, keep the last window current instead of dropping phases.
-  const current =
-    windows.find((window) => todayKey >= window.start && todayKey < window.end) ??
-    (todayKey < windows[0].start ? windows[0] : windows[windows.length - 1]);
-  current.isCurrent = true;
+  // Only a recorded start can open the current cycle, regardless of how overdue it is.
+  const current = windows.filter((window) => !window.predictedStart && window.start <= todayKey).at(-1);
+  if (current) current.isCurrent = true;
 
   const openWindow = windows[periodStarts.length - 1];
+  // The open recorded cycle continues past its expected end until a period is logged.
+  const openOvulation = latestOvulationBetween(
+    historicalOvulations, openWindow.start, formatDateKey(addDays(today, 1))
+  );
+  const daysUntilExpected = current
+    ? daysBetween(parseDateKey(todayKey), parseDateKey(current.end))
+    : 0;
+  const currentCycle: CurrentCycleState | null = current ? {
+    start: current.start,
+    cycleDay: daysBetween(parseDateKey(current.start), parseDateKey(todayKey)) + 1,
+    expectedPeriodStart: current.end,
+    daysUntilExpected,
+    timing: daysUntilExpected > 0 ? 'upcoming' : daysUntilExpected === 0 ? 'expected' : 'overdue',
+    phase: phaseForDateInWindows(todayKey, windows),
+  } : null;
 
   return {
+    currentCycle,
     windows,
     futurePeriodStarts,
     averageLutealLength: average,
     effectiveLutealLength: effective,
-    currentCycleOvulation: openWindow.ovulationRecorded ? openWindow.ovulationDate : null,
+    currentCycleOvulation: openOvulation,
   };
 };
 
-/** Phase for a day, given the cycle windows that cover it. */
+/** Estimated phase within a recorded cycle. Unknown beyond its expected end; never restart from a forecast. */
 export const phaseForDateInWindows = (
   date: string,
   windows: CycleWindow[]
 ): CyclePhase | null => {
-  const window = windows.find((candidate) => date >= candidate.start && date < candidate.end);
+  const window = windows.find((candidate) => !candidate.predictedStart && date >= candidate.start && date < candidate.end);
   if (!window) return null;
 
   const menstrualEnd = formatDateKey(

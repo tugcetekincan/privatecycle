@@ -6,8 +6,8 @@
  * Kept pure of SQLite/Expo so it is directly unit-testable.
  */
 
-import { buildCycleModel, CyclePhase, PHASE_ORDER, phaseForDateInWindows } from './CycleModel';
-import { daysBetween, parseDateKey } from './dateKey';
+import { buildCycleModel, CurrentCycleState, CyclePhase, PHASE_ORDER } from './CycleModel';
+import { parseDateKey } from './dateKey';
 
 export { CyclePhase, PHASE_ORDER };
 
@@ -31,9 +31,7 @@ export interface CyclePhaseInfo {
   tips: PhaseTipItem[];
 }
 
-export interface CurrentPhaseStatus {
-  phase: CyclePhase;
-  cycleDay: number;
+export interface CurrentPhaseStatus extends CurrentCycleState {
   daysSinceLastPeriod: number;
 }
 
@@ -43,6 +41,13 @@ export interface TodayFocus {
   title: string;
   description: string;
 }
+
+/** Keep the Today card useful without inventing a phase at an expected boundary. */
+export const UNCERTAIN_PHASE_FOCUS: TodayFocus = {
+  emoji: '🌿',
+  title: 'Let your body set the pace',
+  description: 'Check in with how you feel today. Choose movement, rest and meals that suit you, rather than an estimated phase.',
+};
 
 export const TODAY_FOCUS: Record<CyclePhase, TodayFocus> = {
   menstrual: {
@@ -260,26 +265,12 @@ export function getCurrentPhaseStatus(
 ): CurrentPhaseStatus | null {
   if (!periodStarts || periodStarts.length === 0) return null;
 
-  let lastStart: string | null = null;
-  for (const start of periodStarts) {
-    if (start > todayDateKey) break;
-    lastStart = start;
-  }
-  if (!lastStart) return null;
-
   const today = parseDateKey(todayDateKey);
   const model = buildCycleModel({ periodStarts, ovulationDays, today });
-  const phase = phaseForDateInWindows(todayDateKey, model.windows);
-  if (!phase) return null;
-
-  const daysSince = daysBetween(parseDateKey(lastStart), today);
-  if (daysSince < 0) return null;
-
-  const cycleDay = daysSince + 1;
+  if (!model.currentCycle) return null;
 
   return {
-    phase,
-    cycleDay,
-    daysSinceLastPeriod: daysSince,
+    ...model.currentCycle,
+    daysSinceLastPeriod: model.currentCycle.cycleDay - 1,
   };
 }

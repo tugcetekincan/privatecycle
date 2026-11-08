@@ -237,6 +237,12 @@ is a gitignored drop box for a user export — the app's normal
   prediction for the cycle it belongs to. The Overview phase buckets and
   Insights phase tips derive from the same model, so calendar, Overview and
   Insights cannot disagree about an ovulation date.
+- `CycleModel.currentCycle` stays anchored to the latest recorded start, even
+  after its expected end. Forecast-only windows have `predictedStart: true`
+  and never supply current/historical phase labels. At/past the expected end,
+  phase is unknown until a new period is logged; show expected/overdue copy,
+  not a synthetic menstrual phase. Phase reminders use recorded-start windows
+  only; late check-ins refer only to the open recorded cycle's expected start.
 
 **Backups**
 - `BackupData` JSON is a public interface: users keep these files. Only add

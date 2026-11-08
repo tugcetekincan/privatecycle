@@ -100,16 +100,35 @@ describe('buildNotificationPlan', () => {
     expect(reminder?.body).toContain('not contraception');
   });
 
-  it('schedules one phase tip per predicted phase transition', () => {
+  it('schedules phase tips only inside the recorded current cycle', () => {
     const plan = planFor(baseSettings({ phaseTips: true }), {
       periodStarts: ['2026-09-01', '2026-09-29'],
+      now: new Date(2026, 8, 29, 6),
     });
     const phases = plan.filter((item) => item.kind === 'phase');
 
-    expect(phases.length).toBeGreaterThanOrEqual(4);
-    expect(phases.some((item) => item.dateKey === '2026-10-27')).toBe(true);
+    expect(phases).toHaveLength(4);
+    expect(phases.every((item) => item.dateKey < '2026-10-27')).toBe(true);
     expect(phases.some((item) => item.title === 'Luteal phase')).toBe(true);
     expect(phases.every((item) => item.date.getHours() === 8)).toBe(true);
+  });
+
+  it('does not turn future predictions into late check-ins or phase tips', () => {
+    const plan = planFor(baseSettings({ lateCheckIn: true, phaseTips: true }), {
+      now: new Date(2026, 10, 1, 12),
+    });
+    expect(plan).toEqual([]);
+  });
+
+  it('checks in only about the open recorded cycle and resets after a new start', () => {
+    const settings = baseSettings({ lateCheckIn: true });
+    expect(planFor(settings).map((item) => item.dateKey)).toEqual(['2026-10-29']);
+    const updated = planFor(settings, {
+      now: new Date(2026, 9, 28, 12),
+      periodStarts: [...periodStarts, '2026-10-28'],
+    });
+    expect(updated).toHaveLength(1);
+    expect(updated[0].dateKey).not.toBe('2026-10-29');
   });
 
   it('hides cycle words when the privacy setting is discreet', () => {

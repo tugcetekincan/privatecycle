@@ -102,7 +102,8 @@ Naming convention: `area-element`, kebab-case.
   `mood-valence-{1..5}`, `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`;
   the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves, so there
   is no mood save button anywhere.
-- Overview (route `/track`): `overview-cycle-hero`, `overview-cycle-day`,
+- Overview (route `/track`): `overview-scroll`, `overview-cycle-hero`, `overview-cycle-day`,
+  `overview-phase-track`, `overview-phase-track-uncertain`,
   `overview-next-period`, `overview-cycle-meta`, `overview-avg-cycle`,
   `overview-last-period`, `overview-cycle-variation`, `overview-cycle-chart`,
   `overview-cycle-regularity`, `overview-symptom-patterns-card`,
@@ -110,7 +111,7 @@ Naming convention: `area-element`, kebab-case.
   `overview-symptom-bar-{id}`, `overview-symptom-segment-{id}-{phase}`,
   `overview-symptom-empty`, `overview-mood-trend`, `overview-mood-phase-{phase}`,
   `overview-mood-empty`
-- Insights: `insights-today-card`, `insights-current-phase-badge`,
+- Insights: `insights-scroll`, `insights-today-card`, `insights-current-phase-badge`,
   `insights-today-focus`, `insights-today-tips`, `insights-today-tip-{label}`,
   `insights-today-empty`,
   `insights-pattern-{symptom-<id>|mood|cycle}`, `insights-patterns-empty`,
@@ -185,6 +186,17 @@ The smoke also captures all tabs at 360px in dark mode, private entry sheets,
 empty histories and a simulated storage failure followed by a successful
 retry. It checks return-to-today navigation and that Settings shows `—` rather
 than a fabricated average for an empty history. These are screenshots 14–20.
+
+After the polish regression flow, smoke freezes the browser date at 1 Nov 2026
+and loads synthetic overdue/predicted-boundary histories (PRIVATECYC-1). It
+checks Calendar expected-date wording, Overview's recorded cycle day and
+Insights' uncertain phase with a neutral Today focus and log-backed tips. The
+Overview timeline stays visible with a neutral uncertain-state bar. Screenshots are
+`15-*`, `16-*`, and `17-*`; these never use personal export data.
+
+Overview and Insights screenshots use `fullScreenShot` to expand the viewport
+to their ScrollView content height and fail if any content remains clipped.
+Playwright's `fullPage: true` alone cannot capture overflow inside RN ScrollView.
 
 Both scripts fail fast if their ports are occupied and kill Expo's process
 group on exit. If a run is interrupted, verify ports are free:
