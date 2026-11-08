@@ -12,25 +12,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tugcetekincan/privatecycle/releases/latest"><strong>Download for Android</strong></a>
+  <a href="https://github.com/tugcetekincan/privatecycle/releases/latest"><strong>Download for Android · v1.7.5</strong></a>
   &nbsp; · &nbsp;
   <a href="https://github.com/tugcetekincan/privatecycle/releases">Release notes &amp; nightly builds</a>
 </p>
 
 <table>
   <tr>
-    <td align="center"><strong>Your calendar</strong></td>
-    <td align="center"><strong>Your patterns</strong></td>
-    <td align="center"><strong>A little perspective</strong></td>
+    <td valign="top"><img src="docs/screenshots/cycle-length.png" width="390" alt="Cycle length chart showing four cycles, their average and variation"></td>
+    <td valign="top"><img src="docs/screenshots/mood-by-phase-dark.png" width="390" alt="Insights card comparing average mood in the follicular and menstrual phases, with the number of logged days"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/calendar.png" width="260" alt="Calendar in light mode, with logged periods, predicted dates and a fertility forecast"></td>
-    <td><img src="docs/screenshots/overview.png" width="260" alt="Overview in light mode, showing cycle length, variation and symptom patterns"></td>
-    <td><img src="docs/screenshots/insights-dark.png" width="260" alt="Insights in dark mode, with today's cycle phase and patterns from the log"></td>
+    <td valign="top"><img src="docs/screenshots/symptom-patterns.png" width="390" alt="Symptom dashboard with frequency, sample sizes and colored bars showing each symptom's cycle phases"></td>
+    <td valign="top"><img src="docs/screenshots/mood-trends-dark.png" width="390" alt="Mood dashboard in dark mode with a 60-day line chart, shaded period days and mood averages for all four phases"></td>
   </tr>
 </table>
 
-<p align="center"><sub>Current development build, captured on the web with demo data. Light and dark themes included.</sub></p>
+<p align="center"><sub>A closer look at Overview and Insights. Actual chart cards from the current development build, shown with demo data in light and dark mode.</sub></p>
 
 ## What you can do
 
@@ -52,28 +50,52 @@ The private calendar locks when the app goes into the background. On mobile, it 
 
 Keep an exported backup somewhere you trust. There's no cloud copy to recover if you lose your device or delete the app's data.
 
-## Get the app
-
-**Stable release: [v1.7.5](https://github.com/tugcetekincan/privatecycle/releases/tag/v1.7.5)** · November 5, 2026
-
-Open the [latest release](https://github.com/tugcetekincan/privatecycle/releases/latest), download the `Privatecycle-*.apk` under **Assets**, and install it on your Android phone. The APK is built for ARM64 devices.
-
-Want the newest changes? [Nightly builds](https://github.com/tugcetekincan/privatecycle/releases) are marked **Pre-release** and install alongside the stable app. They have their own data, so you can import a backup to try them with your history.
-
-Android is the downloadable release. iOS and web are available to run from source; local reminders are mobile-only.
-
 <details>
-<summary><strong>Run it locally</strong></summary>
+<summary><strong>Run and build locally</strong></summary>
 
-Use Node.js 22.13 or newer.
+Use Node.js 22.13 or newer. Start by installing the dependencies:
 
 ```sh
 npm ci
+```
+
+**Web**
+
+```sh
 npm run dev:web
 ```
 
 Open [localhost:8082](http://localhost:8082). To explore with sample history, use [localhost:8082/?seed=1](http://localhost:8082/?seed=1); it only adds demo data when the calendar is empty.
 
-For native builds and development checks, see [the project guide](AGENTS.md).
+To export the web app:
+
+```sh
+npm run build:web
+```
+
+The output goes to `dist/`. Your web server must send `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so local storage works.
+
+**Android**
+
+With the Android SDK, JDK 17 and a connected device or emulator:
+
+```sh
+npm run prebuild:android:dev
+npm run android:dev
+```
+
+This builds and installs PrivateCycle Dev alongside the stable app, with its own data. Repeat prebuild after native dependency or configuration changes.
+
+**iOS**
+
+On macOS with Xcode installed:
+
+```sh
+npm run ios
+```
+
+This builds and launches the app in the iOS simulator. Local reminders are available on mobile only.
+
+More device setup and verification details are in [the project guide](AGENTS.md).
 
 </details>
