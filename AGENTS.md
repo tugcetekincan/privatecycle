@@ -66,6 +66,7 @@ services/               DataService (SQLite owner), BackupService,
                         IntimacyService (private calendar summaries),
                         privateAccess/ (PIN hash + platform storage), devGlobals
 scripts/                web harness (see below), debug probe,
+                        make-app-icons.mjs (Tidemark launcher exports),
                         make-notification-icon.mjs (96px Android icon),
                         release-version.mjs (production release version),
                         release-metadata.mjs (CI tag + APK filename)
@@ -83,6 +84,7 @@ plugins/withAndroidSigning.js   Expo config plugin for release signing
 | --- | --- |
 | `npm ci` | install exact deps (use after pulling changes) |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run icons:generate` | Export production/nightly launcher PNGs from the Tidemark SVG masters |
 | `npm test` | Jest unit suite (`jest-expo` preset) |
 | `node scripts/release-version.mjs` | preview the next manual production version |
 | `npm run smoke:web` | headless end-to-end + screenshots (~1–3 min) |
@@ -327,6 +329,13 @@ is a gitignored drop box for a user export — the app's normal
   `textTransform: 'uppercase'`: React Native Android applies the transform
   with the device locale, so Turkish devices render dotted İ (`FEELİNGS`).
 - Dev-only UI/logic is wrapped in `__DEV__`.
+- Launcher sources live in `assets/images/tidemark/*.svg`; regenerate their
+  committed PNG exports with `npm run icons:generate` after editing. `app.json`
+  selects production and `app.config.js` selects nightly (dark teal + amber
+  marker); dev keeps its existing blue icon. Android adaptive exports have
+  separate full-bleed backgrounds, padded foregrounds and monochrome layers.
+  Validate the resolved Expo config and generated Android resources, not just
+  the SVG preview: changing source artwork alone does not update the app icon.
 
 **Tests**
 - Put pure logic in services so it can be tested without a database.
@@ -440,7 +449,8 @@ not trigger builds. Bump rules, verification and recovery details:
   APK from the newest release), local dev `com.ncan.privatecycle.dev`
   ("PrivateCycle Dev", blue icon, debug-signed dev client,
   `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
-  ("PrivateCycle Nightly", amber icon, release-signed, downloaded from the
+  ("PrivateCycle Nightly", dark teal Tidemark icon with an amber marker,
+  release-signed, downloaded from the
   Nightly prereleases). They
   coexist on one device with separate data sandboxes — import a backup
   exported from the stable app to test with realistic data. `android/`

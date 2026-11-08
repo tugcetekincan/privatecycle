@@ -19,9 +19,22 @@ Visual proof and measurements:
   design/tidemark-vector/trace-report.json
   design/tidemark-vector/verification.json
 
-The app configuration has not yet been switched to these assets. Platform
-launcher exports must apply the platform mask to a full-bleed background;
-the rounded-tile presentation source should not acquire a second corner mask.
+app.json uses the production PNG exports; app.config.js selects the nightly
+exports for APP_VARIANT=nightly. The local dev variant retains its blue icon.
+
+Regenerate the committed platform PNG exports after editing a master:
+  npm run icons:generate
+
+The exporter uses the existing Playwright Chromium installation. The *-icon.png
+files are opaque, full-bleed 1024px icons for iOS and legacy Android launchers.
+The adaptive foreground/background and monochrome exports use Android's 108dp
+canvas with the original artwork in its central 72dp viewport. Android applies
+the outside shape; no rounded corners are baked into these launcher layers.
+The 64px favicons retain the rounded presentation tile. The SVG masters remain
+resolution-independent; PNGs are the platform inputs generated from them.
+
+Pushes publish the nightly identity. The production icon ships with the next
+manual production release.
 
 Rebuilding the trace (from the repository root):
   python3 design/tidemark-vector/trace.py

@@ -20,6 +20,9 @@ const VARIANTS = {
     slug: 'privatecycle-dev',
     scheme: 'privatecycle-dev',
     package: 'com.ncan.privatecycle.dev',
+    icon: './assets/images/icon.png',
+    foregroundImage: './assets/images/adaptive-icon.png',
+    favicon: './assets/images/favicon.png',
     iconColor: '#4f7cff',
   },
   nightly: {
@@ -27,7 +30,12 @@ const VARIANTS = {
     slug: 'privatecycle-nightly',
     scheme: 'privatecycle-nightly',
     package: 'com.ncan.privatecycle.nightly',
-    iconColor: '#f59e0b',
+    icon: './assets/images/tidemark/nightly-icon.png',
+    foregroundImage: './assets/images/tidemark/nightly-adaptive-foreground.png',
+    backgroundImage: './assets/images/tidemark/nightly-adaptive-background.png',
+    monochromeImage: './assets/images/tidemark/nightly-monochrome.png',
+    favicon: './assets/images/tidemark/nightly-favicon.png',
+    iconColor: '#183b41',
   },
 };
 
@@ -88,6 +96,7 @@ module.exports = ({ config }) => {
   return {
     ...base,
     name: variant.name,
+    icon: variant.icon,
     // Distinct slug too: expo-dev-client derives its `exp+<slug>` deep-link
     // scheme from it, and sharing one would make `expo run:android` ambiguous
     // when another dev build is also installed.
@@ -98,13 +107,21 @@ module.exports = ({ config }) => {
       package: variant.package,
       adaptiveIcon: {
         ...base.android?.adaptiveIcon,
-        // Distinct launcher tint so the channels are never confused.
+        // Select the actual artwork too: tinting the production foreground
+        // alone would leave nightly showing the wrong mark.
+        foregroundImage: variant.foregroundImage,
+        backgroundImage: variant.backgroundImage,
+        monochromeImage: variant.monochromeImage,
         backgroundColor: variant.iconColor,
       },
     },
     ios: {
       ...base.ios,
       bundleIdentifier: variant.package,
+    },
+    web: {
+      ...base.web,
+      favicon: variant.favicon,
     },
   };
 };
