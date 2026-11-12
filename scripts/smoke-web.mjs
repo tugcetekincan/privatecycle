@@ -833,6 +833,99 @@ try {
     await fullScreenShot(`17-${scenario.name}-insights`, 'insights-scroll');
   }
   log('recorded-cycle boundary and overdue flows OK');
+
+  // --- Backup safety: a malformed file must never mutate the database. ---
+  const backupSafety = await page.evaluate(async () => {
+    const dailyBefore = await __privatecycle.DataService.getAllDailyData();
+    const privateBefore = await __privatecycle.DataService.getIntimateData();
+    const [dateKey] = Object.keys(dailyBefore);
+    if (!dateKey) return { skipped: true };
+
+    const malformed = {
+      version: '1.0.0',
+      timestamp: Date.now(),
+      data: {
+        dailyData: {
+          [dateKey]: { ...dailyBefore[dateKey], isPeriod: 'yes' },
+        },
+      },
+      metadata: { totalDays: 1, dateRange: { start: dateKey, end: dateKey } },
+    };
+
+    const accepted = __privatecycle.BackupService.validateBackupData(malformed);
+    let rejectedRestore = false;
+    try {
+      await __privatecycle.BackupService.restoreFromBackup(malformed);
+    } catch {
+      rejectedRestore = true;
+    }
+
+    const dailyAfter = await __privatecycle.DataService.getAllDailyData();
+    const privateAfter = await __privatecycle.DataService.getIntimateData();
+
+    return {
+      accepted,
+      rejectedRestore,
+      dailyUnchanged: JSON.stringify(dailyBefore) === JSON.stringify(dailyAfter),
+      privateUnchanged: JSON.stringify(privateBefore) === JSON.stringify(privateAfter),
+    };
+  });
+
+  if (!backupSafety.skipped) {
+    if (backupSafety.accepted) failures.push('backup validation accepted a malformed day');
+    if (!backupSafety.rejectedRestore) failures.push('malformed restore did not throw');
+    if (!backupSafety.dailyUnchanged || !backupSafety.privateUnchanged) {
+      failures.push('malformed restore mutated the database');
+    }
+    log('backup validation rejects malformed data without mutation');
+  }
+
+  // --- A valid restore replaces cycle data and keeps the private log. ---
+  const backupRestore = await page.evaluate(async () => {
+    const privateKey = '2020-01-02';
+    await __privatecycle.DataService.saveIntimateDay({
+      date: privateKey,
+      protection: 'na',
+      note: 'kept through restore',
+    });
+
+    const replacementDate = '2020-01-01';
+    const replacement = {
+      version: '1.0.0',
+      timestamp: Date.now(),
+      data: {
+        dailyData: {
+          [replacementDate]: {
+            date: replacementDate,
+            isPeriod: true,
+            flowLevel: 'medium',
+            symptoms: [],
+            mood: '',
+            isOvulation: false,
+          },
+        },
+      },
+      metadata: {
+        totalDays: 1,
+        dateRange: { start: replacementDate, end: replacementDate },
+      },
+    };
+
+    await __privatecycle.BackupService.restoreFromBackup(replacement);
+    const dailyAfter = await __privatecycle.DataService.getAllDailyData();
+    const privateAfter = await __privatecycle.DataService.getIntimateData();
+
+    return {
+      dailyKeys: Object.keys(dailyAfter).sort(),
+      privateKept: Boolean(privateAfter[privateKey]),
+    };
+  });
+
+  if (backupRestore.dailyKeys.length !== 1 || backupRestore.dailyKeys[0] !== '2020-01-01') {
+    failures.push('valid restore did not replace cycle data');
+  }
+  if (!backupRestore.privateKept) failures.push('valid restore erased the private log');
+  log('valid restore replaces cycle data and preserves the private log');
 } catch (error) {
   failures.push(`smoke run threw: ${error.message}`);
   console.error(expoLog.split('\n').slice(-25).join('\n'));

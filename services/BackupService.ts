@@ -5,6 +5,11 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DataService, DailyData, IntimateData } from './DataService';
 import { PrivateAccessService } from './PrivateAccessService';
+import {
+  BACKUP_VERSION,
+  MAX_BACKUP_BYTES,
+  validateBackupPayload,
+} from './BackupValidation';
 
 export interface BackupData {
   version: string;
@@ -37,7 +42,6 @@ export interface BackupSettings {
 export class BackupService {
   private static readonly BACKUP_FOLDER = `${FileSystem.documentDirectory}backups/`;
   private static readonly BACKUP_SETTINGS_KEY = 'backup_settings';
-  private static readonly BACKUP_VERSION = '1.0.0';
 
   // The local-file backup features rely on expo-file-system's document directory,
   // which doesn't exist on web. On web we degrade gracefully: export/import work via
@@ -126,7 +130,7 @@ export class BackupService {
       }
 
       const backupData: BackupData = {
-        version: this.BACKUP_VERSION,
+        version: BACKUP_VERSION,
         timestamp: Date.now(),
         data: {
           dailyData,
@@ -243,24 +247,56 @@ export class BackupService {
       }
 
       // DocumentPicker returns a blob URL on web, which FileSystem can't read; fetch it.
-      const backupContent = this.isWeb
-        ? await (await fetch(backupFilePath)).text()
-        : await FileSystem.readAsStringAsync(backupFilePath);
-      const backupData: BackupData = JSON.parse(backupContent);
+      let backupContent: string;
 
-      if (!this.validateBackupData(backupData)) {
+      if (this.isWeb) {
+        const response = await fetch(backupFilePath);
+        const declaredLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(declaredLength) && declaredLength > MAX_BACKUP_BYTES) {
+          return { success: false, message: this.tooLargeMessage() };
+        }
+        backupContent = await response.text();
+      } else {
+        const fileInfo = await FileSystem.getInfoAsync(backupFilePath);
+        if (
+          fileInfo.exists &&
+          'size' in fileInfo &&
+          typeof fileInfo.size === 'number' &&
+          fileInfo.size > MAX_BACKUP_BYTES
+        ) {
+          return { success: false, message: this.tooLargeMessage() };
+        }
+        backupContent = await FileSystem.readAsStringAsync(backupFilePath);
+      }
+
+      // Content-Length is not always available (blob URLs); check the actual
+      // text before parsing so an oversized file never reaches validation.
+      if (this.getContentByteLength(backupContent) > MAX_BACKUP_BYTES) {
+        return { success: false, message: this.tooLargeMessage() };
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(backupContent);
+      } catch {
+        return { success: false, message: 'This file is not valid JSON.' };
+      }
+
+      if (!this.validateBackupData(parsed)) {
         return { success: false, message: 'Invalid backup file format' };
       }
 
+      const backupData = parsed;
       await this.restoreFromBackup(backupData);
 
+      const totalDays = Object.keys(backupData.data.dailyData).length;
       const privateDays = backupData.data.intimateData
         ? Object.keys(backupData.data.intimateData).length
         : 0;
       const stats = {
         version: backupData.version,
         timestamp: new Date(backupData.timestamp).toLocaleString(),
-        totalDays: backupData.metadata.totalDays,
+        totalDays,
         dateRange: backupData.metadata.dateRange,
         includesPrivateData: backupData.data.intimateData !== undefined,
         privateDays,
@@ -268,7 +304,7 @@ export class BackupService {
 
       return { 
         success: true, 
-        message: `Successfully imported backup with ${backupData.metadata.totalDays} days of data`,
+        message: `Successfully imported backup with ${totalDays} days of data`,
         stats
       };
     } catch (error) {
@@ -277,76 +313,45 @@ export class BackupService {
     }
   }
 
-  static async restoreFromBackup(backupData: BackupData): Promise<void> {
-    try {
-      await DataService.clearDailyData();
-      await DataService.saveManyDailyData(backupData.data.dailyData);
+  private static tooLargeMessage(): string {
+    return `Backup file is too large. The maximum supported size is ${this.formatFileSize(MAX_BACKUP_BYTES)}.`;
+  }
 
-      // Old backups predate the private calendar. Keep the device's private
-      // log when the file has no private section; when it does, replace it.
-      if (backupData.data.intimateData !== undefined) {
-        await DataService.clearIntimateData();
-        await DataService.saveManyIntimateData(backupData.data.intimateData);
-      }
+  private static getContentByteLength(content: string): number {
+    try {
+      return new TextEncoder().encode(content).length;
+    } catch {
+      // UTF-8 bytes are never fewer than UTF-16 code units, so this is a safe
+      // lower bound if the runtime has no TextEncoder.
+      return content.length;
+    }
+  }
+
+  static async restoreFromBackup(backupData: BackupData): Promise<void> {
+    // Validate here as well as in importBackup: restore is the only path that
+    // mutates the database, so every caller (including future import preview
+    // and merge flows) must go through the same safety check. Invalid input is
+    // a user error, not an app failure, so it is not logged as one.
+    if (!this.validateBackupData(backupData)) {
+      throw new Error('Invalid backup data');
+    }
+
+    try {
+      // One DataService transaction replaces the cycle data and, when the file
+      // includes it, the private calendar. A failed write rolls everything back
+      // instead of leaving the user with cleared tables.
+      await DataService.replaceAllData(
+        backupData.data.dailyData,
+        backupData.data.intimateData
+      );
     } catch (error) {
       console.error('Error restoring from backup:', error);
       throw error;
     }
   }
 
-  static validateBackupData(data: any): data is BackupData {
-    if (
-      !(
-        data &&
-        typeof data.version === 'string' &&
-        typeof data.timestamp === 'number' &&
-        data.data &&
-        typeof data.data.dailyData === 'object' &&
-        data.data.dailyData !== null &&
-        data.metadata &&
-        typeof data.metadata.totalDays === 'number'
-      )
-    ) {
-      return false;
-    }
-
-    if (data.data.intimateData !== undefined) {
-      if (
-        !data.data.intimateData ||
-        typeof data.data.intimateData !== 'object' ||
-        Array.isArray(data.data.intimateData)
-      ) {
-        return false;
-      }
-
-      for (const day of Object.values(data.data.intimateData)) {
-        if (!day || typeof day !== 'object') return false;
-        const entry = day as { date?: unknown; protection?: unknown; note?: unknown };
-        if (
-          typeof entry.date !== 'string' ||
-          typeof entry.protection !== 'string' ||
-          typeof entry.note !== 'string'
-        ) {
-          return false;
-        }
-      }
-    }
-
-    if (
-      data.metadata.includesPrivateData !== undefined &&
-      typeof data.metadata.includesPrivateData !== 'boolean'
-    ) {
-      return false;
-    }
-
-    if (
-      data.metadata.privateDays !== undefined &&
-      typeof data.metadata.privateDays !== 'number'
-    ) {
-      return false;
-    }
-
-    return true;
+  static validateBackupData(data: unknown): data is BackupData {
+    return validateBackupPayload(data);
   }
 
   static async getLocalBackups(): Promise<Array<{ name: string; path: string; size: number; date: Date }>> {

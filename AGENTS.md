@@ -51,6 +51,7 @@ hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useNotificationSettings (local preference loader),
                         usePrivateScreenProtection (native screenshot block)
 services/               DataService (SQLite owner), BackupService,
+                        BackupValidation (deep backup validation),
                         NotificationService (local delivery + permissions),
                         NotificationPlanner (pure reminder dates/copy),
                         NotificationSettings (stored preferences),
@@ -248,12 +249,20 @@ is a gitignored drop box for a user export — the app's normal
 - `BackupData` JSON is a public interface: users keep these files. Only add
   fields, keep old ones optional, bump `BACKUP_VERSION` for breaking shape
   changes, and extend `validateBackupData` (it must return a real boolean).
+  Validation lives in `services/BackupValidation.ts` and must stay deep:
+  every day key is a real local date, every field has the right type, only
+  supported versions pass, and file/entry sizes are bounded. Validate before
+  any mutation and keep accepting unknown extra fields for forward
+  compatibility.
 - `BackupService` still imports the classic file API from
   `expo-file-system/legacy`: SDK 54 replaced the module's default export with
   the object-oriented `File`/`Directory` API. The legacy entry point still
   ships in SDK 58, so migrating the backup folder code is a standalone
   follow-up, not part of an SDK bump.
-- Restore is destructive: clear + bulk insert for cycle data. The private
+- Restore is destructive but atomic: `BackupService.restoreFromBackup`
+  validates first and delegates to `DataService.replaceAllData`, which clears
+  and re-inserts cycle data (and the optional private section) in one
+  transaction. Never restore with separate clear/save calls. The private
   calendar is replaced only when the backup contains `data.intimateData`;
   otherwise the device's private log is preserved.
 - Private calendar backups are opt-in (`Include in backups`, default off):
