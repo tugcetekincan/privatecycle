@@ -180,11 +180,15 @@ const MIGRATIONS: Migration[] = [
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
-class SQLiteDataService {
+/** Exported for tests that inject a fake database; the app uses the facade below. */
+export class SQLiteDataService {
   private db: SQLite.SQLiteDatabase | null = null;
   private initializationPromise: Promise<void> | null = null;
 
-  constructor() {
+  constructor(
+    private readonly openDatabase: () => Promise<SQLite.SQLiteDatabase> = () =>
+      SQLite.openDatabaseAsync('cycle_tracker.db')
+  ) {
     // Start initialization immediately when service is created
     this.initializeDatabase().catch(error => {
       console.error('Failed to initialize database during construction:', error);
@@ -207,7 +211,7 @@ class SQLiteDataService {
       }
 
       console.log('Initializing SQLite database...');
-      this.db = await SQLite.openDatabaseAsync('cycle_tracker.db');
+      this.db = await this.openDatabase();
       
       if (!this.db) {
         throw new Error('Failed to open database');
@@ -405,35 +409,71 @@ class SQLiteDataService {
   }
 
   /**
-   * Insert or replace many days in a single transaction. Useful for restoring
-   * backups and seeding demo data, where per-row round trips are wasteful.
+   * Write every day row on the supplied connection. Callers own the
+   * transaction so saveMany and restore can share the row mapping.
+   */
+  private async writeDailyRows(
+    db: SQLite.SQLiteDatabase,
+    data: { [date: string]: DailyData }
+  ): Promise<void> {
+    for (const [dateKey, day] of Object.entries(data)) {
+      if (!dayHasContent(day)) continue; // no content -> no row
+      await db.runAsync(
+        `INSERT OR REPLACE INTO daily_data
+         (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags, is_ovulation)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          dateKey,
+          day.isPeriod ? 1 : 0,
+          day.flowLevel || '',
+          JSON.stringify(day.symptoms || []),
+          day.mood || '',
+          day.moodValence || 0,
+          serializeMoodTags(day.moodTags || []),
+          day.isOvulation ? 1 : 0,
+        ]
+      );
+    }
+  }
+
+  /**
+   * Insert or replace many days in a single transaction. Used by seeding and
+   * other bulk writes; restore goes through `replaceAllData` instead.
    */
   async saveManyDailyData(data: { [date: string]: DailyData }): Promise<void> {
-    const entries = Object.entries(data);
-    if (entries.length === 0) return;
+    if (Object.keys(data).length === 0) return;
 
     const db = await this.ensureInitialized();
-
     await db.withTransactionAsync(async () => {
-      for (const [dateKey, day] of entries) {
-        if (!dayHasContent(day)) continue; // no content -> no row
-        await db.runAsync(
-          `INSERT OR REPLACE INTO daily_data
-           (date, is_period, flow_level, symptoms, mood, mood_valence, mood_tags, is_ovulation)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            dateKey,
-            day.isPeriod ? 1 : 0,
-            day.flowLevel || '',
-            JSON.stringify(day.symptoms || []),
-            day.mood || '',
-            day.moodValence || 0,
-            serializeMoodTags(day.moodTags || []),
-            day.isOvulation ? 1 : 0,
-          ]
-        );
-      }
+      await this.writeDailyRows(db, data);
     });
+  }
+
+  /**
+   * Replace all cycle data and, when `intimateData` is provided, the private
+   * calendar in one transaction. Restore must never clear first and insert
+   * later: a failed write would leave the user with no history. Passing
+   * `undefined` keeps the device's private log; an empty object clears it.
+   */
+  async replaceAllData(
+    dailyData: { [date: string]: DailyData },
+    intimateData?: IntimateData
+  ): Promise<void> {
+    try {
+      const db = await this.ensureInitialized();
+      await db.withTransactionAsync(async () => {
+        await db.runAsync('DELETE FROM daily_data');
+        await this.writeDailyRows(db, dailyData);
+
+        if (intimateData !== undefined) {
+          await db.runAsync('DELETE FROM intimate_data');
+          await this.writeIntimateRows(db, intimateData);
+        }
+      });
+    } catch (error) {
+      console.error('Error replacing all data:', error);
+      throw error;
+    }
   }
 
   /**
@@ -620,19 +660,25 @@ class SQLiteDataService {
     }
   }
 
+  private async writeIntimateRows(
+    db: SQLite.SQLiteDatabase,
+    data: IntimateData
+  ): Promise<void> {
+    for (const [dateKey, day] of Object.entries(data)) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO intimate_data (date, activity, protection, note)
+         VALUES (?, 1, ?, ?)`,
+        [dateKey, normalizeProtection(day.protection), day.note ?? '']
+      );
+    }
+  }
+
   async saveManyIntimateData(data: IntimateData): Promise<void> {
-    const entries = Object.entries(data);
-    if (entries.length === 0) return;
+    if (Object.keys(data).length === 0) return;
 
     const db = await this.ensureInitialized();
     await db.withTransactionAsync(async () => {
-      for (const [dateKey, day] of entries) {
-        await db.runAsync(
-          `INSERT OR REPLACE INTO intimate_data (date, activity, protection, note)
-           VALUES (?, 1, ?, ?)`,
-          [dateKey, normalizeProtection(day.protection), day.note ?? '']
-        );
-      }
+      await this.writeIntimateRows(db, data);
     });
   }
 
@@ -942,6 +988,13 @@ export class DataService {
 
   static async saveManyDailyData(data: { [date: string]: DailyData }): Promise<void> {
     return sqliteDataService.saveManyDailyData(data);
+  }
+
+  static async replaceAllData(
+    dailyData: { [date: string]: DailyData },
+    intimateData?: IntimateData
+  ): Promise<void> {
+    return sqliteDataService.replaceAllData(dailyData, intimateData);
   }
 
   static async saveMoodData(
