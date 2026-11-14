@@ -230,8 +230,9 @@ One diffuse shadow language:
 ### Charts
 
 - Symptom bars: 8–9px high, rounded ends, 4 phase colors, 1–2px gaps.
-- Cycle length: 6 bars max, 34px wide, `primaryWeak` with the newest bar
-  `primary`; dashed average line; labels `MMM d` 9–10px.
+- Cycle length: every completed cycle in a horizontal row, six bars visible
+  at a time (34px max) and older ones swipe in; `primaryWeak` with the newest
+  bar `primary`; dashed recent-six average line; labels `MMM d` 9–10px.
 - Mood: 2px line, daily dots, period days as 12% primary bands, 60-day window.
 - Always include a caption or legend; color is never the only key.
 - Sample size belongs next to the chart or in the card meta.

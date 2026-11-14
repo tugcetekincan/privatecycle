@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,12 @@ import {
   CyclePhase,
   PHASE_LABELS,
 } from '@/services/CycleModel';
-import { phaseTrackSegments, summarizeCycleLengths } from '@/services/CycleTrends';
+import {
+  buildCycleLengthPoints,
+  CYCLE_HISTORY_LIMIT,
+  phaseTrackSegments,
+  summarizeCycleLengths,
+} from '@/services/CycleTrends';
 import { getCurrentPhaseStatus } from '@/services/CyclePhaseTips';
 import {
   MOOD_SERIES_DAYS,
@@ -41,6 +46,9 @@ const OVULATION_COLOR = '#009688';
 
 const CHART_HEIGHT = 84;
 const CHART_LABEL_HEIGHT = 18;
+const CHART_VISIBLE_CYCLES = 6;
+const CHART_GAP = 8;
+const CHART_TOTAL_HEIGHT = CHART_HEIGHT + CHART_LABEL_HEIGHT + 24;
 
 type OverviewStats = Awaited<ReturnType<typeof DataService.getInsights>>;
 
@@ -163,6 +171,9 @@ export default function OverviewTab() {
   const { theme } = useTheme();
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [forecast, setForecast] = useState<FertilityForecast | null>(null);
+  const [cycleChartWidth, setCycleChartWidth] = useState(0);
+  const chartScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const lastChartScrollKey = useRef('');
 
   const loadOverview = useCallback(async () => {
     const [data, fertility] = await Promise.all([
@@ -204,6 +215,7 @@ export default function OverviewTab() {
       : 0;
 
   const cycleSummary = summarizeCycleLengths(stats.periodStarts);
+  const cyclePoints = buildCycleLengthPoints(stats.periodStarts);
   const averageCycle =
     cycleSummary.average !== null ? Math.round(cycleSummary.average) : null;
   const lastPeriodLength =
@@ -230,15 +242,33 @@ export default function OverviewTab() {
     luteal: theme.colors.warning,
   };
 
-  const chartSpan =
-    cycleSummary.min !== null && cycleSummary.max !== null
-      ? cycleSummary.max - cycleSummary.min
-      : 0;
+  const chartMin =
+    cyclePoints.length > 0 ? Math.min(...cyclePoints.map((point) => point.length)) : null;
+  const chartMax =
+    cyclePoints.length > 0 ? Math.max(...cyclePoints.map((point) => point.length)) : null;
+  const chartSpan = chartMin !== null && chartMax !== null ? chartMax - chartMin : 0;
   const chartValue = (length: number) =>
-    chartSpan === 0 ? 0.55 : (length - cycleSummary.min!) / chartSpan;
+    chartSpan === 0 ? 0.55 : (length - chartMin!) / chartSpan;
   const barHeight = (length: number) => 24 + chartValue(length) * 56;
   const averageBarHeight =
     cycleSummary.average !== null ? barHeight(cycleSummary.average) : null;
+
+  const chartOverflows = cyclePoints.length > CHART_VISIBLE_CYCLES;
+  const chartColumnWidth =
+    cycleChartWidth > 0
+      ? (cycleChartWidth - CHART_GAP * (CHART_VISIBLE_CYCLES - 1)) / CHART_VISIBLE_CYCLES
+      : 0;
+  const chartContentWidth = chartOverflows
+    ? cyclePoints.length * chartColumnWidth + (cyclePoints.length - 1) * CHART_GAP
+    : cycleChartWidth;
+
+  const handleChartContentSize = useCallback(() => {
+    if (!chartOverflows || cycleChartWidth <= 0) return;
+    const key = `${cyclePoints.length}:${Math.round(cycleChartWidth)}`;
+    if (lastChartScrollKey.current === key) return;
+    lastChartScrollKey.current = key;
+    chartScrollRef.current?.scrollToEnd({ animated: false });
+  }, [chartOverflows, cycleChartWidth, cyclePoints.length]);
 
   const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
   const chartWidth = 310;
@@ -404,12 +434,12 @@ export default function OverviewTab() {
                 />
               )}
             </View>
-            <Text style={styles.cardMeta}>
-              {cycleSummary.points.length > 0
-                ? cycleSummary.points.length === 6
-                  ? 'Last 6 cycles'
-                  : `Last ${cycleSummary.points.length} ${plural(
-                      cycleSummary.points.length,
+            <Text testID="overview-cycle-chart-meta" style={styles.cardMeta}>
+              {cyclePoints.length > 0
+                ? chartOverflows
+                  ? `All ${cyclePoints.length} cycles`
+                  : `Last ${cyclePoints.length} ${plural(
+                      cyclePoints.length,
                       'cycle',
                       'cycles'
                     )}`
@@ -417,53 +447,102 @@ export default function OverviewTab() {
             </Text>
           </View>
 
-          {cycleSummary.points.length > 0 ? (
+          {cyclePoints.length > 0 ? (
             <>
-              <View style={styles.cycleChart}>
-                <View style={styles.cycleBars}>
-                  {cycleSummary.points.map((point, index) => (
-                    <View key={point.start} style={styles.cycleBarColumn}>
-                      <Text style={[typography.caption, { color: theme.colors.textSecondary, marginBottom: 4 }]}>{point.length}</Text>
-                      <View
-                        style={[
-                          styles.cycleBar,
-                          {
-                            height: barHeight(point.length),
-                            backgroundColor:
-                              index === cycleSummary.points.length - 1
-                                ? theme.colors.primary
-                                : theme.isDark
-                                  ? '#5a2437'
-                                  : '#f8bbd0',
-                          },
-                        ]}
-                      />
-                    </View>
-                  ))}
-                </View>
-                {averageBarHeight !== null && (
+              <View
+                style={styles.cycleChart}
+                onLayout={(event) => setCycleChartWidth(event.nativeEvent.layout.width)}
+              >
+                <ScrollView
+                  ref={chartScrollRef}
+                  horizontal
+                  testID="overview-cycle-chart-scroll"
+                  accessibilityLabel={`Cycle lengths for ${cyclePoints.length} ${
+                    cyclePoints.length === 1 ? 'completed cycle' : 'completed cycles'
+                  }`}
+                  showsHorizontalScrollIndicator={false}
+                  scrollEnabled={chartOverflows}
+                  style={styles.cycleChartScroll}
+                  contentContainerStyle={styles.cycleChartScrollContent}
+                  onContentSizeChange={handleChartContentSize}
+                >
                   <View
                     style={[
-                      styles.cycleAverageLine,
-                      { bottom: averageBarHeight + CHART_LABEL_HEIGHT },
+                      styles.cycleChartContent,
+                      { width: chartOverflows ? chartContentWidth : cycleChartWidth || '100%' },
                     ]}
-                  />
-                )}
-                <View style={styles.cycleLabels}>
-                  {cycleSummary.points.map((point) => (
-                    <Text key={point.start} style={styles.cycleLabel}>
-                      {parseDateKey(point.start).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </Text>
-                  ))}
-                </View>
+                  >
+                    <View style={styles.cycleBars}>
+                      {cyclePoints.map((point, index) => (
+                        <View
+                          key={point.start}
+                          testID={`overview-cycle-bar-${point.start}`}
+                          style={[
+                            styles.cycleBarColumn,
+                            chartOverflows && {
+                              width: chartColumnWidth,
+                              flexGrow: 0,
+                              flexShrink: 0,
+                              flexBasis: 'auto',
+                            },
+                          ]}
+                        >
+                          <Text style={[typography.caption, { color: theme.colors.textSecondary, marginBottom: 4 }]}>{point.length}</Text>
+                          <View
+                            style={[
+                              styles.cycleBar,
+                              {
+                                height: barHeight(point.length),
+                                backgroundColor:
+                                  index === cyclePoints.length - 1
+                                    ? theme.colors.primary
+                                    : theme.isDark
+                                      ? '#5a2437'
+                                      : '#f8bbd0',
+                              },
+                            ]}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                    {averageBarHeight !== null && (
+                      <View
+                        style={[
+                          styles.cycleAverageLine,
+                          { bottom: averageBarHeight + CHART_LABEL_HEIGHT },
+                        ]}
+                      />
+                    )}
+                    <View style={styles.cycleLabels}>
+                      {cyclePoints.map((point) => (
+                        <Text
+                          key={point.start}
+                          style={[
+                            styles.cycleLabel,
+                            chartOverflows && {
+                              width: chartColumnWidth,
+                              flexGrow: 0,
+                              flexShrink: 0,
+                              flexBasis: 'auto',
+                            },
+                          ]}
+                        >
+                          {parseDateKey(point.start).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                </ScrollView>
               </View>
               <Text style={styles.cycleChartCaption}>
-                {cycleSummary.points.length === 1
+                {cyclePoints.length === 1
                   ? `1 cycle tracked · average ${Math.round(cycleSummary.average!)} days`
-                  : `Average ${averageCycle} days · range ${cycleSummary.min}–${cycleSummary.max}`}
+                  : chartOverflows
+                    ? `All ${cyclePoints.length} cycles · swipe for older · recent ${CYCLE_HISTORY_LIMIT} avg ${averageCycle} days`
+                    : `Average ${averageCycle} days · range ${cycleSummary.min}–${cycleSummary.max}`}
               </Text>
             </>
           ) : (
@@ -925,15 +1004,23 @@ const createStyles = (theme: any) =>
       color: theme.colors.warning,
     },
     cycleChart: {
-      height: CHART_HEIGHT + CHART_LABEL_HEIGHT + 24,
-      position: 'relative',
       marginTop: 6,
+    },
+    cycleChartScroll: {
+      height: CHART_TOTAL_HEIGHT,
+    },
+    cycleChartScrollContent: {
+      flexGrow: 1,
+    },
+    cycleChartContent: {
+      height: CHART_TOTAL_HEIGHT,
+      position: 'relative',
     },
     cycleBars: {
       height: CHART_HEIGHT + 24,
       flexDirection: 'row',
       alignItems: 'flex-end',
-      gap: 8,
+      gap: CHART_GAP,
     },
     cycleBarColumn: {
       flex: 1,
@@ -960,7 +1047,7 @@ const createStyles = (theme: any) =>
     },
     cycleLabels: {
       flexDirection: 'row',
-      gap: 8,
+      gap: CHART_GAP,
       marginTop: 6,
     },
     cycleLabel: {

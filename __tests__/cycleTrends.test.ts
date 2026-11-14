@@ -1,5 +1,6 @@
 import { buildCycleModel } from '@/services/CycleModel';
 import {
+  buildCycleLengthPoints,
   phaseTrackSegments,
   summarizeCycleLengths,
 } from '@/services/CycleTrends';
@@ -88,6 +89,44 @@ describe('summarizeCycleLengths', () => {
     ]);
 
     expect(summary.lengths).toEqual([27, 29]);
+  });
+});
+
+describe('buildCycleLengthPoints', () => {
+  it('returns every completed cycle, oldest first', () => {
+    const points = buildCycleLengthPoints(startsWithSixCycles);
+
+    expect(points).toHaveLength(6);
+    expect(points[0]).toEqual({
+      start: '2026-01-01',
+      end: '2026-01-28',
+      length: 27,
+    });
+    expect(points[5]).toEqual({
+      start: '2026-05-21',
+      end: '2026-06-18',
+      length: 28,
+    });
+  });
+
+  it('keeps history older than the summary window', () => {
+    const starts = ['2025-11-01', '2025-12-01', ...startsWithSixCycles];
+    const points = buildCycleLengthPoints(starts);
+    const summary = summarizeCycleLengths(starts);
+
+    expect(points).toHaveLength(8);
+    expect(points[0].start).toBe('2025-11-01');
+    expect(summary.points).toHaveLength(6);
+    expect(summary.points[0].start).toBe('2026-01-01');
+  });
+
+  it('sorts unsorted starts and needs two starts for a completed cycle', () => {
+    expect(buildCycleLengthPoints(['2026-02-26', '2026-01-01', '2026-01-28'])).toEqual([
+      { start: '2026-01-01', end: '2026-01-28', length: 27 },
+      { start: '2026-01-28', end: '2026-02-26', length: 29 },
+    ]);
+    expect(buildCycleLengthPoints([])).toEqual([]);
+    expect(buildCycleLengthPoints(['2026-01-01'])).toEqual([]);
   });
 });
 

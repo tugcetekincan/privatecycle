@@ -756,6 +756,94 @@ try {
   await page.getByTestId('private-close').click();
   await page.getByTestId('settings-darkmode-switch').click();
 
+  // --- Overview history: cycles older than the recent-six summary must be
+  // reachable in the scrollable chart without changing the summary numbers.
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-chart').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForTimeout(400);
+  const historyBefore = {
+    bars: await page.locator('[data-testid^="overview-cycle-bar-"]').count(),
+    avg: (await page.getByTestId('overview-avg-cycle').textContent())?.trim(),
+    variation: (await page.getByTestId('overview-cycle-variation').textContent())?.trim(),
+    regularity: (await page.getByTestId('overview-cycle-regularity').textContent())?.trim(),
+  };
+  const injectedStarts = await page.evaluate(async () => {
+    const insights = await __privatecycle.DataService.getInsights();
+    const earliest = new Date(`${[...insights.periodStarts].sort()[0]}T12:00:00`);
+    const rows = {};
+    for (let index = 1; index <= 10; index++) {
+      const date = new Date(earliest);
+      date.setDate(date.getDate() - index * 30);
+      const key = __privatecycle.DataService.formatDateKey(date);
+      rows[key] = {
+        date: key,
+        isPeriod: true,
+        flowLevel: 'medium',
+        symptoms: [],
+        mood: '',
+        isOvulation: false,
+      };
+    }
+    await __privatecycle.DataService.saveManyDailyData(rows);
+    return Object.keys(rows);
+  });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-chart').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.waitForTimeout(600);
+  const historyAfter = {
+    bars: await page.locator('[data-testid^="overview-cycle-bar-"]').count(),
+    meta: (await page.getByTestId('overview-cycle-chart-meta').textContent())?.trim(),
+    avg: (await page.getByTestId('overview-avg-cycle').textContent())?.trim(),
+    variation: (await page.getByTestId('overview-cycle-variation').textContent())?.trim(),
+    regularity: (await page.getByTestId('overview-cycle-regularity').textContent())?.trim(),
+    scroll: await page.getByTestId('overview-cycle-chart-scroll').evaluate((el) => ({
+      left: el.scrollLeft,
+      width: el.scrollWidth,
+      client: el.clientWidth,
+    })),
+  };
+  log(
+    `overview history: bars ${historyBefore.bars} -> ${historyAfter.bars}, ` +
+      `meta="${historyAfter.meta}", scroll=${historyAfter.scroll.left}/${historyAfter.scroll.width}`
+  );
+  if (historyAfter.bars !== historyBefore.bars + injectedStarts.length) {
+    failures.push(
+      `overview history: expected ${historyBefore.bars + injectedStarts.length} bars, ` +
+        `got ${historyAfter.bars}`
+    );
+  }
+  if (historyAfter.meta !== `All ${historyAfter.bars} cycles`) {
+    failures.push(`overview history meta: expected "All ${historyAfter.bars} cycles", ` +
+      `got "${historyAfter.meta}"`);
+  }
+  if (
+    historyAfter.avg !== historyBefore.avg ||
+    historyAfter.variation !== historyBefore.variation ||
+    historyAfter.regularity !== historyBefore.regularity
+  ) {
+    failures.push(
+      `overview history changed the recent-six summary: ` +
+        `${JSON.stringify(historyBefore)} -> ${JSON.stringify(historyAfter)}`
+    );
+  }
+  if (!(historyAfter.scroll.width > historyAfter.scroll.client)) {
+    failures.push('overview history chart is not horizontally scrollable');
+  }
+  if (!(historyAfter.scroll.left > 0)) {
+    failures.push('overview history chart did not open on the newest cycles');
+  }
+  await page.getByTestId('overview-cycle-chart').screenshot({
+    path: shot('21-overview-history-newest'),
+  });
+  await page.getByTestId('overview-cycle-chart-scroll').evaluate((el) => el.scrollTo({ left: 0 }));
+  await page.waitForTimeout(300);
+  await page.getByTestId('overview-cycle-chart').screenshot({
+    path: shot('22-overview-history-oldest'),
+  });
+  await page.getByTestId('tab-settings').click();
+  log('overview full cycle history OK');
+
   await page.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`);
   await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
   await page.screenshot({ path: shot('18-empty-calendar') });

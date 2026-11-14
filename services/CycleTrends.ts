@@ -9,7 +9,7 @@
 import { CyclePhase, CycleWindow, MENSTRUAL_PHASE_DAYS } from './CycleModel';
 import { daysBetween, parseDateKey } from './dateKey';
 
-/** How many completed cycles the Overview chart and variation use. */
+/** How many recent completed cycles the averages, variation and regularity use. */
 export const CYCLE_HISTORY_LIMIT = 6;
 
 export interface CycleLengthPoint {
@@ -38,6 +38,26 @@ export interface CycleLengthSummary {
 const sum = (values: number[]): number => values.reduce((total, value) => total + value, 0);
 
 /**
+ * Every completed cycle, oldest first. The Overview chart draws this full list
+ * (it can scroll back through years of history) while the summary below keeps
+ * using the recent window for averages and variation.
+ */
+export function buildCycleLengthPoints(periodStarts: string[]): CycleLengthPoint[] {
+  const sorted = [...periodStarts].sort();
+  const points: CycleLengthPoint[] = [];
+
+  for (let index = 1; index < sorted.length; index++) {
+    points.push({
+      start: sorted[index - 1],
+      end: sorted[index],
+      length: daysBetween(parseDateKey(sorted[index - 1]), parseDateKey(sorted[index])),
+    });
+  }
+
+  return points;
+}
+
+/**
  * Summarise the most recent completed cycles. A cycle length needs two period
  * starts, so one period start returns an empty summary; one completed cycle
  * returns its length but no variation yet.
@@ -46,17 +66,7 @@ export function summarizeCycleLengths(
   periodStarts: string[],
   limit: number = CYCLE_HISTORY_LIMIT
 ): CycleLengthSummary {
-  const sorted = [...periodStarts].sort();
-  const all: CycleLengthPoint[] = [];
-
-  for (let index = 1; index < sorted.length; index++) {
-    all.push({
-      start: sorted[index - 1],
-      end: sorted[index],
-      length: daysBetween(parseDateKey(sorted[index - 1]), parseDateKey(sorted[index])),
-    });
-  }
-
+  const all = buildCycleLengthPoints(periodStarts);
   const points = limit > 0 ? all.slice(-Math.floor(limit)) : [];
   const lengths = points.map((point) => point.length);
 
