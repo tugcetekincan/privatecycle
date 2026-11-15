@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { TrendingUp } from 'lucide-react-native';
@@ -49,6 +50,9 @@ const CHART_LABEL_HEIGHT = 18;
 const CHART_VISIBLE_CYCLES = 6;
 const CHART_GAP = 8;
 const CHART_TOTAL_HEIGHT = CHART_HEIGHT + CHART_LABEL_HEIGHT + 24;
+// Card margin (20 × 2), padding (18 × 2) and border (1 × 2) around the chart.
+// Used only until onLayout reports the real width.
+const CYCLE_CARD_HORIZONTAL_CHROME = 78;
 
 type OverviewStats = Awaited<ReturnType<typeof DataService.getInsights>>;
 
@@ -169,9 +173,10 @@ function MoodTrendChart({
 
 export default function OverviewTab() {
   const { theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [forecast, setForecast] = useState<FertilityForecast | null>(null);
-  const [cycleChartWidth, setCycleChartWidth] = useState(0);
+  const [measuredChartWidth, setMeasuredChartWidth] = useState(0);
   const chartScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const lastChartScrollKey = useRef('');
 
@@ -254,6 +259,10 @@ export default function OverviewTab() {
     cycleSummary.average !== null ? barHeight(cycleSummary.average) : null;
 
   const chartOverflows = cyclePoints.length > CHART_VISIBLE_CYCLES;
+  const cycleChartWidth =
+    measuredChartWidth > 0
+      ? measuredChartWidth
+      : Math.max(0, windowWidth - CYCLE_CARD_HORIZONTAL_CHROME);
   const chartColumnWidth =
     cycleChartWidth > 0
       ? (cycleChartWidth - CHART_GAP * (CHART_VISIBLE_CYCLES - 1)) / CHART_VISIBLE_CYCLES
@@ -261,6 +270,16 @@ export default function OverviewTab() {
   const chartContentWidth = chartOverflows
     ? cyclePoints.length * chartColumnWidth + (cyclePoints.length - 1) * CHART_GAP
     : cycleChartWidth;
+  // Native Yoga collapses the columns to zero width when `flex: 0`/`width` is
+  // used without an explicit basis, leaving an empty chart on Android.
+  const chartColumnStyle = chartOverflows
+    ? {
+        width: chartColumnWidth,
+        flexGrow: 0,
+        flexShrink: 0,
+        flexBasis: chartColumnWidth,
+      }
+    : null;
 
   const handleChartContentSize = useCallback(() => {
     if (!chartOverflows || cycleChartWidth <= 0) return;
@@ -451,7 +470,7 @@ export default function OverviewTab() {
             <>
               <View
                 style={styles.cycleChart}
-                onLayout={(event) => setCycleChartWidth(event.nativeEvent.layout.width)}
+                onLayout={(event) => setMeasuredChartWidth(event.nativeEvent.layout.width)}
               >
                 <ScrollView
                   ref={chartScrollRef}
@@ -477,15 +496,7 @@ export default function OverviewTab() {
                         <View
                           key={point.start}
                           testID={`overview-cycle-bar-${point.start}`}
-                          style={[
-                            styles.cycleBarColumn,
-                            chartOverflows && {
-                              width: chartColumnWidth,
-                              flexGrow: 0,
-                              flexShrink: 0,
-                              flexBasis: 'auto',
-                            },
-                          ]}
+                          style={[styles.cycleBarColumn, chartColumnStyle]}
                         >
                           <Text style={[typography.caption, { color: theme.colors.textSecondary, marginBottom: 4 }]}>{point.length}</Text>
                           <View
@@ -517,15 +528,7 @@ export default function OverviewTab() {
                       {cyclePoints.map((point) => (
                         <Text
                           key={point.start}
-                          style={[
-                            styles.cycleLabel,
-                            chartOverflows && {
-                              width: chartColumnWidth,
-                              flexGrow: 0,
-                              flexShrink: 0,
-                              flexBasis: 'auto',
-                            },
-                          ]}
+                          style={[styles.cycleLabel, chartColumnStyle]}
                         >
                           {parseDateKey(point.start).toLocaleDateString('en-US', {
                             month: 'short',
@@ -1015,6 +1018,7 @@ const createStyles = (theme: any) =>
     cycleChartContent: {
       height: CHART_TOTAL_HEIGHT,
       position: 'relative',
+      flexShrink: 0,
     },
     cycleBars: {
       height: CHART_HEIGHT + 24,
@@ -1023,7 +1027,8 @@ const createStyles = (theme: any) =>
       gap: CHART_GAP,
     },
     cycleBarColumn: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
       height: '100%',
       justifyContent: 'flex-end',
       alignItems: 'center',
@@ -1051,7 +1056,8 @@ const createStyles = (theme: any) =>
       marginTop: 6,
     },
     cycleLabel: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
       textAlign: 'center',
       fontSize: 9,
       color: theme.colors.textSecondary,
