@@ -4,6 +4,10 @@ import CalendarTab from '@/app/(tabs)/index';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { DataService } from '@/services/DataService';
 
+// Mounting the calendar initializes the data provider before the welcome state
+// renders; CI's shared runners can exceed Jest's 5s default on a cold start.
+jest.setTimeout(15000);
+
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => require('react').useEffect(callback, [callback]),
 }));
