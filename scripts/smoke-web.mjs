@@ -869,6 +869,66 @@ try {
     await page.screenshot({ path: shot(`20-empty-${tab}`) });
   }
   log('polish: dark/360px, reduced motion, empty states and failed-save retry passed');
+
+  // --- One recorded period: no fabricated average, but a labelled standard estimate. ---
+  const singlePeriodKeys = Array.from({ length: 5 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (4 - index));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate()
+    ).padStart(2, '0')}`;
+  });
+  await page.evaluate(async (keys) => {
+    await __privatecycle.DataService.clearAllData();
+    const rows = Object.fromEntries(
+      keys.map((date) => [
+        date,
+        {
+          date,
+          isPeriod: true,
+          flowLevel: 'medium',
+          symptoms: [],
+          mood: '',
+          isOvulation: false,
+        },
+      ])
+    );
+    await __privatecycle.DataService.saveManyDailyData(rows);
+  }, singlePeriodKeys);
+
+  await page.getByTestId('tab-calendar').click();
+  await page.getByTestId('calendar-period-estimate-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  const periodBasis = (await page.getByTestId('calendar-period-estimate-basis').textContent())?.trim();
+  if (!periodBasis?.includes('standard 28-day cycle')) {
+    failures.push(`one-period calendar basis missing: "${periodBasis}"`);
+  }
+  await page.screenshot({ path: shot('21-one-period-calendar'), fullPage: true });
+
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  const avgCycleOne = (await page.getByTestId('overview-avg-cycle').textContent())?.trim();
+  const lastPeriodOne = (await page.getByTestId('overview-last-period').textContent())?.trim();
+  if (avgCycleOne !== '—') {
+    failures.push(`one-period average cycle should be unknown, got "${avgCycleOne}"`);
+  }
+  if (lastPeriodOne !== '5') {
+    failures.push(`one-period last period should be 5, got "${lastPeriodOne}"`);
+  }
+  await fullScreenShot('22-one-period-overview', 'overview-scroll');
+
+  // The same fallback must stay legible in dark mode.
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+  await page.getByTestId('tab-calendar').click();
+  await page.getByTestId('calendar-period-estimate-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: shot('23-one-period-calendar-dark'), fullPage: true });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  await fullScreenShot('24-one-period-overview-dark', 'overview-scroll');
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+  log('one-period state: honest average and labelled standard estimate OK');
+
   // --- Recorded cycle vs predicted boundary / overdue regression (PRIVATECYC-1). ---
   await page.clock.setFixedTime(new Date(2026, 10, 1, 12));
   for (const scenario of [

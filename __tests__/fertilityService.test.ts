@@ -75,6 +75,7 @@ describe('computeFertilityForecast', () => {
     });
 
     expect(forecast.stats.basis).toBe('standard');
+    expect(forecast.stats.cycleLengthBasis).toBe('standard');
     expect(forecast.stats.averageLutealLength).toBeNull();
     expect(forecast.futurePeriodStarts[0]).toBe('2026-02-02');
     expect(forecast.cycles[0]).toEqual({
@@ -95,6 +96,7 @@ describe('computeFertilityForecast', () => {
     });
 
     expect(forecast.stats.basis).toBe('recorded');
+    expect(forecast.stats.cycleLengthBasis).toBe('recorded');
     expect(forecast.stats.averageLutealLength).toBe(15);
     // Next predicted period: Mar 1 + round(27.5) = Mar 29; minus 15 = Mar 14.
     expect(forecast.cycles[0].ovulationDate).toBe('2026-03-14');
@@ -179,6 +181,42 @@ describe('computeFertilityForecast', () => {
     expect(forecast.cycles).toEqual([]);
     expect(forecast.currentCycleOvulation).toBeNull();
     expect(forecast.stats.averageCycleLength).toBe(28);
+    expect(forecast.stats.cycleLengthBasis).toBe('standard');
+  });
+});
+
+describe('cycle-length basis', () => {
+  it('marks a single recorded period as a standard estimate', () => {
+    const model = buildCycleModel({
+      periodStarts: ['2026-01-05'],
+      ovulationDays: [],
+      today: parseDateKey('2026-01-10'),
+    });
+
+    expect(model.averageCycleLength).toBeNull();
+    expect(model.cycleLengthBasis).toBe('standard');
+  });
+
+  it('marks the average as recorded once one cycle is complete', () => {
+    const model = buildCycleModel({
+      periodStarts: ['2026-01-05', '2026-02-02'],
+      ovulationDays: [],
+      today: parseDateKey('2026-02-05'),
+    });
+
+    expect(model.averageCycleLength).toBe(28);
+    expect(model.cycleLengthBasis).toBe('recorded');
+  });
+
+  it('reports no cycle average for an empty history', () => {
+    const model = buildCycleModel({
+      periodStarts: [],
+      ovulationDays: [],
+      today: parseDateKey('2026-01-10'),
+    });
+
+    expect(model.averageCycleLength).toBeNull();
+    expect(model.cycleLengthBasis).toBe('standard');
   });
 });
 
