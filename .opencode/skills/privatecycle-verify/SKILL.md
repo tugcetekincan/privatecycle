@@ -191,7 +191,7 @@ empty histories and a simulated storage failure followed by a successful
 retry. It checks return-to-today navigation, that Overview shows `—` for an
 unknown average cycle, and that a single recorded period still shows the
 standard 28-day estimate as a labelled fallback instead of a fabricated
-average. These are screenshots 14–22.
+average. These are screenshots 14–20 and 25–28.
 
 After the polish regression flow, smoke freezes the browser date at 1 Nov 2026
 and loads synthetic overdue/predicted-boundary histories (PRIVATECYC-1). It

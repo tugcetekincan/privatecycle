@@ -902,7 +902,7 @@ try {
   if (!periodBasis?.includes('standard 28-day cycle')) {
     failures.push(`one-period calendar basis missing: "${periodBasis}"`);
   }
-  await page.screenshot({ path: shot('21-one-period-calendar'), fullPage: true });
+  await page.screenshot({ path: shot('25-one-period-calendar'), fullPage: true });
 
   await page.getByTestId('tab-overview').click();
   await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
@@ -914,17 +914,17 @@ try {
   if (lastPeriodOne !== '5') {
     failures.push(`one-period last period should be 5, got "${lastPeriodOne}"`);
   }
-  await fullScreenShot('22-one-period-overview', 'overview-scroll');
+  await fullScreenShot('26-one-period-overview', 'overview-scroll');
 
   // The same fallback must stay legible in dark mode.
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-darkmode-switch').click();
   await page.getByTestId('tab-calendar').click();
   await page.getByTestId('calendar-period-estimate-basis').waitFor({ state: 'visible', timeout: 15_000 });
-  await page.screenshot({ path: shot('23-one-period-calendar-dark'), fullPage: true });
+  await page.screenshot({ path: shot('27-one-period-calendar-dark'), fullPage: true });
   await page.getByTestId('tab-overview').click();
   await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
-  await fullScreenShot('24-one-period-overview-dark', 'overview-scroll');
+  await fullScreenShot('28-one-period-overview-dark', 'overview-scroll');
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-darkmode-switch').click();
   log('one-period state: honest average and labelled standard estimate OK');
