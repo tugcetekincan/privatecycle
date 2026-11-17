@@ -46,7 +46,6 @@ const sentenceCase = (value: string): string =>
   value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
 const EMPTY_STATS: InsightStats = {
-  averageCycle: 28,
   lastPeriodLength: 0,
   nextPeriodIn: 0,
   totalPeriods: 0,

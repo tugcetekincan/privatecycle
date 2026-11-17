@@ -65,6 +65,10 @@ export interface CycleModel {
   windows: CycleWindow[];
   /** First six predicted period starts (the calendar horizon). */
   futurePeriodStarts: string[];
+  /** Observed mean cycle length, null until one completed cycle is recorded. */
+  averageCycleLength: number | null;
+  /** Whether predictions use recorded cycles or the standard 28-day default. */
+  cycleLengthBasis: 'recorded' | 'standard';
   /** Observed mean luteal phase in days, null until one full cycle is recorded. */
   averageLutealLength: number | null;
   /** Rounded luteal length used for predictions (14 until one is recorded). */
@@ -114,10 +118,15 @@ const cycleLengths = (periodStarts: string[]): number[] => {
   return lengths;
 };
 
+/** Mean of completed cycles, null until two period starts are recorded. */
+const observedCycleLength = (periodStarts: string[]): number | null => {
+  if (periodStarts.length < 2) return null;
+  return mean(cycleLengths(periodStarts));
+};
+
 /** Mean cycle length from consecutive period starts; 28 when unknowable. */
 export const averageCycleLength = (periodStarts: string[]): number => {
-  if (periodStarts.length < 2) return DEFAULT_CYCLE_LENGTH;
-  return mean(cycleLengths(periodStarts));
+  return observedCycleLength(periodStarts) ?? DEFAULT_CYCLE_LENGTH;
 };
 
 /** Standard deviation of cycle lengths; small-sample default mirrors the calendar. */
@@ -261,12 +270,16 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
   const { periodStarts, ovulationDays, today } = input;
   const todayKey = formatDateKey(today);
   const { average, effective } = lutealStats(periodStarts, ovulationDays);
+  const observedCycle = observedCycleLength(periodStarts);
+  const cycleLengthBasis = observedCycle === null ? 'standard' : 'recorded';
 
   if (periodStarts.length === 0) {
     return {
       currentCycle: null,
       windows: [],
       futurePeriodStarts: [],
+      averageCycleLength: observedCycle,
+      cycleLengthBasis,
       averageLutealLength: average,
       effectiveLutealLength: effective,
       currentCycleOvulation: null,
@@ -319,6 +332,8 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
     currentCycle,
     windows,
     futurePeriodStarts,
+    averageCycleLength: observedCycle,
+    cycleLengthBasis,
     averageLutealLength: average,
     effectiveLutealLength: effective,
     currentCycleOvulation: openOvulation,

@@ -691,23 +691,6 @@ export class SQLiteDataService {
       const today = new Date();
       const todayKey = formatDateKey(today);
       
-      // Calculate average cycle length
-      let averageCycle = 28;
-      if (periodStarts.length >= 2) {
-        const cycles: number[] = [];
-        
-        for (let i = 1; i < periodStarts.length; i++) {
-          const prev = new Date(periodStarts[i - 1]);
-          const curr = new Date(periodStarts[i]);
-          const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
-          cycles.push(diff);
-        }
-        
-        if (cycles.length > 0) {
-          averageCycle = Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length);
-        }
-      }
-
       // Calculate last period length using SQL
       let lastPeriodLength = 0;
       if (periodStarts.length > 0) {
@@ -817,7 +800,6 @@ export class SQLiteDataService {
       const moodPhases = summarizeMoodByPhase(moodDays, periodStarts, ovulationDays);
 
       return {
-        averageCycle,
         lastPeriodLength,
         nextPeriodIn,
         totalPeriods: periodStarts.length,
@@ -831,7 +813,6 @@ export class SQLiteDataService {
     } catch (error) {
       console.error('Error calculating insights:', error);
       return {
-        averageCycle: 28,
         lastPeriodLength: 0,
         nextPeriodIn: 0,
         totalPeriods: 0,

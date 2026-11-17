@@ -700,6 +700,11 @@ export default function CalendarTab() {
                     );
                   })}
                 </View>
+                {forecast?.stats.cycleLengthBasis === 'standard' && (
+                  <Text testID="calendar-period-estimate-basis" style={styles.predictionNote}>
+                    Estimated from a standard {forecast.stats.averageCycleLength}-day cycle until your next period.
+                  </Text>
+                )}
               </Card>
             </>
           )}
@@ -1179,6 +1184,13 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: theme.colors.primaryText,
+  },
+  predictionNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   clickableDay: {
     opacity: 0.9,

@@ -18,6 +18,8 @@ export { averageCycleLength, predictPeriodStarts } from './CycleModel';
 export interface FertilityStats {
   /** Observed mean cycle length in days (28 when unknowable). */
   averageCycleLength: number;
+  /** Whether the cycle length is observed or the standard 28-day default. */
+  cycleLengthBasis: 'recorded' | 'standard';
   /** Observed mean luteal phase in days, null until one full cycle is recorded. */
   averageLutealLength: number | null;
   /** Where the ovulation estimate comes from. */
@@ -89,6 +91,7 @@ export const computeFertilityForecast = (input: FertilityForecastInput): Fertili
     cycles,
     stats: {
       averageCycleLength: averageCycleLength(periodStarts),
+      cycleLengthBasis: model.cycleLengthBasis,
       averageLutealLength: model.averageLutealLength,
       basis: model.averageLutealLength !== null ? 'recorded' : 'standard',
     },

@@ -236,6 +236,9 @@ One diffuse shadow language:
 - Mood: 2px line, daily dots, period days as 12% primary bands, 60-day window.
 - Always include a caption or legend; color is never the only key.
 - Sample size belongs next to the chart or in the card meta.
+- When a length or date comes from the standard 28-day fallback rather than
+  recorded cycles, label it as a standard estimate; never present it as
+  learned.
 
 ### Tab bar
 

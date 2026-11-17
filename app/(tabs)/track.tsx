@@ -57,7 +57,6 @@ const CYCLE_CARD_HORIZONTAL_CHROME = 78;
 type OverviewStats = Awaited<ReturnType<typeof DataService.getInsights>>;
 
 const EMPTY_STATS: OverviewStats = {
-  averageCycle: 28,
   lastPeriodLength: 0,
   nextPeriodIn: 0,
   totalPeriods: 0,
@@ -210,6 +209,7 @@ export default function OverviewTab() {
     today,
   });
   const currentWindow = model.windows.find((window) => window.isCurrent) ?? null;
+  const usesStandardCycleLength = model.cycleLengthBasis === 'standard';
   const segments = currentWindow && currentStatus?.phase ? phaseTrackSegments(currentWindow) : [];
   const cycleLength = currentWindow
     ? daysBetween(parseDateKey(currentWindow.start), parseDateKey(currentWindow.end))
@@ -364,6 +364,12 @@ export default function OverviewTab() {
               {nextPeriodDate && <Text style={styles.heroSideDate}>{nextPeriodDate}</Text>}
             </View>
           </View>
+
+          {usesStandardCycleLength && currentStatus && cycleLength !== null && (
+            <Text testID="overview-cycle-basis" style={styles.heroEstimateNote}>
+              Using a standard {cycleLength}-day cycle estimate until your next period.
+            </Text>
+          )}
 
           {segments.length > 0 && currentStatus && (
             <View testID="overview-phase-track" style={styles.phaseTrackWrap}>
@@ -868,6 +874,12 @@ const createStyles = (theme: any) =>
       fontSize: 11,
       color: theme.colors.textSecondary,
       marginTop: 2,
+    },
+    heroEstimateNote: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: theme.colors.textSecondary,
+      marginTop: 10,
     },
     phaseTrackWrap: {
       marginTop: 14,
