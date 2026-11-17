@@ -91,6 +91,7 @@ Naming convention: `area-element`, kebab-case.
   `calendar-day-mark-YYYY-MM-DD` (tracked non-period dot),
   `calendar-ovulation-recorded-YYYY-MM-DD`,
   `calendar-ovulation-predicted-YYYY-MM-DD`, `calendar-fertility-card`,
+  `calendar-period-estimate-basis`,
   `calendar-recorded-ovulation`, `calendar-next-ovulation`,
   `calendar-fertile-window`, `calendar-fertility-empty`, `day-modal`,
   `day-modal-close`, `day-modal-period-toggle`, `day-modal-flow-{id}`,
@@ -103,7 +104,8 @@ Naming convention: `area-element`, kebab-case.
   the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves, so there
   is no mood save button anywhere.
 - Overview (route `/track`): `overview-scroll`, `overview-cycle-hero`, `overview-cycle-day`,
-  `overview-phase-track`, `overview-phase-track-uncertain`,
+  `overview-cycle-basis`, `overview-phase-track`,
+  `overview-phase-track-uncertain`,
   `overview-next-period`, `overview-cycle-meta`, `overview-avg-cycle`,
   `overview-last-period`, `overview-cycle-variation`, `overview-cycle-chart`,
   `overview-cycle-chart-meta`, `overview-cycle-chart-scroll`,
@@ -186,8 +188,10 @@ selectors so flows don't break when copy changes.
 
 The smoke also captures all tabs at 360px in dark mode, private entry sheets,
 empty histories and a simulated storage failure followed by a successful
-retry. It checks return-to-today navigation and that Settings shows `—` rather
-than a fabricated average for an empty history. These are screenshots 14–20.
+retry. It checks return-to-today navigation, that Overview shows `—` for an
+unknown average cycle, and that a single recorded period still shows the
+standard 28-day estimate as a labelled fallback instead of a fabricated
+average. These are screenshots 14–22.
 
 After the polish regression flow, smoke freezes the browser date at 1 Nov 2026
 and loads synthetic overdue/predicted-boundary histories (PRIVATECYC-1). It
