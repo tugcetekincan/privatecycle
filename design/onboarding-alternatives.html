@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PrivateCycle — onboarding directions · design mockup</title>
+<style>
+  /* ------------------------------------------------------------------
+     Board chrome. Phones carry their own tokens so the board theme can
+     change without disturbing the light and dark screen previews.
+  ------------------------------------------------------------------ */
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    --canvas: #fafafa;
+    --card: #ffffff;
+    --ink: #2f2a2c;
+    --muted: #6f6669;
+    --faint: #948b8e;
+    --hair: #ece5e8;
+    --blush: #fff5f9;
+    --blush-border: #f7dee8;
+    --primary: #e91e63;
+    --primary-ink: #ad1457;
+    --nav: rgba(250, 250, 250, 0.88);
+    --card-shadow: 0 2px 12px rgba(48, 30, 40, 0.045);
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body.ui-dark {
+    --canvas: #121212;
+    --card: #1e1e1e;
+    --ink: #ffffff;
+    --muted: #b3b3b3;
+    --faint: #8f8f8f;
+    --hair: #333333;
+    --blush: #241a1e;
+    --blush-border: #422430;
+    --primary: #e91e63;
+    --primary-ink: #ff8fb6;
+    --nav: rgba(18, 18, 18, 0.88);
+    --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.24);
+  }
+  a { color: inherit; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+  .board { max-width: 1420px; margin: 0 auto; padding: 0 40px 96px; }
+
+  /* ---------- Masthead ---------- */
+  .masthead { padding: 54px 0 34px; }
+  .brandline { display: flex; align-items: center; justify-content: space-between; gap: 14px 20px; flex-wrap: wrap; }
+  .wordmark { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+  .wordmark svg { width: 22px; height: 22px; color: var(--primary); flex: none; }
+  .mock-badge {
+    display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px;
+    border: 1px solid var(--blush-border); background: var(--blush); border-radius: 999px;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.14em; color: var(--primary-ink);
+    white-space: nowrap;
+  }
+  .mock-badge .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+  h1.masthead-title {
+    font-size: clamp(38px, 4.4vw, 54px); line-height: 1.02; letter-spacing: -0.045em;
+    font-weight: 800; margin: 32px 0 20px; max-width: 940px;
+  }
+  .masthead-lede { font-size: 14px; line-height: 1.75; color: var(--muted); max-width: 780px; margin: 0; }
+  .masthead-lede strong { color: var(--ink); font-weight: 700; }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+  .meta-chip {
+    font-size: 9.5px; letter-spacing: 0.11em; font-weight: 800; color: var(--muted);
+    border: 1px solid var(--hair); background: var(--card); border-radius: 999px; padding: 7px 11px;
+  }
+
+  /* ---------- Anchor nav ---------- */
+  .tabs { position: sticky; top: 0; z-index: 40; margin: 0 calc(50% - 50vw); background: var(--nav); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--hair); }
+  .tabs::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 36px; pointer-events: none; display: none; background: linear-gradient(to right, transparent, var(--nav)); }
+  .tabs-inner { max-width: 1420px; margin: 0 auto; padding: 0 40px; display: flex; align-items: center; gap: 2px; min-height: 62px; }
+  .tab-link {
+    display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px;
+    border-radius: 999px; text-decoration: none; color: var(--muted);
+    font-size: 11.5px; font-weight: 700; white-space: nowrap;
+  }
+  .tab-link:hover { background: var(--blush); color: var(--ink); }
+  .tab-link .letter {
+    width: 18px; height: 18px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800; letter-spacing: 0; color: var(--primary-ink); background: var(--blush); border: 1px solid var(--blush-border);
+  }
+  .tab-spacer { flex: 1; }
+  .theme-btn {
+    appearance: none; height: 44px; padding: 0 15px; cursor: pointer;
+    border: 1px solid var(--hair); background: var(--card); color: var(--ink);
+    border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
+    display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  }
+  .theme-btn svg { width: 14px; height: 14px; color: var(--primary); }
+  .theme-btn:hover { border-color: var(--blush-border); }
+
+  /* ---------- Concept header ---------- */
+  .concept { padding-top: 84px; scroll-margin-top: 84px; }
+  .concept-head { display: grid; grid-template-columns: 48px minmax(0, 1fr) 300px; gap: 28px; align-items: start; border-top: 1px solid var(--hair); padding-top: 34px; }
+  .concept-letter {
+    width: 44px; height: 44px; border-radius: 14px; background: var(--card); border: 1px solid var(--hair);
+    display: grid; place-items: center; font-size: 15px; font-weight: 800; color: var(--primary-ink);
+    box-shadow: var(--card-shadow);
+  }
+  .concept-kicker { font-size: 9.5px; letter-spacing: 0.18em; font-weight: 800; color: var(--primary-ink); }
+  .concept-head h2 { font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; margin: 8px 0 10px; font-weight: 800; }
+  .concept-desc { font-size: 13.5px; line-height: 1.72; color: var(--muted); max-width: 650px; margin: 0; }
+  .concept-desc strong { color: var(--ink); font-weight: 700; }
+  .concept-facts { display: flex; flex-direction: column; border-left: 1px solid var(--hair); padding-left: 24px; }
+  .fact { display: flex; justify-content: space-between; gap: 18px; padding: 9px 0; border-bottom: 1px solid var(--hair); font-size: 11px; }
+  .fact:last-child { border-bottom: 0; }
+  .fact span { color: var(--faint); font-weight: 600; white-space: nowrap; }
+  .fact b { text-align: right; font-weight: 800; font-size: 11px; line-height: 1.45; }
+
+  /* ---------- Screen row ---------- */
+  .screens { display: flex; justify-content: center; align-items: flex-start; gap: 30px; margin-top: 38px; flex-wrap: wrap; }
+  .screen-col { flex: 0 0 390px; width: 390px; }
+  .screen-meta { display: flex; align-items: center; gap: 10px; padding: 0 4px; margin-bottom: 12px; }
+  .screen-id {
+    font-size: 8.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--primary-ink);
+    background: var(--blush); border: 1px solid var(--blush-border); border-radius: 6px; padding: 3px 6px;
+  }
+  .screen-title { font-size: 11.5px; font-weight: 800; color: var(--ink); }
+  .screen-sub { font-size: 9px; color: var(--faint); margin-left: auto; letter-spacing: 0.08em; font-weight: 700; white-space: nowrap; }
+  .screen-caption { font-size: 11px; line-height: 1.6; color: var(--muted); margin: 12px 4px 0; max-width: 342px; }
+
+  /* ---------- Phone shell ---------- */
+  .phone {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --tint: #fff8fb;
+    --tint-border: #f7dee8;
+    --text: #2f2b2d;
+    --muted: #6d6669;
+    --faint: #9a9194;
+    --border: #eee7ea;
+    --primary: #e91e63;
+    --primary-ink: #ad1457;
+    --primary-soft: #fce4ec;
+    --primary-weak: #f8bbd0;
+    --paper: #ffffff;
+    --line: #e7c9d5;
+    --rule: #f2dde5;
+    --arc: #f4bcd1;
+    --today: #0077b6;
+    --shadow: 0 30px 70px rgba(45, 30, 38, 0.16), 0 2px 0 rgba(255, 255, 255, 0.8) inset;
+    position: relative; width: 390px; height: 844px; border-radius: 42px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid rgba(45, 30, 38, 0.1);
+    box-shadow: var(--shadow);
+    overflow: hidden; display: flex; flex-direction: column;
+    font-size: 13px; line-height: 1.4;
+  }
+  .phone.dark {
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --tint: #241a1e;
+    --tint-border: #422430;
+    --text: #ffffff;
+    --muted: #b3b3b3;
+    --faint: #8f8f8f;
+    --border: #333333;
+    --primary: #e91e63;
+    --primary-ink: #ff8fb6;
+    --primary-soft: #3b1b28;
+    --primary-weak: #5a2437;
+    --paper: #241a1e;
+    --line: #8a5e70;
+    --rule: #3b2a32;
+    --arc: #5a2437;
+    --today: #4fa8e0;
+    --shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+    border-color: #2b2b2b;
+  }
+  .island {
+    position: absolute; top: 11px; left: 50%; transform: translateX(-50%);
+    width: 92px; height: 24px; border-radius: 999px; background: #0a0a0b; z-index: 5;
+  }
+  .statusbar {
+    flex: none; height: 52px; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 27px 7px 30px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; color: var(--text);
+  }
+  .status-icons { display: flex; align-items: center; gap: 5px; color: var(--text); }
+  .status-icons svg { width: 14px; height: 14px; display: block; }
+  .phone-body {
+    flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+    padding: 0 24px; overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .phone-body::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .phone-footer { flex: none; padding: 10px 24px 0; background: var(--bg); }
+  .home { height: 28px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; }
+  .home span { width: 134px; height: 5px; border-radius: 999px; background: var(--text); opacity: 0.88; }
+  .dark .home span { opacity: 0.8; }
+
+  /* ---------- Phone primitives ---------- */
+  .p-top { flex: none; display: flex; align-items: center; justify-content: space-between; height: 48px; }
+  .p-brand { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
+  .p-brand .gem { width: 8px; height: 8px; background: var(--primary); border-radius: 2px; transform: rotate(45deg); }
+  .p-skip { display: flex; align-items: center; min-height: 44px; padding-left: 14px; font-size: 11.5px; font-weight: 700; color: var(--muted); }
+  .stepbar { display: flex; align-items: center; gap: 12px; margin: 2px 0 0; }
+  .stepbar .num { font-size: 9px; letter-spacing: 0.16em; font-weight: 800; color: var(--faint); white-space: nowrap; }
+  .stepbar .num b { color: var(--text); }
+  .stepbar .rule { flex: 1; height: 1px; background: var(--border); position: relative; }
+  .stepbar .rule::after { content: ""; position: absolute; left: 0; top: 0; height: 1px; width: var(--w, 33%); background: var(--primary); }
+  .p-eyebrow { font-size: 9px; letter-spacing: 0.18em; font-weight: 800; color: var(--primary-ink); margin-top: 22px; }
+  .p-title { font-size: 28px; line-height: 1.18; letter-spacing: -0.035em; font-weight: 800; margin: 10px 0 12px; color: var(--text); }
+  .p-body { font-size: 13px; line-height: 1.58; color: var(--muted); margin: 0; }
+  .p-small { font-size: 11px; line-height: 1.5; color: var(--muted); }
+  .spacer { flex: 1 1 auto; min-height: 8px; }
+  .quiet-line { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 10px; letter-spacing: 0.02em; color: var(--faint); padding: 10px 0 4px; }
+  .quiet-line svg { width: 12px; height: 12px; color: var(--primary-ink); }
+
+  .btn {
+    height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 9px;
+    font-size: 14px; font-weight: 800; letter-spacing: -0.005em; text-align: center;
+  }
+  .btn svg { width: 17px; height: 17px; flex: none; }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 9px 22px rgba(233, 30, 99, 0.22); }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-mini { height: 48px; }
+  .linkbtn { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .linkbtn svg { width: 14px; height: 14px; }
+  .btn-row { display: flex; gap: 10px; }
+  .btn-row .grow { flex: 1; }
+  .btn-back { width: 92px; flex: none; }
+
+  .note-panel { background: var(--tint); border: 1px solid var(--tint-border); border-radius: 14px; padding: 12px 14px 13px; }
+  .note-head { display: flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 800; color: var(--text); }
+  .note-head svg { width: 14px; height: 14px; color: var(--primary-ink); flex: none; }
+  .note-panel p { margin: 5px 0 0; font-size: 11px; line-height: 1.57; color: var(--muted); }
+  .reminder-line { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 10.5px; color: var(--faint); padding: 9px 0 2px; }
+  .reminder-line svg { width: 13px; height: 13px; }
+
+  /* ---------- A · Quiet Journal ---------- */
+  .journal-hero { display: flex; justify-content: center; align-items: center; margin: 22px 0 6px; }
+  .journal-hero svg { width: 100%; max-width: 318px; height: auto; display: block; }
+  .art-line { stroke: var(--line); }
+  .art-rule { stroke: var(--rule); }
+  .art-paper { fill: var(--paper); }
+  .art-soft { fill: var(--primary-soft); }
+  .info-list { margin-top: 14px; }
+  .info-row { display: flex; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+  .info-icon {
+    width: 30px; height: 30px; border-radius: 10px; flex: none; display: grid; place-items: center;
+    background: var(--primary-soft); color: var(--primary-ink);
+  }
+  .info-icon svg { width: 16px; height: 16px; }
+  .info-title { font-size: 12.5px; font-weight: 800; line-height: 1.35; }
+  .info-body { font-size: 11.5px; line-height: 1.55; color: var(--muted); margin: 3px 0 0; }
+
+  /* ---------- B · Tidemark ---------- */
+  .b-bleed { margin: 0 -24px; height: 386px; overflow: hidden; position: relative; }
+  .b-bleed svg { width: 100%; height: 100%; display: block; }
+  .arc { fill: none; stroke: var(--arc); }
+  .v-row { display: flex; gap: 16px; align-items: stretch; }
+  .v-eyebrow { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 13px; flex: none; padding-top: 4px; }
+  .v-eyebrow span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 8.5px; letter-spacing: 0.22em; font-weight: 800; color: var(--primary-ink); white-space: nowrap; }
+  .v-eyebrow i { width: 1px; flex: 1; min-height: 34px; background: var(--border); }
+  .b-title { margin-top: 0; }
+  .b-note { display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--muted); margin-top: 14px; }
+  .b-note svg { width: 13px; height: 13px; color: var(--primary-ink); flex: none; }
+  .illus-label { font-size: 8.5px; letter-spacing: 0.2em; font-weight: 800; color: var(--faint); margin: 18px 0 8px; display: flex; align-items: center; gap: 9px; }
+  .illus-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .mini-cal { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 15px 16px 14px; box-shadow: 0 2px 10px rgba(45, 30, 38, 0.045); }
+  .mini-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; }
+  .mini-month { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+  .mini-month span { font-size: 10px; font-weight: 600; color: var(--faint); margin-left: 5px; letter-spacing: 0.04em; }
+  .mini-nav { display: flex; gap: 6px; color: var(--faint); }
+  .mini-nav svg { width: 14px; height: 14px; }
+  .mini-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 6px 0 4px; border-top: 1px solid var(--border); }
+  .mini-week span { font-size: 8.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--faint); text-align: center; }
+  .mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .mini-day { height: 32px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--muted); }
+  .mini-day.sel { color: var(--primary-ink); font-weight: 800; border: 1.5px solid var(--primary); border-radius: 10px; background: transparent; }
+  .mini-foot { display: flex; align-items: center; gap: 9px; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 11px; }
+  .period-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; color: var(--primary-ink); background: var(--primary-soft); border-radius: 999px; padding: 4px 8px; }
+  .period-chip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--primary); }
+  .mini-hint { font-size: 9.5px; color: var(--faint); }
+  .cal-detail { margin-top: 2px; }
+  .short-list { margin-top: 10px; border-top: 1px solid var(--border); }
+  .short-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .short-item .dash { width: 12px; height: 1px; background: var(--primary); margin-top: 9px; flex: none; }
+  .short-item p { margin: 0; font-size: 11.5px; line-height: 1.58; color: var(--muted); }
+  .short-item b { color: var(--text); font-weight: 800; }
+  .b3-art { margin: 12px 0 0; display: flex; justify-content: center; }
+  .b3-art svg { width: 100%; max-width: 292px; height: auto; display: block; }
+
+  /* ---------- C · Open Door ---------- */
+  .c-hero {
+    position: relative; margin: 8px -24px 0; padding: 22px 24px 20px;
+    background: linear-gradient(155deg, var(--surface) 4%, var(--tint) 92%);
+    border-bottom: 1px solid var(--tint-border);
+    min-height: 316px; overflow: hidden;
+  }
+  .c-hero-art { position: absolute; top: 6px; right: 2px; width: 166px; height: auto; opacity: 0.98; }
+  .c-hero .p-eyebrow { margin-top: 0; position: relative; z-index: 1; }
+  .c-hero .p-title { position: relative; z-index: 1; margin-top: 124px; margin-bottom: 10px; }
+  .c-hero .p-body { position: relative; z-index: 1; max-width: 286px; }
+  .c-rows { margin-top: 6px; }
+  .c-row { display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+  .c-row:first-child { border-top: 0; }
+  .c-row-icon {
+    width: 30px; height: 30px; border-radius: 10px; flex: none; display: grid; place-items: center;
+    background: var(--primary-soft); color: var(--primary-ink);
+  }
+  .c-row-icon svg { width: 16px; height: 16px; }
+  .c-row-title { font-size: 12.5px; font-weight: 800; line-height: 1.35; }
+  .c-row p { margin: 3px 0 0; font-size: 11px; line-height: 1.55; color: var(--muted); }
+  .c-actions { display: flex; flex-direction: column; gap: 9px; }
+  .c-actions .linkbtn { margin-top: -1px; }
+
+  /* C2 · Calendar handoff */
+  .app-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 4px 0 12px; }
+  .app-head h1 { font-size: 23px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 800; margin: 0; }
+  .app-head p { margin: 3px 0 0; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .app-tile { width: 36px; height: 36px; border-radius: 12px; background: var(--primary-soft); color: var(--primary-ink); display: grid; place-items: center; }
+  .app-tile svg { width: 20px; height: 20px; }
+  .handoff { background: linear-gradient(135deg, var(--surface) 8%, var(--tint) 100%); border: 1px solid var(--tint-border); border-radius: 17px; padding: 14px 15px 6px; box-shadow: 0 2px 10px rgba(45, 30, 38, 0.04); }
+  .handoff-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .handoff-kicker { font-size: 8.5px; letter-spacing: 0.16em; font-weight: 800; color: var(--primary-ink); }
+  .setup-chip { font-size: 8px; letter-spacing: 0.12em; font-weight: 800; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 7px; }
+  .handoff h2 { font-size: 15px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 800; margin: 7px 0 5px; }
+  .handoff p { font-size: 11px; line-height: 1.55; color: var(--muted); margin: 0 0 6px; }
+  .handoff-action { display: flex; align-items: center; justify-content: space-between; min-height: 44px; border-top: 1px solid var(--tint-border); margin-top: 7px; font-size: 11px; font-weight: 800; color: var(--primary-ink); }
+  .handoff-action svg { width: 14px; height: 14px; }
+
+  .cal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 13px 14px 12px; margin-top: 11px; box-shadow: 0 2px 10px rgba(45, 30, 38, 0.045); }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 7px; }
+  .cal-chev { width: 32px; height: 32px; border-radius: 10px; background: var(--bg); color: var(--muted); display: grid; place-items: center; }
+  .cal-chev svg { width: 15px; height: 15px; }
+  .cal-month { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
+  .cal-month span { display: block; text-align: center; font-size: 8.5px; font-weight: 700; color: var(--faint); letter-spacing: 0.12em; margin-top: 1px; }
+  .cal-week { display: grid; grid-template-columns: repeat(7, 1fr); padding: 5px 0 3px; }
+  .cal-week span { text-align: center; font-size: 8.5px; font-weight: 800; letter-spacing: 0.1em; color: var(--faint); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 1px; }
+  .cal-day { height: 35px; display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .cal-day.blank { color: transparent; }
+  .cal-empty { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--border); font-size: 9.5px; color: var(--faint); }
+  .cal-empty .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--faint); }
+  .c2-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 0 2px; font-size: 10px; line-height: 1.5; color: var(--faint); }
+  .c2-note svg { width: 13px; height: 13px; flex: none; margin-top: 1px; color: var(--muted); }
+  .tabbar { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border-top: 1px solid var(--border); padding: 7px 5px 0; }
+  .tab-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; font-weight: 600; color: var(--faint); padding-bottom: 3px; }
+  .tab-item svg { width: 19px; height: 19px; }
+  .tab-item.active { color: var(--primary); font-weight: 800; }
+
+  /* C3 · Import */
+  .import-art { display: flex; justify-content: center; margin: 10px 0 4px; }
+  .import-art svg { width: 100%; max-width: 300px; height: auto; display: block; }
+  .file-tag { display: flex; justify-content: center; margin-top: 12px; }
+  .file-tag span { font-size: 8px; letter-spacing: 0.18em; font-weight: 800; color: var(--faint); border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 5px 9px; }
+  .import-copy { font-size: 13px; line-height: 1.55; color: var(--text); font-weight: 600; margin: 16px 0 0; text-align: center; }
+  .import-note { font-size: 11px; line-height: 1.57; color: var(--muted); text-align: center; margin: 8px 12px 0; }
+
+  /* ---------- Review cards ---------- */
+  .review { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 30px; }
+  .review-card { background: var(--card); border: 1px solid var(--hair); border-radius: 18px; padding: 22px 24px; box-shadow: var(--card-shadow); }
+  .review-card h3 { font-size: 9px; letter-spacing: 0.16em; font-weight: 800; color: var(--muted); margin: 0 0 13px; }
+  .review-card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .review-card li { font-size: 13px; line-height: 1.62; color: var(--ink); padding-left: 17px; position: relative; }
+  .review-card li::before { content: ""; position: absolute; left: 0; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+  .review-card.tradeoffs li::before { background: var(--faint); }
+  .review-card li b { font-weight: 800; }
+  .review-best {
+    grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    border-top: 1px dashed var(--hair); padding-top: 14px; margin-top: 2px;
+    font-size: 12px; line-height: 1.6; color: var(--muted);
+  }
+  .review-best b { color: var(--ink); font-weight: 800; }
+
+  /* ---------- Dark hero band ---------- */
+  .dark-band {
+    margin-top: 26px; background: #191416; color: #f5eef0; border-radius: 28px; padding: 42px 46px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 48px; align-items: center;
+    border: 1px solid #2a2024; overflow: hidden; position: relative;
+  }
+  .dark-band::before {
+    content: ""; position: absolute; right: -140px; top: -220px; width: 520px; height: 520px; border-radius: 50%;
+    border: 1px solid #3a2029; opacity: 0.55; pointer-events: none;
+  }
+  .dark-band::after {
+    content: ""; position: absolute; right: -60px; top: -320px; width: 520px; height: 520px; border-radius: 50%;
+    border: 1px solid #4a2836; opacity: 0.4; pointer-events: none;
+  }
+  .dark-copy { position: relative; z-index: 1; max-width: 560px; }
+  .dark-kicker { font-size: 9px; letter-spacing: 0.18em; font-weight: 800; color: #ff8fb6; }
+  .dark-copy h3 { font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 800; margin: 11px 0 12px; color: #ffffff; }
+  .dark-copy p { font-size: 13px; line-height: 1.7; color: #bcb0b4; margin: 0; max-width: 520px; }
+  .swatch-row { display: flex; flex-wrap: wrap; gap: 14px 18px; margin-top: 24px; }
+  .swatch { display: flex; align-items: center; gap: 8px; font-size: 9.5px; font-weight: 600; color: #bcb0b4; }
+  .swatch i { width: 16px; height: 16px; border-radius: 5px; display: block; border: 1px solid rgba(255, 255, 255, 0.16); }
+  .dark-tiny { margin-top: 20px; font-size: 10px; line-height: 1.6; color: #8d8185; }
+  .dark-slot { width: 390px; position: relative; z-index: 1; }
+  .dark-slot .phone { box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6); }
+
+  /* ---------- Comparison ---------- */
+  .compare { padding-top: 84px; scroll-margin-top: 84px; }
+  .section-head { border-top: 1px solid var(--hair); padding-top: 34px; }
+  .section-head .concept-kicker { display: block; margin-bottom: 8px; }
+  .section-head h2 { font-size: 28px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 800; margin: 0 0 10px; }
+  .section-head p { font-size: 13.5px; line-height: 1.72; color: var(--muted); max-width: 700px; margin: 0; }
+  .table-wrap { margin-top: 24px; border: 1px solid var(--hair); border-radius: 20px; overflow-x: auto; background: var(--card); box-shadow: var(--card-shadow); }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  th, td { padding: 15px 18px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--hair); font-size: 12.5px; line-height: 1.58; color: var(--ink); }
+  thead th { font-size: 9px; letter-spacing: 0.13em; font-weight: 800; color: var(--muted); background: var(--blush); }
+  thead th.recommended { color: var(--primary-ink); }
+  tbody th { width: 154px; font-size: 10px; letter-spacing: 0.09em; font-weight: 800; color: var(--muted); background: var(--card); }
+  tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+  td b { font-weight: 800; }
+
+  /* ---------- Flow map ---------- */
+  .flow { padding-top: 84px; scroll-margin-top: 84px; }
+  .flow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .flow-lane { background: var(--card); border: 1px solid var(--hair); border-radius: 18px; padding: 22px; box-shadow: var(--card-shadow); }
+  .flow-lane-head { display: flex; align-items: center; gap: 10px; padding-bottom: 13px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+  .flow-index { width: 24px; height: 24px; border-radius: 8px; background: var(--blush); border: 1px solid var(--blush-border); display: grid; place-items: center; font-size: 8.5px; font-weight: 800; color: var(--primary-ink); }
+  .flow-lane-head h3 { margin: 0; font-size: 11px; letter-spacing: 0.07em; font-weight: 800; }
+  .flow-node { padding: 10px 0 2px; }
+  .flow-node b { display: block; font-size: 12px; font-weight: 800; line-height: 1.4; }
+  .flow-node span { display: block; margin-top: 2px; font-size: 10.5px; line-height: 1.5; color: var(--muted); }
+  .flow-link { width: 1px; height: 16px; background: var(--blush-border); margin: 3px 0 3px 11px; position: relative; }
+  .flow-link::after { content: ""; position: absolute; left: -2.5px; bottom: -1px; width: 6px; height: 6px; border-right: 1px solid var(--muted); border-bottom: 1px solid var(--muted); transform: rotate(45deg); }
+  .flow-split { margin-top: 10px; padding: 10px 11px; background: var(--blush); border: 1px solid var(--blush-border); border-radius: 10px; font-size: 10px; line-height: 1.5; color: var(--muted); }
+  .flow-split b { display: block; color: var(--ink); font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }
+  .flow-split + .flow-split { margin-top: 7px; }
+  .resume-note {
+    display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 16px 18px;
+    background: var(--blush); border: 1px solid var(--blush-border); border-radius: 16px;
+    font-size: 11.5px; line-height: 1.6; color: var(--muted);
+  }
+  .resume-note svg { width: 17px; height: 17px; flex: none; color: var(--primary-ink); margin-top: 1px; }
+  .resume-note b { color: var(--ink); font-weight: 800; }
+
+  /* ---------- Footer ---------- */
+  .board-foot { margin-top: 64px; border-top: 1px solid var(--hair); padding-top: 22px; display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+  .board-foot .proposal { font-size: 12.5px; font-weight: 800; color: var(--ink); }
+  .board-foot .fine { font-size: 10.5px; line-height: 1.6; color: var(--faint); max-width: 480px; }
+  .to-top { text-decoration: none; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--muted); border-bottom: 1px solid var(--hair); padding-bottom: 2px; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 1180px) {
+    .concept-head { grid-template-columns: 44px minmax(0, 1fr); }
+    .concept-facts { grid-column: 2; border-left: 0; padding-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 18px; border-top: 1px solid var(--hair); padding-top: 8px; margin-top: 4px; }
+    .fact { border-bottom: 0; flex-direction: column; gap: 2px; padding: 8px 0; }
+    .fact b { text-align: left; }
+    .dark-band { grid-template-columns: 1fr; justify-items: center; padding: 38px 32px; }
+    .dark-copy { max-width: 620px; }
+    .flow-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 860px) {
+    .board { padding: 0 24px 72px; }
+    .tabs-inner { padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+    .tabs-inner::-webkit-scrollbar { display: none; }
+    .tabs::after { display: block; }
+    .masthead { padding-top: 40px; }
+    .screens { gap: 24px; }
+    .review { grid-template-columns: 1fr; }
+    .review-best { grid-column: 1; }
+    .dark-band { padding: 32px 22px; border-radius: 22px; }
+    .dark-slot { zoom: 0.92; }
+  }
+  @media (max-width: 700px) {
+    .concept { padding-top: 60px; }
+    .concept-head { grid-template-columns: 40px minmax(0, 1fr); gap: 16px 18px; }
+    .screen-col { zoom: 0.84; }
+    .dark-slot { zoom: 0.84; }
+    .concept-letter { width: 40px; height: 40px; }
+    .concept-facts { grid-template-columns: 1fr 1fr; }
+    .fact:last-child { grid-column: 1 / -1; }
+    h1.masthead-title { font-size: 38px; }
+  }
+  @media (max-width: 480px) {
+    .board { padding: 0 18px 60px; }
+    .mock-badge { font-size: 8px; letter-spacing: 0.1em; padding: 0 9px; height: 28px; }
+    .tabs-inner { padding: 0 14px; }
+    .tab-link { font-size: 10.5px; padding: 0 9px; }
+    .tab-link .letter { display: none; }
+    .theme-btn { padding: 0 12px; font-size: 9.5px; }
+    .theme-btn span { display: none; }
+    .screen-col, .dark-slot { zoom: 0.82; }
+    .masthead { padding-top: 34px; }
+    h1.masthead-title { font-size: 34px; }
+    .concept-head { grid-template-columns: 1fr; }
+    .concept-letter { margin-bottom: -4px; }
+    .concept-facts { grid-column: 1; }
+    .review-card { padding: 18px; }
+    .dark-band { padding: 26px 14px; }
+  }
+  @media (max-width: 359px) {
+    .screen-col, .dark-slot { zoom: 0.72; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .phone-body { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="board" id="top">
+
+  <!-- ============================== Masthead ============================== -->
+  <header class="masthead">
+    <div class="brandline">
+      <div class="wordmark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v15.5l-7.5-4-7.5 4V5A1.5 1.5 0 0 1 6 3.5Z"/>
+          <path d="M12 8v5M9.5 10.5h5" stroke-linecap="round"/>
+        </svg>
+        PrivateCycle
+      </div>
+      <div class="mock-badge"><span class="pip"></span>DESIGN MOCKUP · NOT IMPLEMENTED</div>
+    </div>
+    <h1 class="masthead-title">Three ways to open the door.</h1>
+    <p class="masthead-lede">
+      Three onboarding directions for PrivateCycle, rendered at <strong>390 × 844</strong>.
+      Each opens with the same promise — no account, no cloud, no ads — and hands off to the
+      <strong>existing Calendar, day sheet and import flow</strong>. This is a design review board:
+      no app code has changed, and the controls inside the phones are static previews.
+    </p>
+    <div class="meta-row">
+      <span class="meta-chip">3 DIRECTIONS</span>
+      <span class="meta-chip">3 SCREENS EACH</span>
+      <span class="meta-chip">DARK HERO EACH</span>
+      <span class="meta-chip">STATIC PREVIEW</span>
+      <span class="meta-chip">390 × 844</span>
+    </div>
+  </header>
+
+  <!-- ============================== Anchor nav ============================== -->
+  <nav class="tabs" aria-label="Design directions">
+    <div class="tabs-inner">
+      <a class="tab-link" href="#concept-a"><span class="letter">A</span>Quiet Journal · recommended</a>
+      <a class="tab-link" href="#concept-b"><span class="letter">B</span>Tidemark</a>
+      <a class="tab-link" href="#concept-c"><span class="letter">C</span>Open Door</a>
+      <a class="tab-link" href="#compare">Comparison</a>
+      <a class="tab-link" href="#flow">Flow map</a>
+      <span class="tab-spacer"></span>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/>
+        </svg>
+        <span>Dim the board</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ============================== A · Quiet Journal ============================== -->
+  <section class="concept" id="concept-a">
+    <div class="concept-head">
+      <div class="concept-letter" aria-hidden="true">A</div>
+      <div>
+        <div class="concept-kicker">DIRECTION A · RECOMMENDED</div>
+        <h2>Quiet Journal</h2>
+        <p class="concept-desc">
+          A quiet, spacious editorial story in three steps. A slim <strong>01 / 03</strong> marker,
+          a delicate outlined journal with a pink bookmark, and one idea per screen. The privacy
+          promise is explained before the app asks for anything, so the first action feels earned
+          rather than demanded.
+        </p>
+      </div>
+      <div class="concept-facts">
+        <div class="fact"><span>Pace</span><b>Warm, guided, 3 steps</b></div>
+        <div class="fact"><span>Visual weight</span><b>Quiet and literary</b></div>
+        <div class="fact"><span>Build effort</span><b>Moderate</b></div>
+        <div class="fact"><span>Best when</span><b>Trust leads the decision</b></div>
+      </div>
+    </div>
+
+    <div class="screens">
+      <!-- A1 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">A1</span><span class="screen-title">Welcome</span><span class="screen-sub">01 / 03</span></div>
+        <div class="phone" data-screen="a1">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+            <div class="stepbar"><span class="num"><b>01</b> / 03</span><span class="rule" style="--w:33%"></span></div>
+            <div class="p-eyebrow">A LITTLE SPACE FOR YOU</div>
+            <h1 class="p-title">Your cycle.<br>Your own pace.</h1>
+            <p class="p-body">A private place to notice your rhythm, one day at a time.</p>
+
+            <div class="journal-hero" aria-hidden="true">
+              <svg viewBox="0 0 320 270" role="img" aria-label="An outlined journal with a pink ribbon bookmark and a small lock">
+                <ellipse cx="162" cy="239" rx="96" ry="11" fill="var(--primary-soft)" opacity="0.55"/>
+                <path d="M52 213c29 33 148 41 216 5" fill="none" stroke="var(--primary-weak)" stroke-width="1.2" stroke-dasharray="2 6" stroke-linecap="round" opacity="0.85"/>
+                <g transform="rotate(-4 160 140)">
+                  <rect x="104" y="58" width="140" height="182" rx="10" fill="none" class="art-line" stroke-width="1" opacity="0.38"/>
+                  <rect x="97" y="52" width="140" height="182" rx="10" class="art-paper art-line" stroke-width="1.6"/>
+                  <path d="M118 58v170" class="art-line" stroke-width="1.2"/>
+                  <path d="M124 58v170" class="art-line" stroke-width="1" opacity="0.5"/>
+                  <path d="M204 52h18v64l-9-8-9 8z" fill="var(--primary)"/>
+                  <path d="M138 128h80M138 146h64M138 164h80M138 182h56" class="art-rule" stroke-width="1.4" stroke-linecap="round"/>
+                  <rect x="198" y="196" width="28" height="22" rx="6" class="art-soft art-line" stroke-width="1.2"/>
+                  <path d="M204 196v-5a8 8 0 0 1 16 0v5" fill="none" class="art-line" stroke-width="1.4" stroke-linecap="round"/>
+                  <circle cx="212" cy="206" r="2" fill="var(--primary)"/>
+                </g>
+                <path d="M62 96h10M67 91v10M250 92h8M254 88v8" class="art-line" stroke-width="1" stroke-linecap="round" opacity="0.55"/>
+              </svg>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="quiet-line">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              No account. No cloud sync. No ads.
+            </div>
+          </div>
+          <div class="phone-footer">
+            <div class="btn btn-primary">Continue
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">The first screen asks for nothing. Brand and skip stay quiet, and the journal is the only object in the room.</p>
+      </div>
+
+      <!-- A2 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">A2</span><span class="screen-title">Privacy &amp; backup</span><span class="screen-sub">02 / 03</span></div>
+        <div class="phone" data-screen="a2">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+            <div class="stepbar"><span class="num"><b>02</b> / 03</span><span class="rule" style="--w:66%"></span></div>
+            <div class="p-eyebrow">KEPT CLOSE, ON PURPOSE</div>
+            <h1 class="p-title">Your history<br>stays with you.</h1>
+
+            <div class="journal-hero" aria-hidden="true" style="margin-top:8px">
+              <svg viewBox="0 0 320 230" role="img" aria-label="A phone connected by a dotted line to a backup file">
+                <ellipse cx="160" cy="203" rx="116" ry="12" fill="var(--primary-soft)" opacity="0.5"/>
+                <rect x="40" y="24" width="104" height="176" rx="20" class="art-paper art-line" stroke-width="1.6"/>
+                <rect x="49" y="37" width="86" height="150" rx="11" fill="var(--primary-soft)" opacity="0.45"/>
+                <path d="M78 31h28" class="art-line" stroke-width="2" stroke-linecap="round"/>
+                <path d="M62 62h60M62 76h42" class="art-rule" stroke-width="1.3" stroke-linecap="round"/>
+                <rect x="84" y="105" width="24" height="19" rx="5" class="art-paper art-line" stroke-width="1.2"/>
+                <path d="M89 105v-4a7 7 0 0 1 14 0v4" fill="none" class="art-line" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="96" cy="113" r="1.9" fill="var(--primary)"/>
+                <path d="M152 122c18-20 38-24 60-15" fill="none" stroke="var(--primary-weak)" stroke-width="1.4" stroke-dasharray="2 6" stroke-linecap="round"/>
+                <path d="m206 103 6 4-7 3" fill="none" stroke="var(--primary-ink)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <text x="154" y="100" font-size="8" letter-spacing="1.6" font-weight="800" fill="var(--faint)" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">EXPORT</text>
+                <path d="M224 62h38l24 24v66a8 8 0 0 1-8 8h-54a8 8 0 0 1-8-8V70a8 8 0 0 1 8-8z" class="art-paper art-line" stroke-width="1.6"/>
+                <path d="M262 62v24h24" fill="none" class="art-line" stroke-width="1.4" stroke-linejoin="round"/>
+                <path d="M232 104h42M232 118h42M232 132h28" class="art-rule" stroke-width="1.4" stroke-linecap="round"/>
+                <rect x="232" y="78" width="22" height="7" rx="3.5" fill="var(--primary-soft)"/>
+                <text x="234" y="186" font-size="8" letter-spacing="1.5" font-weight="800" fill="var(--faint)" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">BACKUP FILE</text>
+              </svg>
+            </div>
+
+            <div class="info-list">
+              <div class="info-row">
+                <div class="info-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></svg>
+                </div>
+                <div>
+                  <div class="info-title">Stored on this device</div>
+                  <p class="info-body">Your log lives in this app, on this device.</p>
+                </div>
+              </div>
+              <div class="info-row">
+                <div class="info-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21H17a1.5 1.5 0 0 0 1.5-1.5V8.5Z"/><path d="M13 3v5.5h5.5"/><path d="M9 14h6M9 17h4"/></svg>
+                </div>
+                <div>
+                  <div class="info-title">A backup is your safety net</div>
+                  <p class="info-body">Export a backup from Settings. If you lose your device or uninstall the app, only an exported file can restore your history.</p>
+                </div>
+              </div>
+            </div>
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="btn-row">
+              <div class="btn btn-secondary btn-mini btn-back">Back</div>
+              <div class="btn btn-primary btn-mini grow">Continue</div>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">Two plain-language facts: local storage, and a backup as the only recovery path. No account is implied.</p>
+      </div>
+
+      <!-- A3 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">A3</span><span class="screen-title">Choose a start</span><span class="screen-sub">03 / 03</span></div>
+        <div class="phone" data-screen="a3">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+            <div class="stepbar"><span class="num"><b>03</b> / 03</span><span class="rule" style="--w:100%"></span></div>
+            <div class="p-eyebrow">BEGIN GENTLY</div>
+            <h1 class="p-title">Begin where<br>you remember.</h1>
+            <p class="p-body">You don’t need a perfect history to start.</p>
+
+            <div class="spacer"></div>
+            <div class="note-panel">
+              <div class="note-head">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Estimates, not certainties
+              </div>
+              <p>Forecasts use your logged dates. With little history, standard estimates are labelled. Not birth control or medical advice.</p>
+            </div>
+
+            <div class="reminder-line" style="justify-content:flex-start; padding-left:2px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path d="m3 3 18 18"/></svg>
+              Reminders stay off until you choose.
+            </div>
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="c-actions">
+              <div class="btn btn-primary">Start with my last period
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+              </div>
+              <div class="btn btn-secondary btn-mini">Import a backup</div>
+              <div class="linkbtn">I’m unsure — explore Calendar</div>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">The decision is a handoff, not a form. Both actions leave for existing screens; no date input is invented here.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <div class="review-card">
+        <h3>STRENGTHS</h3>
+        <ul>
+          <li><b>Warm, guided pace.</b> Three calm steps give the privacy model room to land before any action is requested.</li>
+          <li><b>Editorial restraint.</b> One motif, one idea per screen, and a numbered rhythm that is easy to follow.</li>
+          <li><b>Honest by construction.</b> Local storage and the manual backup path are explained before the first tap.</li>
+        </ul>
+      </div>
+      <div class="review-card tradeoffs">
+        <h3>TRADEOFFS</h3>
+        <ul>
+          <li><b>Three steps add friction</b> for a returning user who already knows the product.</li>
+          <li><b>Quiet art needs precise spacing.</b> The journal has to feel composed, not empty, at 320px.</li>
+          <li><b>Less brand theatre</b> than B, so it leans on typography and copy to be memorable.</li>
+        </ul>
+      </div>
+      <div class="review-best"><b>Best when</b> trust and tone matter more than speed, and the first session should feel like a gentle invitation rather than a setup task.</div>
+    </div>
+
+    <div class="dark-band">
+      <div class="dark-copy">
+        <div class="dark-kicker">DARK HERO · A1</div>
+        <h3>The same welcome at night.</h3>
+        <p>
+          The journal stays paper-warm on a #121212 canvas, while the ribbon remains the only
+          saturated accent. Surfaces lift to #1e1e1e and the blush tint becomes #241a1e, so the
+          composition keeps its depth without turning into a neon night mode.
+        </p>
+        <div class="swatch-row" aria-label="Dark mode tokens">
+          <span class="swatch"><i style="background:#121212"></i>Canvas #121212</span>
+          <span class="swatch"><i style="background:#1e1e1e"></i>Surface #1e1e1e</span>
+          <span class="swatch"><i style="background:#241a1e"></i>Blush #241a1e</span>
+          <span class="swatch"><i style="background:#e91e63"></i>CTA #e91e63</span>
+        </div>
+        <p class="dark-tiny">Rendered with the existing dark tokens from design/DESIGN.md. No new palette is introduced.</p>
+      </div>
+      <div class="dark-slot" data-dark-src="a1" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- ============================== B · Tidemark ============================== -->
+  <section class="concept" id="concept-b">
+    <div class="concept-head">
+      <div class="concept-letter" aria-hidden="true">B</div>
+      <div>
+        <div class="concept-kicker">DIRECTION B · VISUAL BRAND</div>
+        <h2>Tidemark</h2>
+        <p class="concept-desc">
+          The most visual of the three. Large concentric open arcs in blush, cropped by the phone
+          edge, carry the identity while a single pink marker gives the eye a place to land. A thin
+          vertical eyebrow and a lower-left title keep the composition editorial rather than
+          poster-like.
+        </p>
+      </div>
+      <div class="concept-facts">
+        <div class="fact"><span>Pace</span><b>Three visual steps</b></div>
+        <div class="fact"><span>Visual weight</span><b>Boldest, illustration-led</b></div>
+        <div class="fact"><span>Build effort</span><b>Highest</b></div>
+        <div class="fact"><span>Best when</span><b>Brand recall matters</b></div>
+      </div>
+    </div>
+
+    <div class="screens">
+      <!-- B1 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">B1</span><span class="screen-title">Welcome</span><span class="screen-sub">01 / 03</span></div>
+        <div class="phone" data-screen="b1">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+
+            <div class="b-bleed" aria-hidden="true">
+              <svg viewBox="0 0 390 420" preserveAspectRatio="xMidYMid slice">
+                <g>
+                  <circle class="arc" cx="352" cy="-18" r="140" stroke-width="1.6" opacity="0.9"/>
+                  <circle class="arc" cx="352" cy="-18" r="188" stroke-width="1.6" opacity="0.85"/>
+                  <circle class="arc" cx="352" cy="-18" r="236" stroke-width="1.8" opacity="0.8"/>
+                  <circle class="arc" cx="352" cy="-18" r="286" stroke-width="1.8" opacity="0.72"/>
+                  <circle class="arc" cx="352" cy="-18" r="338" stroke-width="1.7" opacity="0.64"/>
+                  <circle class="arc" cx="352" cy="-18" r="392" stroke-width="1.6" opacity="0.56"/>
+                  <circle class="arc" cx="352" cy="-18" r="448" stroke-width="1.4" opacity="0.46"/>
+                </g>
+                <circle cx="93.07697822578547" cy="199.26221207405035" r="12" fill="none" stroke="var(--primary-weak)" stroke-width="1.2"/>
+                <circle cx="93.07697822578547" cy="199.26221207405035" r="5.2" fill="var(--primary)"/>
+              </svg>
+            </div>
+
+            <div class="v-row" style="margin-top:18px">
+              <div class="v-eyebrow" aria-hidden="true"><span>TIDEMARK · 01</span><i></i></div>
+              <div style="min-width:0">
+                <h1 class="p-title b-title">Find your<br>own rhythm.</h1>
+                <p class="p-body">Make room for the patterns that are yours.</p>
+              </div>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="b-note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              Private by design. Yours to keep.
+            </div>
+          </div>
+          <div class="phone-footer">
+            <div class="btn btn-primary">Continue
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">The arcs read as a tide mark, not a cycle-phase diagram. One pink marker anchors the composition without explaining it.</p>
+      </div>
+
+      <!-- B2 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">B2</span><span class="screen-title">A small note</span><span class="screen-sub">02 / 03</span></div>
+        <div class="phone" data-screen="b2">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+
+            <div class="v-row" style="margin-top:8px">
+              <div class="v-eyebrow" aria-hidden="true"><span>TIDEMARK · 02</span><i></i></div>
+              <div style="min-width:0">
+                <h1 class="p-title b-title">A small note.<br>A clearer picture.</h1>
+              </div>
+            </div>
+
+            <div class="illus-label">ILLUSTRATION</div>
+            <div class="mini-cal" aria-label="Illustration of one selected calendar date">
+              <div class="mini-head">
+                <div class="mini-month">May <span>2026</span></div>
+                <div class="mini-nav" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                </div>
+              </div>
+              <div class="mini-week" aria-hidden="true">
+                <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+              </div>
+              <div class="mini-grid" aria-hidden="true">
+                <span class="mini-day">3</span><span class="mini-day">4</span><span class="mini-day">5</span><span class="mini-day">6</span><span class="mini-day">7</span><span class="mini-day">8</span><span class="mini-day">9</span>
+                <span class="mini-day">10</span><span class="mini-day">11</span><span class="mini-day">12</span><span class="mini-day">13</span><span class="mini-day sel">14</span><span class="mini-day">15</span><span class="mini-day">16</span>
+                <span class="mini-day">17</span><span class="mini-day">18</span><span class="mini-day">19</span><span class="mini-day">20</span><span class="mini-day">21</span><span class="mini-day">22</span><span class="mini-day">23</span>
+                <span class="mini-day">24</span><span class="mini-day">25</span><span class="mini-day">26</span><span class="mini-day">27</span><span class="mini-day">28</span><span class="mini-day">29</span><span class="mini-day">30</span>
+              </div>
+              <div class="mini-foot">
+                <span class="period-chip"><span class="dot"></span>Period</span>
+                <span class="mini-hint">First day</span>
+              </div>
+            </div>
+
+            <p class="p-body" style="margin-top:14px">Start with the first day of your last period. Add only what you remember.</p>
+
+            <div class="note-panel" style="margin-top:12px">
+              <p style="margin-top:0">Forecasts are estimates—not birth control or medical advice. Standard estimates are labelled until there is enough history.</p>
+            </div>
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="btn-row">
+              <div class="btn btn-secondary btn-mini btn-back">Back</div>
+              <div class="btn btn-primary btn-mini grow">Continue</div>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">A cropped calendar detail, openly labelled as an illustration: one outlined date and a Period chip. No logged range, forecast fill or metric.</p>
+      </div>
+
+      <!-- B3 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">B3</span><span class="screen-title">Choose a start</span><span class="screen-sub">03 / 03</span></div>
+        <div class="phone" data-screen="b3">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="p-skip">Skip</div>
+            </div>
+
+            <div class="v-row" style="margin-top:8px">
+              <div class="v-eyebrow" aria-hidden="true"><span>TIDEMARK · 03</span><i></i></div>
+              <div style="min-width:0">
+                <h1 class="p-title b-title">Yours means<br>yours.</h1>
+              </div>
+            </div>
+
+            <div class="b3-art" aria-hidden="true">
+              <svg viewBox="0 0 340 250" role="img" aria-label="A phone, a backup file, and open tidal arcs">
+                <g fill="none" stroke="var(--arc)" stroke-width="1.4">
+                  <path d="M8 244C22 136 116 48 240 44" opacity="0.55"/>
+                  <path d="M-8 212C12 112 110 24 238 20" opacity="0.45"/>
+                  <path d="M28 262C44 166 130 84 248 78" opacity="0.34"/>
+                </g>
+                <ellipse cx="190" cy="226" rx="96" ry="9" fill="var(--primary-soft)" opacity="0.55"/>
+                <rect x="202" y="38" width="86" height="158" rx="18" class="art-paper art-line" stroke-width="1.6"/>
+                <rect x="210" y="50" width="70" height="134" rx="10" fill="var(--primary-soft)" opacity="0.4"/>
+                <path d="M232 44h26" class="art-line" stroke-width="2" stroke-linecap="round"/>
+                <rect x="236" y="112" width="22" height="18" rx="5" class="art-paper art-line" stroke-width="1.2"/>
+                <path d="M241 112v-4a6 6 0 0 1 12 0v4" fill="none" class="art-line" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="247" cy="120" r="1.8" fill="var(--primary)"/>
+                <g transform="rotate(-7 99 162)">
+                  <path d="M56 110h58l28 28v72a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8v-92a8 8 0 0 1 8-8z" class="art-paper art-line" stroke-width="1.5"/>
+                  <path d="M114 110v28h28" fill="none" class="art-line" stroke-width="1.3" stroke-linejoin="round"/>
+                  <path d="M64 152h54M64 166h54M64 180h34" class="art-rule" stroke-width="1.4" stroke-linecap="round"/>
+                  <rect x="64" y="126" width="21" height="7" rx="3.5" fill="var(--primary-soft)"/>
+                </g>
+                <path d="M148 152c16-13 32-15 50-9" fill="none" stroke="var(--primary-weak)" stroke-width="1.4" stroke-dasharray="2 6" stroke-linecap="round"/>
+                <path d="m192 139 7 4-6 4" fill="none" stroke="var(--primary-ink)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+
+            <div class="short-list">
+              <div class="short-item">
+                <span class="dash" aria-hidden="true"></span>
+                <p><b>No account or cloud sync.</b> Your log stays on this device.</p>
+              </div>
+              <div class="short-item">
+                <span class="dash" aria-hidden="true"></span>
+                <p><b>Keep an exported backup.</b> It’s the only way to recover your history after losing your device or uninstalling.</p>
+              </div>
+            </div>
+
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="c-actions">
+              <div class="btn btn-primary">Start with my last period
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+              </div>
+              <div class="btn btn-secondary btn-mini">Import a backup</div>
+              <div class="linkbtn">I’m unsure — explore Calendar</div>
+            </div>
+            <div class="reminder-line" style="padding-top:5px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path d="m3 3 18 18"/></svg>
+              Reminders stay off until you choose.
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">Same three paths as A, but the safety copy is set as two ruled statements rather than stacked cards. The art is composed differently: arcs cradle the device and file.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <div class="review-card">
+        <h3>STRENGTHS</h3>
+        <ul>
+          <li><b>Strongest visual brand.</b> The tidal arcs and cropped compositions make PrivateCycle recognisable at a glance.</li>
+          <li><b>Illustration-led confidence.</b> The product feels designed, not assembled from onboarding templates.</li>
+          <li><b>Still restrained.</b> Blush line-work and one pink marker keep it airy; no saturated full-bleed surface.</li>
+        </ul>
+      </div>
+      <div class="review-card tradeoffs">
+        <h3>TRADEOFFS</h3>
+        <ul>
+          <li><b>More illustration work.</b> Three custom compositions, each needing a careful crop at small widths.</li>
+          <li><b>Art competes with copy</b> if the upper-half bleed is not tuned per device height.</li>
+          <li><b>Less explicit pacing</b> than A's numbered steps; the visual sequence carries more of the flow.</li>
+        </ul>
+      </div>
+      <div class="review-best"><b>Best when</b> the launch needs a memorable brand moment and the team can invest in bespoke, responsive illustration.</div>
+    </div>
+
+    <div class="dark-band">
+      <div class="dark-copy">
+        <div class="dark-kicker">DARK HERO · B1</div>
+        <h3>The tide, after dark.</h3>
+        <p>
+          The arcs drop to a deep blush (#5a2437) so they read as a quiet texture rather than
+          glowing rings. The pink marker and wordmark carry the accent, and the lower-left title
+          keeps the same editorial weight against #121212.
+        </p>
+        <div class="swatch-row" aria-label="Dark mode tokens">
+          <span class="swatch"><i style="background:#121212"></i>Canvas #121212</span>
+          <span class="swatch"><i style="background:#1e1e1e"></i>Surface #1e1e1e</span>
+          <span class="swatch"><i style="background:#5a2437"></i>Arc #5a2437</span>
+          <span class="swatch"><i style="background:#e91e63"></i>Marker #e91e63</span>
+        </div>
+        <p class="dark-tiny">The same crop and spacing as the light hero — only the token values change.</p>
+      </div>
+      <div class="dark-slot" data-dark-src="b1" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- ============================== C · Open Door ============================== -->
+  <section class="concept" id="concept-c">
+    <div class="concept-head">
+      <div class="concept-letter" aria-hidden="true">C</div>
+      <div>
+        <div class="concept-kicker">DIRECTION C · ACTION FIRST</div>
+        <h2>Open Door</h2>
+        <p class="concept-desc">
+          One compact, beautiful welcome screen with a soft blush hero and a line-drawn journal
+          tucked into the top right. Safety copy becomes two understated rows, and the primary
+          action sits within reach. The Calendar handoff and import state are shown as
+          <strong>explanatory views of existing flows</strong>, not committed new screens.
+        </p>
+      </div>
+      <div class="concept-facts">
+        <div class="fact"><span>Pace</span><b>One screen, then the app</b></div>
+        <div class="fact"><span>Visual weight</span><b>Light and app-native</b></div>
+        <div class="fact"><span>Build effort</span><b>Lowest</b></div>
+        <div class="fact"><span>Best when</span><b>Speed is the priority</b></div>
+      </div>
+    </div>
+
+    <div class="screens">
+      <!-- C1 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">C1</span><span class="screen-title">Welcome</span><span class="screen-sub">SINGLE SCREEN</span></div>
+        <div class="phone" data-screen="c1">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-top">
+              <div class="p-brand"><span class="gem"></span>PrivateCycle</div>
+              <div class="setup-chip">ON DEVICE</div>
+            </div>
+
+            <div class="c-hero">
+              <svg class="c-hero-art" viewBox="0 0 180 170" aria-hidden="true">
+                <path d="M18 160c8-74 58-124 148-132" fill="none" stroke="var(--primary-weak)" stroke-width="1.2" opacity="0.8"/>
+                <path d="M2 166c12-88 66-140 164-148" fill="none" stroke="var(--primary-weak)" stroke-width="1" opacity="0.45"/>
+                <g transform="rotate(-5 92 86)">
+                  <rect x="36" y="30" width="112" height="126" rx="9" class="art-paper art-line" stroke-width="1.5"/>
+                  <path d="M52 30v126" class="art-line" stroke-width="1.1" opacity="0.75"/>
+                  <path d="M60 46h70M60 58h46" class="art-rule" stroke-width="1.3" stroke-linecap="round"/>
+                  <g class="art-rule" stroke-width="1">
+                    <rect x="60" y="78" width="70" height="54" rx="4" fill="none"/>
+                    <path d="M60 96h70M60 114h70M83 78v54M107 78v54"/>
+                  </g>
+                  <rect x="120" y="78" width="10" height="14" rx="2" fill="var(--primary-soft)"/>
+                  <path d="M140 30h14v48l-7-6-7 6z" fill="var(--primary)"/>
+                  <path d="M70 120h24" class="art-line" stroke-width="1.6" stroke-linecap="round"/>
+                  <circle cx="61" cy="147" r="2" fill="var(--primary)"/>
+                </g>
+                <path d="M150 40h8M154 36v8" class="art-line" stroke-width="1" stroke-linecap="round" opacity="0.5"/>
+              </svg>
+              <div class="p-eyebrow">YOUR FIRST PAGE</div>
+              <h1 class="p-title">A private place<br>to begin.</h1>
+              <p class="p-body">Your cycle, at your pace. No account needed.</p>
+            </div>
+
+            <div class="c-rows">
+              <div class="c-row">
+                <div class="c-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                </div>
+                <div>
+                  <div class="c-row-title">On this device, by design</div>
+                  <p>No cloud sync. Export a backup from Settings—only that file can recover lost history.</p>
+                </div>
+              </div>
+              <div class="c-row">
+                <div class="c-row-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                </div>
+                <div>
+                  <div class="c-row-title">Guidance, not certainty</div>
+                  <p>Forecasts are estimates. Standard estimates are labelled. Not birth control or medical advice.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="c-actions">
+              <div class="btn btn-primary">Start with my last period
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+              </div>
+              <div class="btn btn-secondary btn-mini">Import a backup</div>
+              <div class="linkbtn">I’m unsure — explore Calendar</div>
+            </div>
+            <div class="reminder-line" style="padding-top:5px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path d="m3 3 18 18"/></svg>
+              Reminders stay off until you choose.
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">The whole promise, one scroll-free screen. The journal is tucked into the hero rather than given its own stage.</p>
+      </div>
+
+      <!-- C2 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">C2</span><span class="screen-title">Calendar handoff</span><span class="screen-sub">EXPLANATORY VIEW</span></div>
+        <div class="phone" data-screen="c2">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="app-head">
+              <div>
+                <h1>Period Calendar</h1>
+                <p>Tap the first day you remember</p>
+              </div>
+              <div class="app-tile" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+              </div>
+            </div>
+
+            <div class="handoff">
+              <div class="handoff-top">
+                <span class="handoff-kicker">LAST PERIOD</span>
+                <span class="setup-chip">SETUP</span>
+              </div>
+              <h2>Start with your last period</h2>
+              <p>Tap the first day you remember. You can add other days later.</p>
+              <div class="handoff-action">Finish later
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </div>
+            </div>
+
+            <div class="cal-card">
+              <div class="cal-head">
+                <div class="cal-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></div>
+                <div class="cal-month">November<span>2026</span></div>
+                <div class="cal-chev" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></div>
+              </div>
+              <div class="cal-week" aria-hidden="true"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+              <div class="cal-grid" aria-hidden="true">
+                <span class="cal-day">1</span><span class="cal-day">2</span><span class="cal-day">3</span><span class="cal-day">4</span><span class="cal-day">5</span><span class="cal-day">6</span><span class="cal-day">7</span>
+                <span class="cal-day">8</span><span class="cal-day">9</span><span class="cal-day">10</span><span class="cal-day">11</span><span class="cal-day">12</span><span class="cal-day">13</span><span class="cal-day">14</span>
+                <span class="cal-day">15</span><span class="cal-day">16</span><span class="cal-day">17</span><span class="cal-day">18</span><span class="cal-day">19</span><span class="cal-day">20</span><span class="cal-day">21</span>
+                <span class="cal-day">22</span><span class="cal-day">23</span><span class="cal-day">24</span><span class="cal-day">25</span><span class="cal-day">26</span><span class="cal-day">27</span><span class="cal-day">28</span>
+                <span class="cal-day">29</span><span class="cal-day">30</span>
+              </div>
+              <div class="cal-empty"><span class="dot"></span>No days logged yet</div>
+            </div>
+
+            <div class="c2-note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+              A neutral first calendar: no predicted fills. Tapping a day opens the existing day sheet with Period pre-set.
+            </div>
+            <div class="spacer"></div>
+          </div>
+          <div class="tabbar" aria-hidden="true">
+            <div class="tab-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
+              Calendar
+            </div>
+            <div class="tab-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4v16h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              Overview
+            </div>
+            <div class="tab-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"/></svg>
+              Insights
+            </div>
+            <div class="tab-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="home" aria-hidden="true" style="background:var(--surface)"><span></span></div>
+        </div>
+        <p class="screen-caption">Optional explanatory view. It shows the existing Calendar in a neutral, empty state with the guided last-period banner and a Finish later exit.</p>
+      </div>
+
+      <!-- C3 -->
+      <div class="screen-col">
+        <div class="screen-meta"><span class="screen-id">C3</span><span class="screen-title">Import state</span><span class="screen-sub">EXPLANATORY VIEW</span></div>
+        <div class="phone" data-screen="c3">
+          <div class="island" aria-hidden="true"></div>
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="status-icons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="7" width="18" height="10" rx="2.6"/><path d="M22 10.5v3"/><rect x="5" y="10" width="10" height="4" rx="1.2" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-body">
+            <div class="p-eyebrow" style="margin-top:8px">IMPORT</div>
+            <h1 class="p-title">Bring your history<br>with you.</h1>
+
+            <div class="import-art" aria-hidden="true">
+              <svg viewBox="0 0 300 218">
+                <ellipse cx="150" cy="190" rx="104" ry="11" fill="var(--primary-soft)" opacity="0.5"/>
+                <circle cx="150" cy="104" r="86" fill="none" stroke="var(--primary-weak)" stroke-width="1.1" stroke-dasharray="2 7" opacity="0.8"/>
+                <g transform="rotate(-3 150 104)">
+                  <path d="M108 30h62l28 28v106a9 9 0 0 1-9 9h-81a9 9 0 0 1-9-9V39a9 9 0 0 1 9-9z" class="art-paper art-line" stroke-width="1.6"/>
+                  <path d="M170 30v28h28" fill="none" class="art-line" stroke-width="1.4" stroke-linejoin="round"/>
+                  <path d="M118 82h60M118 96h60M118 110h38" class="art-rule" stroke-width="1.4" stroke-linecap="round"/>
+                  <rect x="118" y="56" width="28" height="8" rx="4" fill="var(--primary-soft)"/>
+                  <path d="M118 132h44" class="art-line" stroke-width="1.3" stroke-linecap="round"/>
+                  <circle cx="196" cy="58" r="14" fill="var(--primary)"/>
+                  <path d="M190 58h11M196 53l5 5-5 5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+                <path d="M56 156h34M72 140v32" class="art-line" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+                <circle cx="231.7908604013832" cy="130.57546151624548" r="3" fill="var(--primary)"/>
+              </svg>
+            </div>
+            <div class="file-tag"><span>PRIVATECYCLE BACKUP</span></div>
+
+            <p class="import-copy">Choose a PrivateCycle backup file.</p>
+            <p class="import-note">Import replaces cycle data. Private entries are replaced only if the file includes them.</p>
+            <div class="spacer"></div>
+          </div>
+          <div class="phone-footer">
+            <div class="c-actions">
+              <div class="btn btn-primary">Choose backup file
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+              </div>
+              <div class="linkbtn">Back</div>
+            </div>
+            <div class="home" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <p class="screen-caption">Optional explanatory view of the existing import workflow. The copy states the replacement rule and leaves the file choice to the system picker.</p>
+      </div>
+    </div>
+
+    <div class="review">
+      <div class="review-card">
+        <h3>STRENGTHS</h3>
+        <ul>
+          <li><b>Fastest to understand.</b> One welcome screen gets out of the way; the existing Calendar and import screens do the rest.</li>
+          <li><b>App-native continuity.</b> The handoff is visible immediately, so the path from promise to first log is short.</li>
+          <li><b>Lowest build effort.</b> One new screen, reusing the current day sheet, calendar banner and import flow.</li>
+        </ul>
+      </div>
+      <div class="review-card tradeoffs">
+        <h3>TRADEOFFS</h3>
+        <ul>
+          <li><b>Denser safety copy.</b> Local storage, backup and estimate caveats are compressed onto one screen.</li>
+          <li><b>Less room for brand atmosphere</b> than A or B; the hero has to do a lot with a small crop.</li>
+          <li><b>Handoff/import views are explanatory.</b> They describe existing behavior, not new screens to build.</li>
+        </ul>
+      </div>
+      <div class="review-best"><b>Best when</b> the priority is a short path to logging, and the team wants the smallest possible change surface.</div>
+    </div>
+
+    <div class="dark-band">
+      <div class="dark-copy">
+        <div class="dark-kicker">DARK HERO · C1</div>
+        <h3>One screen, still warm.</h3>
+        <p>
+          The blush hero becomes #241a1e, the journal line-work lifts to a dusky rose, and the
+          safety rows sit directly on #121212. The compact composition survives dark mode without
+          needing a second illustration.
+        </p>
+        <div class="swatch-row" aria-label="Dark mode tokens">
+          <span class="swatch"><i style="background:#121212"></i>Canvas #121212</span>
+          <span class="swatch"><i style="background:#1e1e1e"></i>Surface #1e1e1e</span>
+          <span class="swatch"><i style="background:#241a1e"></i>Hero #241a1e</span>
+          <span class="swatch"><i style="background:#e91e63"></i>CTA #e91e63</span>
+        </div>
+        <p class="dark-tiny">The light hero's gradient is preserved as a surface-to-blush transition; no extra dark-only artwork is required.</p>
+      </div>
+      <div class="dark-slot" data-dark-src="c1" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <!-- ============================== Comparison ============================== -->
+  <section class="compare" id="compare">
+    <div class="section-head">
+      <span class="concept-kicker">AT A GLANCE</span>
+      <h2>How the three directions differ.</h2>
+      <p>
+        All three share the same product facts and the same exits. The difference is how much
+        room the onboarding gives the promise before it asks for a first entry — and how much
+        illustration the team wants to own.
+      </p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">DIMENSION</th>
+            <th scope="col" class="recommended">A · QUIET JOURNAL</th>
+            <th scope="col">B · TIDEMARK</th>
+            <th scope="col">C · OPEN DOOR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">PACE</th>
+            <td><b>Three guided steps.</b> One idea and one decision per screen.</td>
+            <td><b>Three visual steps.</b> The arc sequence carries the rhythm; copy stays short.</td>
+            <td><b>One screen.</b> Safety context and actions share a single welcome.</td>
+          </tr>
+          <tr>
+            <th scope="row">VISUAL WEIGHT</th>
+            <td>Quiet and literary. White space, hairlines, one journal motif.</td>
+            <td>Boldest. Cropped tidal arcs and a single pink marker lead the composition.</td>
+            <td>Light and app-native. A soft blush hero integrated into the first screen.</td>
+          </tr>
+          <tr>
+            <th scope="row">SAFETY COPY</th>
+            <td>Paced: storage and backup each get a calm section.</td>
+            <td>Light-medium: one compact forecast note, two ruled statements.</td>
+            <td>Denser: two understated rows carry backup and estimate caveats together.</td>
+          </tr>
+          <tr>
+            <th scope="row">BUILD EFFORT</th>
+            <td>Moderate. Three screens and two custom illustrations.</td>
+            <td>Highest. Three screens and three bespoke, responsive compositions.</td>
+            <td>Lowest. One new screen; Calendar and import reuse existing flows.</td>
+          </tr>
+          <tr>
+            <th scope="row">MAIN RISK</th>
+            <td>May feel long for a returning user; spacing must stay generous at 320px.</td>
+            <td>Art can overpower copy if crops are not tuned per device.</td>
+            <td>Compressed nuance; the welcome has to earn trust quickly.</td>
+          </tr>
+          <tr>
+            <th scope="row">BEST WHEN</th>
+            <td><b>Trust and tone</b> lead the decision. Recommended.</td>
+            <td><b>Brand recall</b> matters and bespoke illustration is affordable.</td>
+            <td><b>Speed</b> is the priority and the change surface must stay small.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== Flow map ============================== -->
+  <section class="flow" id="flow">
+    <div class="section-head">
+      <span class="concept-kicker">FLOW MAP</span>
+      <h2>Every route ends in the existing app.</h2>
+      <p>
+        No direction adds a new data path. Skip always lands on Calendar, import keeps the user in
+        onboarding until a file is accepted, and the last-period route uses the existing day sheet.
+      </p>
+    </div>
+
+    <div class="flow-grid">
+      <div class="flow-lane">
+        <div class="flow-lane-head">
+          <span class="flow-index">01</span>
+          <h3>SKIP, AT ANY STEP</h3>
+        </div>
+        <div class="flow-node"><b>Any onboarding screen</b><span>A and B keep Skip in the top right; C uses its explicit explore link.</span></div>
+        <div class="flow-link" aria-hidden="true"></div>
+        <div class="flow-node"><b>Calendar</b><span>Tabs are immediately available. A pending last-period setup can be resumed from the Calendar banner.</span></div>
+        <div class="flow-split"><b>No data is fabricated</b>An empty Calendar stays honest: no seeded period, no predicted fill without a logged start.</div>
+        <div class="flow-split"><b>No permission prompt</b>Onboarding never asks for notification access; reminders stay opt-in on the notifications screen.</div>
+      </div>
+
+      <div class="flow-lane">
+        <div class="flow-lane-head">
+          <span class="flow-index">02</span>
+          <h3>START WITH MY LAST PERIOD</h3>
+        </div>
+        <div class="flow-node"><b>Primary action</b><span>Hands off to the Calendar with the guided banner.</span></div>
+        <div class="flow-link" aria-hidden="true"></div>
+        <div class="flow-node"><b>Existing day sheet</b><span>Period is pre-set. The user taps the first day they remember.</span></div>
+        <div class="flow-link" aria-hidden="true"></div>
+        <div class="flow-node"><b>Save a period day</b><span>Setup completes only after a period day is saved.</span></div>
+        <div class="flow-split"><b>Mood saved alone</b>The banner stays; setup is not complete.</div>
+        <div class="flow-split"><b>Finish later or close</b>The banner resumes on the next launch. Setup is resumable.</div>
+      </div>
+
+      <div class="flow-lane">
+        <div class="flow-lane-head">
+          <span class="flow-index">03</span>
+          <h3>IMPORT A BACKUP</h3>
+        </div>
+        <div class="flow-node"><b>Import a backup</b><span>Opens the system file picker for a PrivateCycle export.</span></div>
+        <div class="flow-link" aria-hidden="true"></div>
+        <div class="flow-node"><b>File picker</b><span>The user can cancel before choosing a file.</span></div>
+        <div class="flow-split"><b>Cancel or invalid file</b>Remain in onboarding. Show the error and allow a retry.</div>
+        <div class="flow-split"><b>Valid backup</b>Validate, replace data, then land on Calendar. Private entries are replaced only when the file includes them.</div>
+      </div>
+    </div>
+
+    <div class="resume-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      <div><b>Resumable by default.</b> If setup is interrupted before a period is saved, the next launch returns to the Calendar banner rather than restarting the guide. Completion stays device-local, as it is today.</div>
+    </div>
+  </section>
+
+  <!-- ============================== Footer ============================== -->
+  <footer class="board-foot">
+    <div>
+      <div class="proposal">Design proposals — app implementation awaits selection.</div>
+      <div class="fine" style="margin-top:8px">
+        Static review board. Buttons and toggles inside the phones are non-interactive previews;
+        the outer anchor navigation and board theme toggle are the only live controls. No app
+        files, data, backups or onboarding state were changed.
+      </div>
+    </div>
+    <a class="to-top" href="#top">BACK TO TOP</a>
+  </footer>
+</div>
+
+<script>
+  // The board theme toggle only changes the gallery chrome. Phone previews keep
+  // their own light/dark tokens so both can be reviewed at once.
+  const themeButton = document.getElementById('theme-toggle');
+  if (themeButton) {
+    themeButton.addEventListener('click', () => {
+      const isDark = document.body.classList.toggle('ui-dark');
+      themeButton.setAttribute('aria-pressed', String(isDark));
+      themeButton.querySelector('span').textContent = isDark ? 'Light the board' : 'Dim the board';
+    });
+  }
+
+  // Build each dark hero from its light counterpart so the composition stays
+  // pixel-identical to the reviewed screen. Static markup only, no app code.
+  document.querySelectorAll('[data-dark-src]').forEach((slot) => {
+    const source = document.querySelector('.phone[data-screen="' + slot.dataset.darkSrc + '"]');
+    if (!source) return;
+    const clone = source.cloneNode(true);
+    clone.classList.add('dark');
+    clone.removeAttribute('data-screen');
+    slot.appendChild(clone);
+  });
+</script>
+</body>
+</html>
