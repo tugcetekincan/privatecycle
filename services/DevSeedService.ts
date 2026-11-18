@@ -1,4 +1,5 @@
 import { DataService, DailyData } from './DataService';
+import { OnboardingService } from './OnboardingService';
 import { MoodTag, MoodTagLevel } from './MoodTags';
 
 /**
@@ -171,10 +172,17 @@ export async function seedDemoData(
   const data = generateDemoDailyData(options);
   await DataService.clearAllData();
   await DataService.saveManyDailyData(data);
+  try {
+    await OnboardingService.markComplete('existing');
+  } catch (error) {
+    // Demo data is still usable; the next launch may offer the guide again.
+    console.error('Error completing onboarding after seeding demo data:', error);
+  }
   return { days: Object.keys(data).length, skipped: false };
 }
 
 /** Delete all tracking data, including private calendar entries; backups and the PIN are untouched. */
 export async function resetDemoData(): Promise<void> {
   await DataService.clearAllData();
+  await OnboardingService.reset();
 }

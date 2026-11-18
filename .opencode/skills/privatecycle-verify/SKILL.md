@@ -47,7 +47,7 @@ Three ways to use it:
 | --- | --- |
 | Seed if DB empty | `http://localhost:8082/?seed=1` |
 | Wipe + reseed | `http://localhost:8082/?seed=force` |
-| Wipe all data | `http://localhost:8082/?reset=1` |
+| Wipe all data + first-run state | `http://localhost:8082/?reset=1` |
 | From UI | Settings → Developer → Load/Reset Demo Data (`__DEV__` only) |
 | From the page | `await __privatecycle.seedDemoData({ force: true })` |
 
@@ -59,12 +59,41 @@ await __privatecycle.DataService.getInsights()
 await __privatecycle.DataService.getFertilityForecast()
 await __privatecycle.DataService.getIntimateData()
 await __privatecycle.BackupService.createBackup()
+await __privatecycle.OnboardingService.getState()
 await __privatecycle.PrivateAccessService.reset()
 await __privatecycle.generateDemoDailyData({ endDate: new Date() })
 ```
 
 The `?seed` query param is consumed before the first screen renders (see
 `hooks/useDevSeed.ts`), then stripped from the URL.
+
+## First-run onboarding
+
+`?reset=1` clears cycle data **and** first-run state, so a clean web session
+lands on the three-step Tidemark guide before the tabs. Verify:
+
+1. Step 1 ("Find your own rhythm") shows the cropped arc illustration, the
+   private-by-design line and Continue. Check the marker is centred on its arc.
+2. Step 2 ("A small note. A clearer picture.") shows the `ILLUSTRATION` label,
+   the decorative single-date calendar and the estimates disclaimer. The
+   calendar must be hidden from assistive tech and must not create data.
+3. Step 3 ("Yours means yours.") shows the local-only and backup statements and
+   the three exits: last period, import and explore. Skip must be present on
+   every step and Back on steps 2–3.
+4. `first-run-skip` (or `first-run-explore`) lands on Calendar; reload does not
+   show the guide again.
+5. `first-run-start-period` opens Calendar with `calendar-first-run-banner`;
+   tapping a day opens the day sheet with `day-modal-first-run-hint` and
+   Period already on. Save with "Save last period" and the forecast appears.
+6. `first-run-import` confirms, opens the file picker, restores a synthetic
+   backup and lands on Calendar. Cancel/error stays on step 3.
+7. Clearing all data in Settings or resetting demo data returns to first run
+   on the next launch. Seeded data never shows the guide.
+8. Capture all three steps in light and dark at 390px and 320px; the body may
+   scroll but the footer actions stay reachable.
+
+`__privatecycle.OnboardingService.getState()` exposes the stored state for
+debugging. The smoke runs all of this in a separate browser context.
 
 ## Screenshots and artifacts
 
@@ -85,7 +114,9 @@ Naming convention: `area-element`, kebab-case.
 - Tabs: `tab-calendar`, `tab-overview`, `tab-insights`, `tab-settings`
 - Missing route recovery: `not-found-calendar`
 - Calendar: `calendar-prev-month`, `calendar-next-month`,
-  `calendar-return-today`, `calendar-welcome`, `calendar-log-today`,
+  `calendar-return-today`, `calendar-welcome`, `calendar-start-last-period`,
+  `calendar-log-today`, `calendar-import-backup`,
+  `calendar-first-run-banner`, `calendar-first-run-cancel`,
   `calendar-month-label`, `calendar-day-YYYY-MM-DD`,
   `calendar-today-YYYY-MM-DD`, `calendar-today-caption`,
   `calendar-day-mark-YYYY-MM-DD` (tracked non-period dot),
@@ -98,7 +129,17 @@ Naming convention: `area-element`, kebab-case.
   `day-modal-ovulation-toggle`, `day-modal-ovulation-hint`,
   `day-modal-symptom-{id}`, `day-modal-mood-valence-{1..5}`,
   `day-modal-mood-tag-{id}`, `day-modal-mood-tag-{id}-clear`,
-  `day-modal-mood-saved`, `day-modal-save`
+  `day-modal-mood-saved`, `day-modal-save`,
+  `day-modal-first-run-hint` (guided last-period entry)
+- First run (`components/onboarding/FirstRun.tsx`):
+  `first-run-screen`, `first-run-scroll`, `first-run-step-{1,2,3}`,
+  `first-run-step-label`, `first-run-title`, `first-run-next`,
+  `first-run-back`, `first-run-skip`, `first-run-explore`,
+  `first-run-start-period`, `first-run-import`, `first-run-privacy`,
+  `first-run-backups`, `first-run-estimates`,
+  `first-run-arc-illustration`, `first-run-calendar-illustration`,
+  `first-run-illustration-label`, `first-run-calendar-decorative`,
+  `first-run-backup-illustration`
 - Mood picker (`components/MoodPicker.tsx`, used by the calendar day modal):
   `mood-valence-{1..5}`, `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`;
   the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves, so there
@@ -173,21 +214,31 @@ selectors so flows don't break when copy changes.
 1. starts `expo start --web` on `SMOKE_EXPO_PORT` (default 8091) in CI mode,
 2. starts the header proxy on `SMOKE_PROXY_PORT` (default 8092),
 3. launches Chromium via Playwright (390×844 at 2x for design-grade screenshots),
-4. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
-5. walks Overview (cycle hero, variation, chart, symptom/mood trends),
+4. runs first-run checks in a separate browser context: `/?reset=1` shows the
+   three-step Tidemark guide; it checks Skip on every step, Back on steps 2–3,
+   all three screens at 390/320 in light and dark, an unfinished last-period
+   setup resuming the banner after reload, the guided last-period sheet
+   pre-setting Period and completing on save, and a synthetic backup import
+   landing on Calendar (screenshots `00-first-run-step*`).
+5. opens `/?seed=force`, asserts `self.crossOriginIsolated`,
+6. walks Overview (cycle hero, variation, chart, symptom/mood trends),
    Insights (Today focus + personal pattern, pattern cards, phase tips from
    seeded data), Calendar (day modal entry + save/dialog, fertility forecast),
    Settings, and the Notifications web notice,
-6. reloads and asserts the calendar entry and mood valence/strength persist in
+7. reloads and asserts the calendar entry and mood valence/strength persist in
    the DB,
-7. saves a symptom on a clean next-month day, then clears it and asserts the
+8. saves a symptom on a clean next-month day, then clears it and asserts the
    row and the grey day mark both disappear,
-8. opens the private calendar from Settings → Privacy (resets the PIN via
+9. opens the private calendar from Settings → Privacy (resets the PIN via
    `__privatecycle.PrivateAccessService.reset()` first), creates PIN `1234`,
    logs today with protection + a note, screenshots the setup/day modal/
    calendar/change-PIN/lock screens, locks, checks a wrong PIN, unlocks,
    reloads `/private` and asserts the gate reappears and the entry survives,
-9. fails on page errors / console errors, then kills the whole process tree.
+10. fails on page errors / console errors, then kills the whole process tree.
+
+The first-run context is disposable; it never affects the seeded screenshots.
+Because `?reset=1` also clears onboarding, empty-state checks must click
+`first-run-skip` before waiting for `calendar-welcome`.
 
 The smoke also captures all tabs at 360px in dark mode, private entry sheets,
 empty histories and a simulated storage failure followed by a successful
@@ -240,7 +291,9 @@ and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
 dialog component, cycle trends/phase tracks, narrative cards, today tips,
 notification settings/planner/scheduler/screen, private-access PIN
-hashing/lockout and intimacy summaries.
+hashing/lockout and intimacy summaries. First-run coverage walks the three
+Tidemark steps (next/back/skip on every step), the import/start exits, the
+decorative calendar labelling and the pure marker-on-arc geometry.
 Calendar interaction regressions cover month-end navigation, queued mood saves
 with truthful feedback, and failed-write retry; reduced-motion coverage checks
 live preference changes and stale initial reads.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useRouter, type Href } from 'expo-router';
 import { Platform } from 'react-native';
 import { resetDemoData, seedDemoData } from '@/services/DevSeedService';
 
@@ -35,6 +36,7 @@ export async function runDevSeedAction(action: DevSeedAction) {
 
 export function useDevSeed(enabled: boolean) {
   const isWebDev = Platform.OS === 'web' && __DEV__;
+  const router = useRouter();
   const [handled, setHandled] = useState(false);
   const ranRef = useRef(false);
 
@@ -43,29 +45,33 @@ export function useDevSeed(enabled: boolean) {
     ranRef.current = true;
 
     (async () => {
+      let hadAction = false;
       try {
         const action = parseDevSeedAction(window.location.search);
         if (action) {
+          hadAction = true;
           const result = await runDevSeedAction(action);
           console.log(`[dev-seed] action=${action}`, result);
         }
       } catch (error) {
         console.error('[dev-seed] failed:', error);
       } finally {
-        // Strip dev params so a reload keeps the current state.
+        // Strip dev params so a reload keeps the current state. Expo Router's
+        // Stack mounts after this async gate, so the history change also has
+        // to be reflected in the router state or the query would come back
+        // with the first navigation and a reload would seed/reset again.
         const params = new URLSearchParams(window.location.search);
         params.delete('seed');
         params.delete('reset');
         const query = params.toString();
-        window.history.replaceState(
-          {},
-          '',
-          window.location.pathname + (query ? `?${query}` : '') + window.location.hash
-        );
+        const cleaned =
+          window.location.pathname + (query ? `?${query}` : '') + window.location.hash;
+        window.history.replaceState({}, '', cleaned);
+        if (hadAction) router.replace(cleaned as Href);
         setHandled(true);
       }
     })();
-  }, [enabled, isWebDev]);
+  }, [enabled, isWebDev, router]);
 
   // Native and production builds are never gated. On web dev the UI waits
   // until the requested action has finished, so screens never read the DB

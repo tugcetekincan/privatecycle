@@ -12,6 +12,8 @@ Visual references:
 
 - `design/overview-insights-redesign.html` — Overview + Insights
 - `design/app-language-design.html` — Calendar card + Settings
+- `design/onboarding-alternatives.html` — onboarding directions; Tidemark (B)
+  is the selected first-run flow
 
 ## 1. Product decisions baked into the visual language
 
@@ -294,15 +296,53 @@ The calendar is a signature surface. See
 
 ## 7. Screen recipes
 
+### First run
+
+1. Full-screen, three-step, skippable Tidemark guide before the tabs on a
+   fresh install. It is a root gate, not a tab and not a marketing splash.
+   Skip is available on every step; Back is available on steps 2 and 3.
+2. Step 1 — "Find your own rhythm." Large cropped concentric blush arcs with
+   one pink marker, a compact "TIDEMARK · 01" eyebrow, the body "Make room for
+   the patterns that are yours.", and the quiet line "Private by design. Yours
+   to keep." Primary "Continue".
+3. Step 2 — "A small note. A clearer picture." A clearly labelled
+   `ILLUSTRATION` mini-calendar with one outlined date and a Period chip. It is
+   decorative, hidden from assistive tech and never reads or writes data. Body
+   "Start with the first day of your last period. Add only what you remember."
+   plus the compact estimates disclaimer. Footer Back / Continue.
+4. Step 3 — "Yours means yours." A device + exported-backup illustration, the
+   local-only and backup-recovery statements, primary "Start with my last
+   period", secondary "Import a backup", text "I’m unsure — explore Calendar",
+   and "Reminders stay off until you choose." Back moves to the top bar because
+   the footer holds the three actions.
+5. No account field and no notification permission request. No seeded or
+   fabricated data. Keep the marker on its arc: the pink dot is computed from
+   the same SVG center/radius/angle as the r=338 arc in
+   `components/onboarding/tidemarkGeometry.ts`; never eyeball coordinates.
+6. Starting hands off to Calendar with a tint banner. Tapping a day opens the
+   existing day `Sheet` with Period pre-set and a short hint; the footer reads
+   "Save last period". Saving a mood alone does not complete setup. Import keeps
+   the existing confirm, picker, validation and replacement flow.
+7. Completion and pending state stay in `OnboardingService`: skip/explore
+   complete as `skip`, a successful import completes as `import`, and the
+   last-period route completes only after a period day is saved. If the app
+   closes before that save, the Calendar banner resumes the setup.
+8. Check light and dark at 320px and 390px. The body scrolls while the footer
+   actions remain reachable; font scaling and reduced motion stay respected.
+
 ### Calendar
 
 1. Screen header: "Period Calendar", subtitle "Tap a day to log or edit",
    calendar icon tile.
-2. Calendar card (above).
-3. Section "UPCOMING PERIODS" + pink dot + "Next 3" meta; list card.
-4. Section "FERTILITY FORECAST" + teal dot + "Wellness estimate" meta; list
+2. Before the first period exists, a start-period card sits above the calendar
+   (start with last period, log today, import backup). While guided last-period
+   setup is pending, a tint banner replaces it and the subtitle changes to
+   "Tap the first day of your last period".
+3. Calendar card (above).
+4. Section "UPCOMING PERIODS" + pink dot + "Next 3" meta; list card.
+5. Section "FERTILITY FORECAST" + teal dot + "Wellness estimate" meta; list
    card with the disclaimer note.
-5. Tab bar with Calendar active.
+6. Tab bar with Calendar active.
 
 ### Overview
 
@@ -403,8 +443,9 @@ The calendar is a signature surface. See
   `Pill`, `Stat`, `EmptyState`, `PrimaryButton`, `IconTile`, `ScreenFade`.
 - Use `react-native-svg` for gradients; do not add a gradient dependency.
 - Use the existing system font stack.
-- The visual references remain `design/overview-insights-redesign.html` and
-  `design/app-language-design.html`.
+- The visual references remain `design/overview-insights-redesign.html`,
+  `design/app-language-design.html` and `design/onboarding-alternatives.html`
+  (Tidemark is the selected onboarding direction).
 
 ### New-feature checklist
 

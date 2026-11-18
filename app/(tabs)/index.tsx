@@ -12,6 +12,8 @@ import {
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, Droplets, Egg } from 'lucide-react-native';
 import { DataService, DailyData } from '@/services/DataService';
 import { NotificationService } from '@/services/NotificationService';
+import { BackupService } from '@/services/BackupService';
+import { OnboardingService } from '@/services/OnboardingService';
 import { FertilityForecast } from '@/services/FertilityService';
 import { expectedPeriodLabel } from '@/services/CycleModel';
 import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dateKey';
@@ -28,6 +30,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScreenFade from '@/components/ui/ScreenFade';
 import Sheet from '@/components/ui/Sheet';
 import EmptyState from '@/components/ui/EmptyState';
+import IconTile from '@/components/ui/IconTile';
 import { cardShadow, radii, spacing, typography } from '@/design/tokens';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -53,7 +56,7 @@ export default function CalendarTab() {
   const { theme } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
-  const { showSuccess, showInfo, DialogComponent } = useDialog();
+  const { showSuccess, showInfo, showConfirm, showError, DialogComponent } = useDialog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
@@ -66,6 +69,7 @@ export default function CalendarTab() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
   const [calendarHeight, setCalendarHeight] = useState(252);
+  const [lastPeriodMode, setLastPeriodMode] = useState(false);
   
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -74,6 +78,7 @@ export default function CalendarTab() {
     data: DailyData | null;
   } | null>(null);
   const [editingData, setEditingData] = useState<DailyData | null>(null);
+  const [entryMode, setEntryMode] = useState<'normal' | 'last-period'>('normal');
   const [moodSaved, setMoodSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -110,15 +115,19 @@ export default function CalendarTab() {
   );
 
   const loadData = async () => {
-    const data = await DataService.getPeriodData();
-    const dailyData = await DataService.getAllDailyData();
-    const fertility = await DataService.getFertilityForecast();
+    const [data, dailyData, fertility, pendingLastPeriod] = await Promise.all([
+      DataService.getPeriodData(),
+      DataService.getAllDailyData(),
+      DataService.getFertilityForecast(),
+      OnboardingService.getPendingLastPeriod(),
+    ]);
 
     setAllDailyData(dailyData);
     setPeriodDates(data.periods);
     setOvulationDates(data.ovulationDays);
     setForecast(fertility);
     setFuturePeriods(fertility.futurePeriodStarts);
+    setLastPeriodMode(pendingLastPeriod);
 
     // Get dates where user explicitly marked "no period"
     const noPeriodDates = Object.entries(dailyData)
@@ -169,7 +178,7 @@ export default function CalendarTab() {
     );
   };
 
-  const handleDayPress = async (date: Date) => {
+  const handleDayPress = async (date: Date, options?: { lastPeriodStart?: boolean }) => {
     if (isAfterToday(date)) {
       showInfo('Future date', 'You can only log data for today or earlier.');
       return;
@@ -177,13 +186,15 @@ export default function CalendarTab() {
 
     const dateKey = formatDateKey(date);
     const existingData = allDailyData[dateKey] || null;
+    const lastPeriodStart = options?.lastPeriodStart === true;
     moodSaveRevision.current += 1;
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     setSaveError('');
     setMoodSaved(false);
+    setEntryMode(lastPeriodStart ? 'last-period' : 'normal');
     
     setSelectedDateData({ date, data: existingData });
-    setEditingData(existingData || {
+    const baseData: DailyData = existingData ?? {
       date: dateKey,
       isPeriod: false,
       flowLevel: '',
@@ -192,7 +203,8 @@ export default function CalendarTab() {
       isOvulation: false,
       moodValence: 0,
       moodTags: [],
-    });
+    };
+    setEditingData(lastPeriodStart ? { ...baseData, isPeriod: true } : baseData);
     setModalVisible(true);
   };
 
@@ -203,6 +215,7 @@ export default function CalendarTab() {
     setModalVisible(false);
     setSelectedDateData(null);
     setEditingData(null);
+    setEntryMode('normal');
   };
 
   const saveModalData = async () => {
@@ -212,19 +225,106 @@ export default function CalendarTab() {
     try {
       await moodSaveQueue.current;
       await DataService.saveTodayData(editingData.date, editingData);
+
+      // First-run handoff: only a saved Period day starts the forecast. Saving
+      // a mood instead keeps the guided banner so setup can be finished later.
+      const wasLastPeriodEntry = entryMode === 'last-period';
+      const completedLastPeriod = wasLastPeriodEntry && editingData.isPeriod;
+      if (completedLastPeriod) {
+        try {
+          await OnboardingService.markComplete('last-period');
+        } catch (error) {
+          console.error('Error completing last-period setup:', error);
+        }
+      }
+
       await loadData(); // Reload all data to update the calendar
+      if (completedLastPeriod) setLastPeriodMode(false);
       void NotificationService.syncSchedule();
       setModalVisible(false);
       setSelectedDateData(null);
       setEditingData(null);
-      // Let the native sheet finish dismissing before presenting the dialog,
-      // otherwise the dialog can appear behind the closing modal.
-      setTimeout(() => showSuccess('Day saved', 'Your calendar is up to date.'), 350);
+      setEntryMode('normal');
+      if (wasLastPeriodEntry && !editingData.isPeriod) {
+        // The sheet already saved the mood/symptom edits; keep the setup
+        // banner visible and explain what is still missing.
+        setTimeout(
+          () => showInfo(
+            'Day saved',
+            'To set up your first forecast, tap the first day of your last period and turn on Period.'
+          ),
+          350
+        );
+      } else if (completedLastPeriod) {
+        setTimeout(
+          () => showSuccess(
+            'Last period saved',
+            'Your first forecast uses standard estimates until you log more cycles.'
+          ),
+          350
+        );
+      } else {
+        // Let the native sheet finish dismissing before presenting the dialog,
+        // otherwise the dialog can appear behind the closing modal.
+        setTimeout(() => showSuccess('Day saved', 'Your calendar is up to date.'), 350);
+      }
     } catch (error) {
       setSaveError('Could not save this day. Please try again.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const startLastPeriodFromCard = async () => {
+    try {
+      await OnboardingService.beginLastPeriod();
+      setLastPeriodMode(true);
+    } catch (error) {
+      console.error('Error starting last-period setup:', error);
+      showInfo('Could not start setup', 'Please try again.');
+    }
+  };
+
+  const skipLastPeriod = async () => {
+    try {
+      await OnboardingService.markComplete('skip');
+    } catch (error) {
+      console.error('Error skipping last-period setup:', error);
+    }
+    setLastPeriodMode(false);
+  };
+
+  const importBackupFromCard = () => {
+    showConfirm(
+      'Import Backup',
+      'This will replace your cycle data with the backup data. Private calendar entries are only replaced if the backup includes them. Are you sure you want to continue?',
+      async () => {
+        try {
+          const result = await BackupService.importBackup();
+          if (result.cancelled) return;
+          if (!result.success) {
+            showError('Import Failed', result.message);
+            return;
+          }
+          try {
+            await OnboardingService.markComplete('import');
+          } catch (error) {
+            console.error('Error completing onboarding after import:', error);
+          }
+          await loadData();
+          setLastPeriodMode(false);
+          void NotificationService.syncSchedule();
+          showSuccess('Import Successful', result.message);
+        } catch (error) {
+          console.error('Error importing backup:', error);
+          showError('Error', 'Failed to import backup');
+        }
+      },
+      undefined,
+      'Import',
+      'Cancel',
+      true
+    );
   };
 
   const toggleModalSymptom = (symptomId: string) => {
@@ -467,9 +567,9 @@ export default function CalendarTab() {
           key={day}
           testID={`calendar-day-${dayKey}`}
           accessibilityRole="button"
-          accessibilityLabel={`${dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}${isToday ? ', today' : ''}${isPeriod ? ', period' : isPredicted ? ', predicted period' : ''}${isOvulation ? ', ovulation recorded' : isFertile ? ', estimated fertile window' : ''}${isNoPeriod ? ', entry logged' : ''}`}
+          accessibilityLabel={`${dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}${isToday ? ', today' : ''}${isPeriod ? ', period' : isPredicted ? ', predicted period' : ''}${isOvulation ? ', ovulation recorded' : isFertile ? ', estimated fertile window' : ''}${isNoPeriod ? ', entry logged' : ''}${lastPeriodMode ? ', set as last period start' : ''}`}
           style={[styles.dayCell, hasData && styles.clickableDay]}
-          onPress={() => handleDayPress(dayDate)}
+          onPress={() => handleDayPress(dayDate, { lastPeriodStart: lastPeriodMode })}
           activeOpacity={0.7}>
           <View
             style={[
@@ -561,13 +661,67 @@ export default function CalendarTab() {
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           <ScreenHeader
             title="Period Calendar"
-            subtitle="Tap a day to log or edit"
+            subtitle={lastPeriodMode ? 'Tap the first day of your last period' : 'Tap a day to log or edit'}
             icon={<CalendarIcon size={21} color={theme.colors.primary} />}
           />
-          {forecast && Object.keys(allDailyData).length === 0 && (
+          {lastPeriodMode && (
+            <Card testID="calendar-first-run-banner" tone="tint" style={styles.firstRunBanner}>
+              <View style={styles.firstRunBannerRow}>
+                <IconTile tone="primary" size={34}>
+                  <CalendarIcon size={16} color={theme.colors.primary} />
+                </IconTile>
+                <View style={styles.firstRunBannerCopy}>
+                  <Text style={[typography.rowTitle, { color: theme.colors.text }]}>
+                    Set up your last period
+                  </Text>
+                  <Text style={[typography.caption, styles.firstRunBannerBody, { color: theme.colors.textSecondary }]}>
+                    Tap the day your last period started. Just the first day is enough for now.
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                testID="calendar-first-run-cancel"
+                accessibilityRole="button"
+                onPress={skipLastPeriod}
+                style={styles.firstRunSkip}>
+                <Text style={[typography.caption, styles.firstRunSkipText, { color: theme.colors.primaryText }]}>
+                  Skip for now
+                </Text>
+              </TouchableOpacity>
+            </Card>
+          )}
+          {!lastPeriodMode && forecast && periodDates.length === 0 && (
             <Card testID="calendar-welcome" style={{ marginHorizontal: spacing.xxl, marginBottom: spacing.base }}>
-              <EmptyState plain title="Your journal starts here" body="Log a period, a feeling, or a symptom. A little at a time, your own patterns will take shape." />
-              <PrimaryButton testID="calendar-log-today" title="Log today" onPress={() => handleDayPress(new Date())} />
+              <EmptyState
+                plain
+                title="Your journal starts here"
+                body="Start with the first day of your last period so your forecasts have a real anchor. Or log how you feel today."
+              />
+              <View style={styles.welcomeActions}>
+                <PrimaryButton
+                  testID="calendar-start-last-period"
+                  title="Start with my last period"
+                  onPress={startLastPeriodFromCard}
+                />
+                <PrimaryButton
+                  testID="calendar-log-today"
+                  title="Log today"
+                  variant="secondary"
+                  onPress={() => handleDayPress(new Date())}
+                />
+                <TouchableOpacity
+                  testID="calendar-import-backup"
+                  accessibilityRole="button"
+                  onPress={importBackupFromCard}
+                  style={styles.welcomeLink}>
+                  <Text style={[typography.caption, { color: theme.colors.primaryText }]}>
+                    Import a backup
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={[typography.caption, styles.welcomePrivacy, { color: theme.colors.textSecondary }]}>
+                Stays on this device. Backups are the only way to restore it.
+              </Text>
             </Card>
           )}
 
@@ -793,11 +947,29 @@ export default function CalendarTab() {
         testID="day-modal"
         closeTestID="day-modal-close"
         title={selectedDateData?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) ?? 'Daily entry'}
-        subtitle="Mood saves as you go · Save your other changes below"
+        subtitle={entryMode === 'last-period'
+          ? 'Mark your last period start · Save below'
+          : 'Mood saves as you go · Save your other changes below'}
         footer={<>
           {saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: spacing.sm }}>{saveError}</Text> : null}
-          <PrimaryButton testID="day-modal-save" title={saving ? 'Saving…' : 'Save day'} loading={saving} onPress={saveModalData} icon={<Check size={18} color={theme.colors.white} />} />
+          <PrimaryButton
+            testID="day-modal-save"
+            title={saving ? 'Saving…' : entryMode === 'last-period' ? 'Save last period' : 'Save day'}
+            loading={saving}
+            onPress={saveModalData}
+            icon={<Check size={18} color={theme.colors.white} />}
+          />
         </>}>
+              {entryMode === 'last-period' && (
+                <View
+                  testID="day-modal-first-run-hint"
+                  style={[styles.firstRunSheetHint, { backgroundColor: theme.colors.primarySoft }]}>
+                  <Text style={[typography.caption, { color: theme.colors.primaryText }]}>
+                    This will be saved as the first day of your last period. You can add the other days later.
+                  </Text>
+                </View>
+              )}
+
               {/* Mood (auto-saves on every tap) */}
               <MoodPicker
                 valence={editingData?.moodValence || 0}
@@ -922,6 +1094,52 @@ const createStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  welcomeActions: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  welcomeLink: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.button,
+  },
+  welcomePrivacy: {
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  firstRunBanner: {
+    marginHorizontal: spacing.xxl,
+    marginBottom: spacing.base,
+    gap: spacing.xs,
+  },
+  firstRunBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.base,
+  },
+  firstRunBannerCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  firstRunBannerBody: {
+    lineHeight: 17,
+  },
+  firstRunSkip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.base,
+  },
+  firstRunSkipText: {
+    fontWeight: '700',
+  },
+  firstRunSheetHint: {
+    borderRadius: radii.card,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   scrollView: {
     flex: 1,

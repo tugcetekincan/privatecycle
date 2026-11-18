@@ -3,6 +3,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import CalendarTab from '@/app/(tabs)/index';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { DataService } from '@/services/DataService';
+import { OnboardingService } from '@/services/OnboardingService';
 
 // Mounting the calendar initializes the data provider before the welcome state
 // renders; CI's shared runners can exceed Jest's 5s default on a cold start.
@@ -68,5 +69,70 @@ describe('Calendar interactions', () => {
     fireEvent.press(screen.getByTestId('day-modal-save'));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1][1].isPeriod).toBe(true);
+  });
+
+  it('starts the guided last-period setup from the empty calendar', async () => {
+    const begin = jest.spyOn(OnboardingService, 'beginLastPeriod').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    fireEvent.press(await screen.findByTestId('calendar-start-last-period'));
+
+    await waitFor(() => expect(begin).toHaveBeenCalledTimes(1));
+    expect(await screen.findByTestId('calendar-first-run-banner')).toBeTruthy();
+    expect(screen.queryByTestId('calendar-welcome')).toBeNull();
+  });
+
+  it('pre-sets Period and completes setup for a guided last-period day', async () => {
+    jest.spyOn(OnboardingService, 'getPendingLastPeriod').mockResolvedValue(true);
+    const complete = jest.spyOn(OnboardingService, 'markComplete').mockResolvedValue(undefined);
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    await screen.findByTestId('calendar-first-run-banner');
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth(), Math.max(1, now.getDate() - 1));
+    const targetKey = DataService.formatDateKey(target);
+    fireEvent.press(screen.getByTestId(`calendar-day-${targetKey}`));
+
+    expect(await screen.findByTestId('day-modal-first-run-hint')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-period-toggle').props.accessibilityState.checked).toBe(true);
+
+    fireEvent.press(screen.getByTestId('day-modal-save'));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(complete).toHaveBeenCalledWith('last-period'));
+    await waitFor(() => expect(screen.queryByTestId('calendar-first-run-banner')).toBeNull());
+  });
+
+  it('keeps the guided banner when the saved day is not a period', async () => {
+    jest.spyOn(OnboardingService, 'getPendingLastPeriod').mockResolvedValue(true);
+    const complete = jest.spyOn(OnboardingService, 'markComplete').mockResolvedValue(undefined);
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    await screen.findByTestId('calendar-first-run-banner');
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth(), Math.max(1, now.getDate() - 1));
+    const targetKey = DataService.formatDateKey(target);
+    fireEvent.press(screen.getByTestId(`calendar-day-${targetKey}`));
+    fireEvent.press(await screen.findByTestId('day-modal-period-toggle'));
+    fireEvent.press(screen.getByTestId('day-modal-save'));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][1].isPeriod).toBe(false);
+    expect(complete).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('calendar-first-run-banner')).toBeTruthy();
+  });
+
+  it('skips the guided setup from the banner', async () => {
+    jest.spyOn(OnboardingService, 'getPendingLastPeriod').mockResolvedValue(true);
+    const complete = jest.spyOn(OnboardingService, 'markComplete').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    await screen.findByTestId('calendar-first-run-banner');
+    fireEvent.press(screen.getByTestId('calendar-first-run-cancel'));
+
+    await waitFor(() => expect(complete).toHaveBeenCalledWith('skip'));
+    expect(screen.queryByTestId('calendar-first-run-banner')).toBeNull();
   });
 });

@@ -39,6 +39,12 @@ describe('DataService.getNotificationStats', () => {
   });
 });
 
+describe('DataService.getTrackedDayCount', () => {
+  it('returns zero for an empty database', async () => {
+    await expect(DataService.getTrackedDayCount()).resolves.toBe(0);
+  });
+});
+
 describe('dayHasContent', () => {
   const emptyDay: DailyData = {
     date: '2026-10-16',

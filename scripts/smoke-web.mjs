@@ -75,6 +75,242 @@ async function fullScreenShot(name, scrollTestID) {
   }
 }
 
+/**
+ * First-run onboarding is a separate browser context so its reset/skip/import
+ * state cannot leak into the seeded screenshots and assertions below.
+ */
+async function runFirstRunChecks(browserInstance) {
+  const context = await browserInstance.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+  });
+  const firstRunPage = await context.newPage();
+
+  firstRunPage.on('console', (msg) => {
+    const text = msg.text();
+    consoleAll.push(`[first-run][${msg.type()}] ${text}`);
+    if (msg.type() !== 'error') return;
+    if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(text))) return;
+    consoleErrors.push(`[first-run] ${text}`);
+    console.error(`[smoke] first-run console error: ${text}`);
+  });
+  firstRunPage.on('pageerror', (error) => {
+    pageErrors.push(`[first-run] ${String(error)}`);
+    console.error(`[smoke] first-run page error: ${error}`);
+  });
+
+  const localKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const now = new Date();
+  const targetDate = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    Math.max(1, now.getDate() - 3)
+  );
+  const targetKey = localKey(targetDate);
+  const backup = {
+    version: '1.0.0',
+    timestamp: Date.now(),
+    data: {
+      dailyData: {
+        [targetKey]: {
+          date: targetKey,
+          isPeriod: true,
+          flowLevel: 'medium',
+          symptoms: [],
+          mood: '',
+          isOvulation: false,
+        },
+      },
+    },
+    metadata: {
+      totalDays: 1,
+      dateRange: { start: targetKey, end: targetKey },
+    },
+  };
+
+  const welcome = async () => {
+    await firstRunPage.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000,
+    });
+    await firstRunPage.getByTestId('first-run-screen').waitFor({ timeout: 120_000 });
+    await firstRunPage.waitForTimeout(500);
+  };
+
+  const goToStep = async (step) => {
+    for (let current = 1; current < step; current += 1) {
+      await firstRunPage.getByTestId('first-run-next').click();
+      await firstRunPage.waitForTimeout(200);
+    }
+    await firstRunPage.getByTestId(`first-run-step-${step}`).waitFor({ timeout: 30_000 });
+    await firstRunPage.waitForTimeout(200);
+  };
+
+  const captureStep = async (step, suffix = '') => {
+    await firstRunPage.setViewportSize({ width: 390, height: 844 });
+    await firstRunPage.waitForTimeout(250);
+    await firstRunPage.screenshot({ path: shot(`00-first-run-step${step}${suffix}`), fullPage: true });
+    if (step === 1 && !suffix) {
+      await firstRunPage
+        .getByTestId('first-run-arc-illustration')
+        .screenshot({ path: shot('00-first-run-arc-closeup') });
+    }
+    await firstRunPage.setViewportSize({ width: 320, height: 844 });
+    await firstRunPage.waitForTimeout(250);
+    await firstRunPage.screenshot({
+      path: shot(`00-first-run-step${step}-320${suffix}`),
+      fullPage: true,
+    });
+    await firstRunPage.setViewportSize({ width: 390, height: 844 });
+    await firstRunPage.waitForTimeout(150);
+  };
+
+  const checkStep = async (step) => {
+    const copy = await firstRunPage.getByTestId('first-run-screen').innerText();
+    const checks = {
+      1: [
+        ['the Tidemark welcome', /Find your/i],
+        ['the private tone', /Private by design/i],
+      ],
+      2: [
+        ['the calendar illustration label', /ILLUSTRATION/i],
+        ['the last-period guidance', /Start with the first day of your last period/i],
+        ['the estimate guidance', /Forecasts are estimates/i],
+        ['the medical disclaimer', /not birth control or medical advice/i],
+      ],
+      3: [
+        ['the local-only promise', /No account or cloud sync/i],
+        ['the backup recovery guidance', /Keep an exported backup/i],
+        ['optional reminders', /Reminders stay off until you choose/i],
+      ],
+    }[step];
+    for (const [name, pattern] of checks) {
+      if (!pattern.test(copy)) failures.push(`first-run: step ${step} missing ${name}`);
+    }
+
+    const backCount = await firstRunPage.getByTestId('first-run-back').count();
+    if (step === 1 && backCount > 0) failures.push('first-run: back is visible on step 1');
+    if (step > 1 && backCount === 0) failures.push(`first-run: back missing on step ${step}`);
+    if ((await firstRunPage.getByTestId('first-run-skip').count()) !== 1) {
+      failures.push(`first-run: skip missing on step ${step}`);
+    }
+  };
+
+  try {
+    await welcome();
+    for (const step of [1, 2, 3]) {
+      await checkStep(step);
+      await captureStep(step);
+      if (step < 3) {
+        await firstRunPage.getByTestId('first-run-next').click();
+        await firstRunPage.waitForTimeout(250);
+      }
+    }
+
+    // The same three screens in dark mode, at both target widths.
+    await firstRunPage.evaluate(() => localStorage.setItem('theme_preference', 'dark'));
+    await welcome();
+    for (const step of [1, 2, 3]) {
+      await captureStep(step, '-dark');
+      if (step < 3) {
+        await firstRunPage.getByTestId('first-run-next').click();
+        await firstRunPage.waitForTimeout(250);
+      }
+    }
+    await firstRunPage.evaluate(() => localStorage.removeItem('theme_preference'));
+    await welcome();
+
+    await firstRunPage.getByTestId('first-run-skip').click();
+    await firstRunPage.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
+    await firstRunPage.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+    if (await firstRunPage.getByTestId('first-run-screen').count()) {
+      failures.push('first-run: skip did not leave the welcome screen');
+    }
+    await firstRunPage.reload({ waitUntil: 'domcontentloaded' });
+    await firstRunPage.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
+    if (await firstRunPage.getByTestId('first-run-screen').count()) {
+      failures.push('first-run: skip did not persist across reload');
+    }
+    await firstRunPage.screenshot({ path: shot('00-first-run-after-skip'), fullPage: true });
+
+    await welcome();
+    await goToStep(3);
+    await firstRunPage.getByTestId('first-run-start-period').click();
+    await firstRunPage.getByTestId('calendar-first-run-banner').waitFor({ timeout: 30_000 });
+    await firstRunPage.reload({ waitUntil: 'domcontentloaded' });
+    await firstRunPage.getByTestId('calendar-first-run-banner').waitFor({ timeout: 30_000 });
+    if (await firstRunPage.getByTestId('first-run-screen').count()) {
+      failures.push('first-run: unfinished last-period setup did not resume');
+    }
+    await firstRunPage.screenshot({ path: shot('00-first-run-banner'), fullPage: true });
+    await firstRunPage.getByTestId(`calendar-day-${targetKey}`).click();
+    await firstRunPage.getByTestId('day-modal-first-run-hint').waitFor({ timeout: 30_000 });
+    const periodToggle = await firstRunPage.getByTestId('day-modal-period-toggle').innerText();
+    if (!/Period Day/.test(periodToggle)) {
+      failures.push('first-run: guided day sheet did not pre-set Period');
+    }
+    await firstRunPage.waitForTimeout(400);
+    await firstRunPage.screenshot({ path: shot('00-first-run-day-sheet') });
+    await firstRunPage.getByTestId('day-modal-save').click();
+    await firstRunPage.getByTestId('calendar-first-run-banner').waitFor({ state: 'detached', timeout: 30_000 });
+    await firstRunPage.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
+    const savedPeriods = await firstRunPage.evaluate(async () => {
+      const data = await window.__privatecycle.DataService.getPeriodData();
+      return data.periods;
+    });
+    if (!savedPeriods.includes(targetKey)) {
+      failures.push('first-run: guided last-period save did not persist the start date');
+    }
+    await firstRunPage.reload({ waitUntil: 'domcontentloaded' });
+    await firstRunPage.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
+    if (await firstRunPage.getByTestId('first-run-screen').count()) {
+      failures.push('first-run: completed last-period setup did not persist across reload');
+    }
+    await firstRunPage.screenshot({ path: shot('00-first-run-saved'), fullPage: true });
+
+    await welcome();
+    await goToStep(3);
+    await firstRunPage.getByTestId('first-run-import').click();
+    const [chooser] = await Promise.all([
+      firstRunPage.waitForEvent('filechooser', { timeout: 30_000 }),
+      firstRunPage.getByText('Import', { exact: true }).click(),
+    ]);
+    await chooser.setFiles({
+      name: 'cycle_backup_smoke.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(backup)),
+    });
+    await firstRunPage.getByText('Backup imported').waitFor({ timeout: 30_000 });
+    await firstRunPage.getByText('OK', { exact: true }).click();
+    await firstRunPage.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
+    const importedPeriods = await firstRunPage.evaluate(async () => {
+      const data = await window.__privatecycle.DataService.getPeriodData();
+      return data.periods;
+    });
+    if (!importedPeriods.includes(targetKey)) {
+      failures.push('first-run: imported backup did not restore the period start');
+    }
+    if (await firstRunPage.getByTestId('first-run-screen').count()) {
+      failures.push('first-run: import did not leave the welcome screen');
+    }
+    await firstRunPage.screenshot({ path: shot('00-first-run-imported'), fullPage: true });
+
+    log('first-run: welcome, skip/relaunch, guided period and import OK');
+  } catch (error) {
+    failures.push(`first-run checks threw: ${error}`);
+    try {
+      await firstRunPage.screenshot({ path: shot('00-first-run-failure'), fullPage: true });
+    } catch {}
+  } finally {
+    await context.close();
+  }
+}
+
 for (const [name, port] of [
   ['SMOKE_EXPO_PORT', EXPO_PORT],
   ['SMOKE_PROXY_PORT', PROXY_PORT],
@@ -134,6 +370,8 @@ try {
     headless: !headed,
     args: ['--no-sandbox'],
   });
+  await runFirstRunChecks(browser);
+
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 }, // phone-ish: matches the design boards
     deviceScaleFactor: 2,
@@ -870,6 +1108,9 @@ try {
   log('overview full cycle history OK');
 
   await page.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`);
+  await page.getByTestId('first-run-screen').waitFor({ timeout: 30_000 });
+  await page.getByTestId('first-run-skip').click();
+  await page.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
   await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
   await page.screenshot({ path: shot('18-empty-calendar') });
   await page.getByTestId('calendar-log-today').click();
@@ -887,6 +1128,9 @@ try {
   const retried = await page.evaluate(key => __privatecycle.DataService.getTodayData(key), todayKey);
   if (!retried?.isPeriod) failures.push('failed save retry lost the period selection');
   await page.goto(`http://127.0.0.1:${PROXY_PORT}/?reset=1`);
+  await page.getByTestId('first-run-screen').waitFor({ timeout: 30_000 });
+  await page.getByTestId('first-run-skip').click();
+  await page.getByTestId('tab-calendar').waitFor({ timeout: 30_000 });
   await page.getByTestId('calendar-welcome').waitFor();
   for (const tab of ['overview', 'insights', 'settings']) {
     await page.getByTestId(`tab-${tab}`).click();

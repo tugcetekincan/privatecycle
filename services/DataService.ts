@@ -815,6 +815,24 @@ export class SQLiteDataService {
   }
 
   /**
+   * Whether anything has ever been logged. First-run onboarding only needs a
+   * count, not the full daily payload (`getAllDailyData` is reserved for the
+   * calendar itself).
+   */
+  async getTrackedDayCount(): Promise<number> {
+    try {
+      const db = await this.ensureInitialized();
+      const tracked = (await db.getFirstAsync(
+        'SELECT COUNT(*) as count FROM daily_data'
+      )) as { count: number } | null;
+      return tracked?.count ?? 0;
+    } catch (error) {
+      console.error('Error counting tracked days:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Lightweight stats for notification planning. Unlike `getInsights` this
    * does not build mood/symptom series, so rescheduling on foreground stays
    * cheap even with a long history.
@@ -988,6 +1006,10 @@ export class DataService {
 
   static async getAllDailyData(): Promise<{ [date: string]: DailyData }> {
     return sqliteDataService.getAllDailyData();
+  }
+
+  static async getTrackedDayCount(): Promise<number> {
+    return sqliteDataService.getTrackedDayCount();
   }
 
   static async getIntimateData(): Promise<IntimateData> {

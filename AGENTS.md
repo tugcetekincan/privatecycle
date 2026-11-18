@@ -27,7 +27,7 @@ current when the workflow changes. Deeper runbooks live in
 
 ```
 app/                    expo-router screens
-  _layout.tsx           providers, migration gate, dev-seed gate, dev globals
+  _layout.tsx           providers, migration gate, dev-seed gate, first-run gate, dev globals
   (tabs)/index.tsx      Calendar (month grid, day modal, period + fertility forecast)
   (tabs)/track.tsx      Overview (read-only cycle stats, symptom + mood trends;
                         route stays /track for stability)
@@ -37,7 +37,8 @@ app/                    expo-router screens
   private/index.tsx     PIN-protected intimacy calendar (outside the tab bar)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
 components/             CustomDialog (+ demo), MoodPicker (faces + tags),
-                        PrivateGate (PIN gate), PrivateCalendar (month + day sheet)
+                        PrivateGate (PIN gate), PrivateCalendar (month + day sheet),
+                        onboarding/FirstRun (skippable first-run guide)
 components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
                         IconTile, SettingsRow, EmptyState, PrimaryButton,
                         ScreenFade (the shared design-language primitives)
@@ -46,12 +47,14 @@ components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
 design/                 DESIGN.md (authoritative visual language), tokens.ts,
                         and the HTML design studies
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
-                        useDevSeed (URL-seed handling), useFrameworkReady,
+                        useDevSeed (URL-seed handling), useFirstRun (root gate),
+                        useFrameworkReady,
                         useNotifications (scheduling + tap routing),
                         useNotificationSettings (local preference loader),
                         usePrivateScreenProtection (native screenshot block)
 services/               DataService (SQLite owner), BackupService,
                         BackupValidation (deep backup validation),
+                        OnboardingService (device-local first-run state),
                         NotificationService (local delivery + permissions),
                         NotificationPlanner (pure reminder dates/copy),
                         NotificationSettings (stored preferences),
@@ -162,11 +165,12 @@ Never use the GitHub release pipeline as a test loop; it exists for shipping.
   ports are occupied, so no orphaned Metro servers.
 - `services/DevSeedService.ts` generates deterministic demo data (126 days,
   26–30 day cycles) used by `?seed=1|force`, `?reset=1`, the Settings
-  Developer section, tests and smoke.
+  Developer section, tests and smoke. Seeding marks first-run complete;
+  resetting clears it.
 - `services/devGlobals.ts` exposes `__privatecycle` (DataService,
-  BackupService, NotificationSettingsService, PrivateAccessService, seed
-  helpers) on web dev builds for inspection from the console/Playwright.
-  Production and native builds are unaffected.
+  BackupService, NotificationSettingsService, OnboardingService,
+  PrivateAccessService, seed helpers) on web dev builds for inspection from the
+  console/Playwright. Production and native builds are unaffected.
 
 ## Real-data previews (local export)
 
@@ -322,6 +326,31 @@ is a gitignored drop box for a user export — the app's normal
   may be delayed by battery optimization. Copy is a wellness estimate, never
   medical advice or contraception.
 
+**First run**
+- `OnboardingService` keeps completion in AsyncStorage (`onboarding_v1`) and
+  never in SQLite or backups. It is device-local preference state, not health
+  data.
+- The root layout gates after migrations and the dev-seed action. Existing
+  installs with tracked days are silently marked complete; an in-progress
+  last-period setup resumes the Calendar banner; a failed preference write
+  never blocks the calendar (the guide may reappear next launch).
+- `FirstRun` is a three-step Tidemark guide: welcome arcs, an illustrated
+  calendar (clearly labelled and decorative to assistive tech) and the
+  local-only/backup choice. Skip is available on every step and Back on steps
+  2–3. It has no account field and never requests notification permission. All
+  paths land on Calendar; reminders stay opt-in on `/notifications`.
+- Marker geometry is shared through
+  `components/onboarding/tidemarkGeometry.ts`; derive the pink dot from the same
+  SVG center/radius/angle as its arc instead of eyeballing coordinates.
+- “Start with my last period” hands off to the existing Calendar day sheet with
+  Period pre-set. Only a saved Period day completes setup; saving a mood alone
+  keeps the banner. Never fabricate a period range or seed data for setup.
+- Chart/Overview/Insights empty states are PRIVATECYC-6, not this flow.
+- Clear All Data and the dev reset clear first-run state; loading demo data
+  marks it complete. `?reset=1` therefore returns to the first guide step.
+- Web dev exposes `__privatecycle.OnboardingService`; the smoke uses a separate
+  browser context for the skip/relaunch/import paths.
+
 **UI**
 - Read `design/DESIGN.md` before adding or changing UI. Use
   `design/tokens.ts` (spacing, radii, typography, shadows) and the
@@ -366,7 +395,8 @@ is a gitignored drop box for a user export — the app's normal
 - Put pure logic in services so it can be tested without a database.
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
-  determinism, date keys, dialog + mood picker components, mood tags/insights,
+  determinism, date keys, first-run state + welcome screen + calendar handoff,
+  dialog + mood picker components, mood tags/insights,
   fertility forecast + cycle phases, cycle phase tips, cycle trends + phase
   tracks, cycle narrative cards, today tips, symptom patterns, notification
   settings/planner/screen, private-access PIN/lockout, intimacy summaries and

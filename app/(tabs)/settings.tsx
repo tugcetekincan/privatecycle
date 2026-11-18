@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { BackupService, BackupSettings } from '@/services/BackupService';
 import { NotificationService } from '@/services/NotificationService';
+import { OnboardingService } from '@/services/OnboardingService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
 import { seedDemoData, resetDemoData } from '@/services/DevSeedService';
 import { useTheme } from '@/hooks/useTheme';
@@ -170,6 +171,11 @@ export default function SettingsTab() {
           const result = await BackupService.importBackup();
           if (result.cancelled) return;
           if (result.success) {
+            try {
+              await OnboardingService.markComplete('import');
+            } catch (error) {
+              console.error('Error completing onboarding after import:', error);
+            }
             await loadBackupData();
             void NotificationService.syncSchedule();
             showSuccess(
@@ -241,6 +247,7 @@ export default function SettingsTab() {
             try {
               await BackupService.clearAllData();
               await PrivateAccessService.reset();
+              await OnboardingService.reset();
               await loadBackupData();
               void NotificationService.syncSchedule();
               showSuccess('Success', 'All data, private activity, and backups have been cleared.');

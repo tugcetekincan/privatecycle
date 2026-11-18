@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { DataService } from './DataService';
 import { BackupService } from './BackupService';
 import { NotificationSettingsService } from './NotificationSettings';
+import { OnboardingService } from './OnboardingService';
 import { PrivateAccessService } from './PrivateAccessService';
 import { generateDemoDailyData, seedDemoData, resetDemoData } from './DevSeedService';
 
@@ -21,6 +22,7 @@ export function installDevGlobals(): void {
     DataService,
     BackupService,
     NotificationSettingsService,
+    OnboardingService,
     PrivateAccessService,
     seedDemoData,
     resetDemoData,
