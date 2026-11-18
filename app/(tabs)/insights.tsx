@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Lightbulb } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
+import { emptyBleedingSummary, toPeriodRunContext } from '@/services/BleedingModel';
 import { DataService } from '@/services/DataService';
 import type { DailyData } from '@/services/DataService';
 import { CyclePhase, expectedPeriodLabel, PHASE_LABELS } from '@/services/CycleModel';
@@ -15,6 +16,7 @@ import {
   CYCLE_PHASE_TIPS,
   getCurrentPhaseStatus,
   PHASE_ORDER,
+  phaseDayRanges,
   TODAY_FOCUS,
   UNCERTAIN_PHASE_FOCUS,
 } from '@/services/CyclePhaseTips';
@@ -46,7 +48,7 @@ const sentenceCase = (value: string): string =>
   value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
 const EMPTY_STATS: InsightStats = {
-  lastPeriodLength: 0,
+  periodLength: emptyBleedingSummary(),
   nextPeriodIn: 0,
   totalPeriods: 0,
   moodSeries: [],
@@ -84,7 +86,8 @@ export default function InsightsTab() {
   const currentStatus = getCurrentPhaseStatus(
     todayKey,
     stats.periodStarts,
-    stats.ovulationDays
+    stats.ovulationDays,
+    toPeriodRunContext(stats.periodLength)
   );
   const narrative = buildNarrative({
     symptomPatterns: stats.symptomPatterns,
@@ -95,6 +98,10 @@ export default function InsightsTab() {
 
   const activePhase: CyclePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
   const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
+  const phaseRanges = currentStatus?.phase
+    ? phaseDayRanges(currentStatus.window)
+    : null;
+  const activeDayRange = phaseRanges?.[activePhase] ?? 'Days vary';
   const currentPhaseInfo = currentStatus?.phase ? CYCLE_PHASE_TIPS[currentStatus.phase] : null;
   const todayFocus = currentStatus?.phase ? TODAY_FOCUS[currentStatus.phase] : UNCERTAIN_PHASE_FOCUS;
   const showPhaseSummary = !currentStatus || activePhase !== currentStatus.phase;
@@ -208,7 +215,9 @@ export default function InsightsTab() {
               <Text style={styles.todayKicker}>TODAY</Text>
               <View testID="insights-current-phase-badge" style={styles.todayPill}>
                 <Text style={styles.todayPillText}>
-                  {currentStatus.phase ? PHASE_BADGE_LABELS[currentStatus.phase] : 'PHASE UNCERTAIN'} · DAY {currentStatus.cycleDay}
+                  {currentStatus.phase
+                    ? `ESTIMATED ${PHASE_BADGE_LABELS[currentStatus.phase]} · DAY ${currentStatus.cycleDay}`
+                    : `PHASE UNCERTAIN · DAY ${currentStatus.cycleDay}`}
                 </Text>
               </View>
             </View>
@@ -363,7 +372,9 @@ export default function InsightsTab() {
               </Text>
               <Text style={styles.guideHormones}>Hormones · {phaseInfo.hormones}</Text>
             </View>
-            <Text style={styles.guideDayRange}>{phaseInfo.dayRange}</Text>
+            <Text testID="insights-phase-day-range" style={styles.guideDayRange}>
+              {activeDayRange}
+            </Text>
           </View>
 
           {showPhaseSummary && (
@@ -389,8 +400,12 @@ export default function InsightsTab() {
             ))}
           </View>
 
-          <Text style={styles.guideNote}>
-            Observations come from your own log and are not medical advice.
+          <Text testID="insights-phase-estimate-note" style={styles.guideNote}>
+            {currentStatus?.phase
+              ? 'Day ranges are typical for you, estimated from your logged cycles. '
+              : 'Day ranges appear when your current phase is known. '}
+            Phase timing is an estimate, not a hormone measurement. Observations come
+            from your own log and are not medical advice.
           </Text>
         </Card>
         </ScrollView>

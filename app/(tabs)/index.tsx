@@ -46,9 +46,6 @@ const FLOW_LEVELS = [
 // Intentional accent for ovulation marks; keeps them distinct from period pink.
 const OVULATION_COLOR = '#009688';
 
-// A predicted period span covers seven days from its start, as before.
-const PREDICTED_PERIOD_DAYS = 7;
-
 // Fertile window convention: five days before ovulation + ovulation day.
 const FERTILE_WINDOW_DAYS_BEFORE = 5;
 
@@ -129,11 +126,13 @@ export default function CalendarTab() {
       .map(([date, _]) => date);
     setNoPeriodDates(noPeriodDates);
 
-    // Predicted period days: seven days from each predicted start.
+    // Predicted period days use the learned (or clearly standard) duration
+    // shared with the Overview and notifications.
     const predictedPeriodKeys = new Set<string>();
+    const predictedPeriodDays = fertility.stats.periodLength.predictionDays;
     for (const start of fertility.futurePeriodStarts) {
       const startDate = parseDateKey(start);
-      for (let offset = 0; offset < PREDICTED_PERIOD_DAYS; offset++) {
+      for (let offset = 0; offset < predictedPeriodDays; offset++) {
         const key = formatDateKey(addDays(startDate, offset));
         if (key >= formatDateKey(new Date())) predictedPeriodKeys.add(key);
       }
@@ -703,6 +702,22 @@ export default function CalendarTab() {
                 {forecast?.stats.cycleLengthBasis === 'standard' && (
                   <Text testID="calendar-period-estimate-basis" style={styles.predictionNote}>
                     Estimated from a standard {forecast.stats.averageCycleLength}-day cycle until your next period.
+                  </Text>
+                )}
+                {forecast && (
+                  <Text testID="calendar-period-length-basis" style={styles.predictionNote}>
+                    {forecast.stats.periodLength.basis === 'recorded'
+                      ? `Predicted spans use the median of your last ${forecast.stats.periodLength.sampleSize} ${
+                          forecast.stats.periodLength.sampleSize === 1 ? 'period' : 'periods'
+                        } (${forecast.stats.periodLength.predictionDays} days).`
+                      : `Predicted spans use a standard ${forecast.stats.periodLength.predictionDays}-day estimate until you log ${
+                          forecast.stats.periodLength.sampleSize > 0
+                            ? 'one more complete period'
+                            : 'two complete periods'
+                        }.`}
+                    {forecast.stats.periodLength.clamped
+                      ? ' Recent periods were outside the usual range, so the span is capped.'
+                      : ''}
                   </Text>
                 )}
               </Card>

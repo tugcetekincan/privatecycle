@@ -9,6 +9,7 @@ import {
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { TrendingUp } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
+import { emptyBleedingSummary, toPeriodRunContext } from '@/services/BleedingModel';
 import { DataService } from '@/services/DataService';
 import {
   buildCycleModel,
@@ -57,7 +58,7 @@ const CYCLE_CARD_HORIZONTAL_CHROME = 78;
 type OverviewStats = Awaited<ReturnType<typeof DataService.getInsights>>;
 
 const EMPTY_STATS: OverviewStats = {
-  lastPeriodLength: 0,
+  periodLength: emptyBleedingSummary(),
   nextPeriodIn: 0,
   totalPeriods: 0,
   moodSeries: [],
@@ -198,15 +199,18 @@ export default function OverviewTab() {
   const today = new Date();
   const todayKey = formatDateKey(today);
 
+  const periodContext = toPeriodRunContext(stats.periodLength);
   const currentStatus = getCurrentPhaseStatus(
     todayKey,
     stats.periodStarts,
-    stats.ovulationDays
+    stats.ovulationDays,
+    periodContext
   );
   const model = buildCycleModel({
     periodStarts: stats.periodStarts,
     ovulationDays: stats.ovulationDays,
     today,
+    ...periodContext,
   });
   const currentWindow = model.windows.find((window) => window.isCurrent) ?? null;
   const usesStandardCycleLength = model.cycleLengthBasis === 'standard';
@@ -223,8 +227,11 @@ export default function OverviewTab() {
   const cyclePoints = buildCycleLengthPoints(stats.periodStarts);
   const averageCycle =
     cycleSummary.average !== null ? Math.round(cycleSummary.average) : null;
-  const lastPeriodLength =
-    stats.lastPeriodLength > 0 ? stats.lastPeriodLength : null;
+  const typicalPeriodDays = stats.periodLength.typicalDays;
+  const lastPeriod = stats.periodLength.lastPeriod;
+  const lastPeriodDays = lastPeriod?.days ?? null;
+  const lastPeriodActive = lastPeriod?.active ?? false;
+  const periodLengthClamped = stats.periodLength.clamped;
   const variation = cycleSummary.halfRange;
 
   const nextPeriodStart =
@@ -341,7 +348,7 @@ export default function OverviewTab() {
                     style={[styles.phasePillDot, { backgroundColor: phaseColors[currentStatus.phase] }]}
                   />
                   <Text style={[styles.phasePillText, { color: theme.colors.text }]}>
-                    {PHASE_LABELS[currentStatus.phase]} phase
+                    Estimated {PHASE_LABELS[currentStatus.phase].toLowerCase()} phase
                   </Text>
                 </View>
               ) : (
@@ -416,35 +423,72 @@ export default function OverviewTab() {
         </GradientCard>
 
         <Card style={styles.cycleStats} padding={14}>
-          <View style={styles.cycleStat}>
-            <View style={styles.cycleStatValueRow}>
-              <Text testID="overview-avg-cycle" style={styles.cycleStatValue}>
-                {averageCycle ?? '—'}
-              </Text>
-              {averageCycle !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+          <View style={styles.cycleStatsRow}>
+            <View style={styles.cycleStat}>
+              <View style={styles.cycleStatValueRow}>
+                <Text testID="overview-avg-cycle" style={styles.cycleStatValue}>
+                  {averageCycle ?? '—'}
+                </Text>
+                {averageCycle !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+              </View>
+              <Text style={styles.cycleStatLabel}>Avg cycle</Text>
             </View>
-            <Text style={styles.cycleStatLabel}>Avg cycle</Text>
-          </View>
-          <View style={styles.cycleStatDivider} />
-          <View style={styles.cycleStat}>
-            <View style={styles.cycleStatValueRow}>
-              <Text testID="overview-last-period" style={styles.cycleStatValue}>
-                {lastPeriodLength ?? '—'}
-              </Text>
-              {lastPeriodLength !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+            <View style={styles.cycleStatDivider} />
+            <View style={styles.cycleStat}>
+              <View style={styles.cycleStatValueRow}>
+                <Text testID="overview-typical-period" style={styles.cycleStatValue}>
+                  {typicalPeriodDays ?? '—'}
+                </Text>
+                {typicalPeriodDays !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+              </View>
+              <Text style={styles.cycleStatLabel}>Typical period</Text>
             </View>
-            <Text style={styles.cycleStatLabel}>Last period</Text>
           </View>
-          <View style={styles.cycleStatDivider} />
-          <View style={styles.cycleStat}>
-            <View style={styles.cycleStatValueRow}>
-              <Text testID="overview-cycle-variation" style={styles.cycleStatValue}>
-                {variation !== null ? `±${variation}` : '—'}
-              </Text>
-              {variation !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+
+          <View style={styles.cycleStatsRowDivider} />
+
+          <View style={styles.cycleStatsRow}>
+            <View style={styles.cycleStat}>
+              <View style={styles.cycleStatValueRow}>
+                <Text testID="overview-last-period" style={styles.cycleStatValue}>
+                  {lastPeriodDays ?? '—'}
+                </Text>
+                {lastPeriodDays !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+              </View>
+              <Text style={styles.cycleStatLabel}>Last period</Text>
+              {lastPeriodActive && (
+                <Text testID="overview-last-period-note" style={styles.cycleStatHint}>
+                  In progress
+                </Text>
+              )}
             </View>
-            <Text style={styles.cycleStatLabel}>Cycle variation</Text>
+            <View style={styles.cycleStatDivider} />
+            <View style={styles.cycleStat}>
+              <View style={styles.cycleStatValueRow}>
+                <Text testID="overview-cycle-variation" style={styles.cycleStatValue}>
+                  {variation !== null ? `±${variation}` : '—'}
+                </Text>
+                {variation !== null && <Text style={styles.cycleStatUnit}>d</Text>}
+              </View>
+              <Text style={styles.cycleStatLabel}>Cycle variation</Text>
+            </View>
           </View>
+
+          <Text testID="overview-period-basis" style={styles.periodBasisNote}>
+            {stats.periodLength.basis === 'recorded'
+              ? `Typical period is the median of your last ${stats.periodLength.sampleSize} complete ${
+                  stats.periodLength.sampleSize === 1 ? 'period' : 'periods'
+                }.`
+              : `Add ${
+                  stats.periodLength.sampleSize > 0 ? 'one more complete period' : 'two complete periods'
+                } to see your typical period. Predictions use a standard ${
+                  stats.periodLength.predictionDays
+                }-day estimate.`}
+            {periodLengthClamped
+              ? ' Recent periods were outside the usual range, so predicted spans are capped.'
+              : ''}
+            {lastPeriodActive ? ' Your current period is excluded until it ends.' : ''}
+          </Text>
         </Card>
 
         <Card testID="overview-cycle-chart" style={styles.card} padding={18}>
@@ -932,12 +976,21 @@ const createStyles = (theme: any) =>
       color: theme.colors.textSecondary,
     },
     cycleStats: {
-      flexDirection: 'row',
       alignItems: 'stretch',
       marginHorizontal: 20,
       marginTop: 10,
       paddingVertical: 14,
       paddingHorizontal: 4,
+    },
+    cycleStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    cycleStatsRowDivider: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginVertical: 12,
+      marginHorizontal: 8,
     },
     cycleStat: {
       flex: 1,
@@ -969,6 +1022,18 @@ const createStyles = (theme: any) =>
       width: 1,
       backgroundColor: theme.colors.border,
       marginVertical: 2,
+    },
+    cycleStatHint: {
+      fontSize: 9,
+      color: theme.colors.textSecondary,
+      marginTop: 1,
+    },
+    periodBasisNote: {
+      fontSize: 10,
+      lineHeight: 15,
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+      textAlign: 'center',
     },
     card: {
       marginHorizontal: 20,

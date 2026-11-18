@@ -213,6 +213,14 @@ try {
       `overview: expected at least 3 period starts, got ${overviewData.periodStarts.length}`
     );
   }
+  if (
+    overviewData.periodLength?.basis !== 'recorded' ||
+    !(overviewData.periodLength.predictionDays >= 2 && overviewData.periodLength.predictionDays <= 10)
+  ) {
+    failures.push(
+      `overview period length not learned: ${JSON.stringify(overviewData.periodLength)}`
+    );
+  }
   const avgCycle = Number((await page.getByTestId('overview-avg-cycle').textContent())?.trim());
   log(`overview: periods=${overviewData.periodStarts.length} avgCycle=${avgCycle}`);
   if (!(avgCycle >= 20 && avgCycle <= 40)) {
@@ -222,6 +230,14 @@ try {
   const regularity = (await page.getByTestId('overview-cycle-regularity').textContent())?.trim();
   if (!['Regular', 'Variable'].includes(regularity ?? '')) {
     failures.push(`overview regularity missing or malformed: "${regularity}"`);
+  }
+  const typicalPeriod = Number((await page.getByTestId('overview-typical-period').textContent())?.trim());
+  if (!(typicalPeriod >= 2 && typicalPeriod <= 10)) {
+    failures.push(`overview typical period out of expected range: ${typicalPeriod}`);
+  }
+  const periodBasisCopy = (await page.getByTestId('overview-period-basis').textContent())?.trim();
+  if (!periodBasisCopy?.includes('median of your last')) {
+    failures.push(`overview period basis missing: "${periodBasisCopy}"`);
   }
 
   await page.getByTestId('overview-mood-trend').waitFor({ state: 'visible', timeout: 15_000 });
@@ -252,6 +268,10 @@ try {
   await page.getByTestId('tab-insights').click();
   await page.getByTestId('insights-today-card').waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('insights-current-phase-badge').waitFor({ state: 'visible', timeout: 15_000 });
+  const phaseBadge = (await page.getByTestId('insights-current-phase-badge').textContent())?.trim();
+  if (!phaseBadge || !/(ESTIMATED|PHASE UNCERTAIN)/.test(phaseBadge)) {
+    failures.push(`insights phase badge is not marked as estimated: "${phaseBadge}"`);
+  }
   await page.getByTestId('insights-today-focus').waitFor({ state: 'visible', timeout: 15_000 });
 
   const patternCards = await page.locator('[data-testid^="insights-pattern-"]').count();
@@ -276,6 +296,11 @@ try {
   if (follicularTitle !== 'Follicular Phase') {
     failures.push(`phase selector did not switch to follicular (got "${follicularTitle}")`);
   }
+  const dayRange = (await page.getByTestId('insights-phase-day-range').textContent())?.trim();
+  if (!dayRange || !/^(Day|Days) /.test(dayRange)) {
+    failures.push(`insights phase day range is not derived: "${dayRange}"`);
+  }
+  await page.getByTestId('insights-phase-estimate-note').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('insights-phase-tab-menstrual').click();
   await page.waitForTimeout(200);
   const phaseTips = await page.locator('[data-testid^="insights-phase-tip-"]').count();
@@ -902,14 +927,24 @@ try {
   if (!periodBasis?.includes('standard 28-day cycle')) {
     failures.push(`one-period calendar basis missing: "${periodBasis}"`);
   }
+  await page.getByTestId('calendar-period-length-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  const periodLengthBasis = (await page.getByTestId('calendar-period-length-basis').textContent())?.trim();
+  if (!periodLengthBasis?.includes('standard 5-day estimate')) {
+    failures.push(`one-period bleeding basis missing: "${periodLengthBasis}"`);
+  }
   await page.screenshot({ path: shot('25-one-period-calendar'), fullPage: true });
 
   await page.getByTestId('tab-overview').click();
   await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('overview-period-basis').waitFor({ state: 'visible', timeout: 15_000 });
   const avgCycleOne = (await page.getByTestId('overview-avg-cycle').textContent())?.trim();
+  const typicalPeriodOne = (await page.getByTestId('overview-typical-period').textContent())?.trim();
   const lastPeriodOne = (await page.getByTestId('overview-last-period').textContent())?.trim();
   if (avgCycleOne !== '—') {
     failures.push(`one-period average cycle should be unknown, got "${avgCycleOne}"`);
+  }
+  if (typicalPeriodOne !== '—') {
+    failures.push(`one-period typical period should be unknown, got "${typicalPeriodOne}"`);
   }
   if (lastPeriodOne !== '5') {
     failures.push(`one-period last period should be 5, got "${lastPeriodOne}"`);
