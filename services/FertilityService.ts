@@ -1,3 +1,8 @@
+import {
+  BleedingSummary,
+  emptyBleedingSummary,
+  toPeriodRunContext,
+} from './BleedingModel';
 import { averageCycleLength, buildCycleModel } from './CycleModel';
 import { formatDateKey } from './dateKey';
 
@@ -24,6 +29,8 @@ export interface FertilityStats {
   averageLutealLength: number | null;
   /** Where the ovulation estimate comes from. */
   basis: 'recorded' | 'standard';
+  /** Learned/standard bleeding duration used for predicted spans and phases. */
+  periodLength: BleedingSummary;
 }
 
 export interface CycleForecast {
@@ -57,12 +64,20 @@ export interface FertilityForecastInput {
   ovulationDays: string[];
   /** Reference "today" (local time). */
   today: Date;
+  /** Bleeding-run summary; absent callers get the standard fallback. */
+  periodLength?: BleedingSummary;
 }
 
 export const computeFertilityForecast = (input: FertilityForecastInput): FertilityForecast => {
   const { periodStarts, ovulationDays } = input;
   const todayKey = formatDateKey(input.today);
-  const model = buildCycleModel(input);
+  const periodLength = input.periodLength ?? emptyBleedingSummary();
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today: input.today,
+    ...toPeriodRunContext(periodLength),
+  });
   const windowByEnd = new Map(model.windows.map((window) => [window.end, window]));
 
   const cycles: CycleForecast[] = [];
@@ -94,6 +109,7 @@ export const computeFertilityForecast = (input: FertilityForecastInput): Fertili
       cycleLengthBasis: model.cycleLengthBasis,
       averageLutealLength: model.averageLutealLength,
       basis: model.averageLutealLength !== null ? 'recorded' : 'standard',
+      periodLength,
     },
     currentCycleOvulation: model.currentCycleOvulation,
   };

@@ -148,8 +148,23 @@ describe('phaseTrackSegments', () => {
       'ovulation',
       'luteal',
     ]);
-    expect(segments.map((segment) => segment.days)).toEqual([6, 10, 3, 11]);
+    expect(segments.map((segment) => segment.days)).toEqual([5, 11, 3, 11]);
     expect(segments.reduce((total, segment) => total + segment.share, 0)).toBe(1);
+  });
+
+  it('uses the recorded bleeding run for the menstrual segment', () => {
+    const model = buildCycleModel({
+      periodStarts: ['2026-09-01', '2026-10-01'],
+      ovulationDays: [],
+      today: new Date('2026-09-15T12:00:00'),
+      periodRunDays: { '2026-09-01': 7 },
+      periodLengthDays: 5,
+    });
+    const current = model.windows.find((window) => window.isCurrent)!;
+
+    expect(phaseTrackSegments(current).map((segment) => segment.days)).toEqual([
+      7, 9, 3, 11,
+    ]);
   });
 
   it('never produces negative or overflowing segments for a short cycle', () => {

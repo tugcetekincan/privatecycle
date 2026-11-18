@@ -1,4 +1,9 @@
 import * as SQLite from 'expo-sqlite';
+import {
+  emptyBleedingSummary,
+  summarizePeriodDays,
+  toPeriodRunContext,
+} from './BleedingModel';
 import { computeFertilityForecast, FertilityForecast, predictPeriodStarts } from './FertilityService';
 import { addDays, daysBetween, formatDateKey, parseDateKey } from './dateKey';
 import { buildMoodSeries, summarizeMoodByPhase, MoodDay, MOOD_SERIES_DAYS } from './MoodInsights';
@@ -292,6 +297,14 @@ export class SQLiteDataService {
       ORDER BY pd.date
     `) as { date: string }[];
     return rows.map(row => row.date);
+  }
+
+  /** Every recorded period day, ascending (for bleeding-run summaries). */
+  private async queryPeriodDays(db: SQLite.SQLiteDatabase): Promise<string[]> {
+    const rows = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
+    ) as { date: string }[];
+    return rows.map((row) => row.date);
   }
 
   /** Recorded ovulation days, ascending. */
@@ -686,45 +699,15 @@ export class SQLiteDataService {
     try {
       const db = await this.ensureInitialized();
       
-      const periodStarts = await this.queryPeriodStarts(db);
-      const ovulationDays = await this.queryOvulationDays(db);
+      const [periodStarts, ovulationDays, periodDays] = await Promise.all([
+        this.queryPeriodStarts(db),
+        this.queryOvulationDays(db),
+        this.queryPeriodDays(db),
+      ]);
       const today = new Date();
       const todayKey = formatDateKey(today);
-      
-      // Calculate last period length using SQL
-      let lastPeriodLength = 0;
-      if (periodStarts.length > 0) {
-        const lastPeriodStart = periodStarts[periodStarts.length - 1];
-        
-        // Get all period days starting from the last period start
-        const periodDaysResult = await db.getAllAsync(
-          `SELECT date FROM daily_data 
-           WHERE date >= ? AND is_period = 1 
-           ORDER BY date`,
-          [lastPeriodStart]
-        ) as { date: string }[];
-        
-        // Count consecutive days from the start
-        if (periodDaysResult.length > 0) {
-          let consecutiveDays = 1;
-          let currentDate = new Date(periodDaysResult[0].date);
-          
-          for (let i = 1; i < periodDaysResult.length; i++) {
-            const nextExpectedDate = new Date(currentDate);
-            nextExpectedDate.setDate(nextExpectedDate.getDate() + 1);
-            const nextActualDate = new Date(periodDaysResult[i].date);
-            
-            if (nextExpectedDate.getTime() === nextActualDate.getTime()) {
-              consecutiveDays++;
-              currentDate = nextActualDate;
-            } else {
-              break;
-            }
-          }
-          
-          lastPeriodLength = consecutiveDays;
-        }
-      }
+      const periodLength = summarizePeriodDays(periodDays, todayKey);
+      const periodContext = toPeriodRunContext(periodLength);
 
       // Calculate next period prediction. Use the same first prediction as the
       // calendar (local day keys) instead of mixing UTC-parsed dates with local
@@ -765,7 +748,7 @@ export class SQLiteDataService {
         symptomDays,
         periodStarts,
         trackedDays,
-        { ovulationDays }
+        { ovulationDays, ...periodContext }
       ).patterns;
 
       // Mood detail: every day with valence or feeling tags feeds the phase
@@ -797,10 +780,15 @@ export class SQLiteDataService {
       );
 
       const moodSeries = buildMoodSeries(seriesByDate, today);
-      const moodPhases = summarizeMoodByPhase(moodDays, periodStarts, ovulationDays);
+      const moodPhases = summarizeMoodByPhase(
+        moodDays,
+        periodStarts,
+        ovulationDays,
+        periodContext
+      );
 
       return {
-        lastPeriodLength,
+        periodLength,
         nextPeriodIn,
         totalPeriods: periodStarts.length,
         moodSeries,
@@ -813,7 +801,7 @@ export class SQLiteDataService {
     } catch (error) {
       console.error('Error calculating insights:', error);
       return {
-        lastPeriodLength: 0,
+        periodLength: emptyBleedingSummary(),
         nextPeriodIn: 0,
         totalPeriods: 0,
         moodSeries: [],
@@ -834,13 +822,15 @@ export class SQLiteDataService {
   async getNotificationStats(): Promise<{
     periodStarts: string[];
     ovulationDays: string[];
+    periodDays: string[];
     trackedDays: number;
   }> {
     try {
       const db = await this.ensureInitialized();
-      const [periodStarts, ovulationDays, tracked] = await Promise.all([
+      const [periodStarts, ovulationDays, periodDays, tracked] = await Promise.all([
         this.queryPeriodStarts(db),
         this.queryOvulationDays(db),
+        this.queryPeriodDays(db),
         db.getFirstAsync('SELECT COUNT(*) as count FROM daily_data') as Promise<{
           count: number;
         } | null>,
@@ -849,11 +839,12 @@ export class SQLiteDataService {
       return {
         periodStarts,
         ovulationDays,
+        periodDays,
         trackedDays: tracked?.count ?? 0,
       };
     } catch (error) {
       console.error('Error loading notification stats:', error);
-      return { periodStarts: [], ovulationDays: [], trackedDays: 0 };
+      return { periodStarts: [], ovulationDays: [], periodDays: [], trackedDays: 0 };
     }
   }
 
@@ -864,13 +855,19 @@ export class SQLiteDataService {
   async getFertilityForecast(): Promise<FertilityForecast> {
     try {
       const db = await this.ensureInitialized();
-      const periodStarts = await this.queryPeriodStarts(db);
-      const ovulationDays = await this.queryOvulationDays(db);
+      const today = new Date();
+      const [periodStarts, ovulationDays, periodDays] = await Promise.all([
+        this.queryPeriodStarts(db),
+        this.queryOvulationDays(db),
+        this.queryPeriodDays(db),
+      ]);
+      const periodLength = summarizePeriodDays(periodDays, formatDateKey(today));
 
       return computeFertilityForecast({
         periodStarts,
         ovulationDays,
-        today: new Date(),
+        today,
+        periodLength,
       });
     } catch (error) {
       console.error('Error calculating fertility forecast:', error);

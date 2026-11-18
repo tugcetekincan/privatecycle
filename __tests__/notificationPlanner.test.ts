@@ -113,6 +113,23 @@ describe('buildNotificationPlan', () => {
     expect(phases.every((item) => item.date.getHours() === 8)).toBe(true);
   });
 
+  it('uses the learned bleeding duration for phase tips', () => {
+    const plan = planFor(baseSettings({ phaseTips: true }), {
+      periodStarts: ['2026-08-04', '2026-09-01', '2026-09-29'],
+      periodDays: [
+        '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07',
+        '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04',
+        '2026-09-29',
+      ],
+      now: new Date(2026, 8, 29, 6),
+    });
+    const follicular = plan.find((item) => item.title === 'Follicular phase');
+
+    // Two complete 4-day runs -> the follicular tip lands four days after the
+    // recorded start, not the old fixed six.
+    expect(follicular?.dateKey).toBe('2026-10-03');
+  });
+
   it('does not turn future predictions into late check-ins or phase tips', () => {
     const plan = planFor(baseSettings({ lateCheckIn: true, phaseTips: true }), {
       now: new Date(2026, 10, 1, 12),

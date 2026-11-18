@@ -6,8 +6,15 @@
  * Kept pure of SQLite/Expo so it is directly unit-testable.
  */
 
-import { buildCycleModel, CurrentCycleState, CyclePhase, PHASE_ORDER } from './CycleModel';
-import { parseDateKey } from './dateKey';
+import { PeriodRunContext } from './BleedingModel';
+import {
+  buildCycleModel,
+  CurrentCycleState,
+  CyclePhase,
+  CycleWindow,
+  PHASE_ORDER,
+} from './CycleModel';
+import { daysBetween, parseDateKey } from './dateKey';
 
 export { CyclePhase, PHASE_ORDER };
 
@@ -24,7 +31,6 @@ export interface PhaseTipItem {
 export interface CyclePhaseInfo {
   phase: CyclePhase;
   title: string;
-  dayRange: string;
   tagline: string;
   summary: string;
   hormones: string;
@@ -76,7 +82,6 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   menstrual: {
     phase: 'menstrual',
     title: 'Menstrual Phase',
-    dayRange: 'Days 1–6',
     tagline: 'Rest & Replenish',
     summary:
       'Hormones are at their baseline and energy is directed inward as your body sheds the uterine lining.',
@@ -119,7 +124,6 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   follicular: {
     phase: 'follicular',
     title: 'Follicular Phase',
-    dayRange: 'Days 7–14',
     tagline: 'Rising Energy & New Beginnings',
     summary:
       'Estrogen and FSH are on the rise, rebuilding the uterine lining and stimulating follicle growth as stamina rebounds.',
@@ -162,7 +166,6 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   ovulation: {
     phase: 'ovulation',
     title: 'Ovulatory Phase',
-    dayRange: 'Days 15–17',
     tagline: 'Peak Vitality & Connection',
     summary:
       'Estrogen peaks and luteinizing hormone (LH) triggers ovulation. You are at your most fertile, energetic, and magnetic.',
@@ -205,7 +208,6 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   luteal: {
     phase: 'luteal',
     title: 'Luteal Phase',
-    dayRange: 'Days 18–28+',
     tagline: 'Nourish, Steady & Wind Down',
     summary:
       'Progesterone rises to support the uterine lining, increasing resting metabolic rate before tapering off if pregnancy does not occur.',
@@ -247,26 +249,66 @@ export const CYCLE_PHASE_TIPS: Record<CyclePhase, CyclePhaseInfo> = {
   },
 };
 
+const rangeLabel = (start: number, end: number): string => {
+  if (start > end) return '—';
+  return start === end ? `Day ${start}` : `Days ${start}–${end}`;
+};
+
+/**
+ * Typical day ranges for the four phases of a cycle window. Uses the same
+ * menstrual and ovulation bounds as `phaseForDateInWindows`, so the guide cannot
+ * disagree with the Overview timeline. The values are estimates, not measured
+ * hormone phases.
+ */
+export function phaseDayRanges(window: CycleWindow): Record<CyclePhase, string> {
+  const cycleDays = Math.max(
+    1,
+    daysBetween(parseDateKey(window.start), parseDateKey(window.end))
+  );
+  const menstrualEnd = Math.min(window.menstrualPhaseDays, cycleDays);
+  const ovulationStartDay =
+    daysBetween(parseDateKey(window.start), parseDateKey(window.ovulationPhaseStart)) + 1;
+  const ovulationEndDay = Math.min(
+    daysBetween(parseDateKey(window.start), parseDateKey(window.ovulationPhaseEnd)) + 1,
+    cycleDays
+  );
+  const follicularStart = menstrualEnd + 1;
+  const follicularEnd = ovulationStartDay - 1;
+
+  return {
+    menstrual: rangeLabel(1, menstrualEnd),
+    follicular: rangeLabel(follicularStart, follicularEnd),
+    ovulation: rangeLabel(ovulationStartDay, ovulationEndDay),
+    luteal: rangeLabel(ovulationEndDay + 1, cycleDays),
+  };
+}
+
 /**
  * Calculates current cycle day and phase for `todayDateKey` given sorted
  * `periodStarts` and `ovulationDays`.
  *
  * The phase comes from the shared cycle model (`CycleModel.ts`), the same
  * source as the calendar's forecast and the Insights phase buckets, so a
- * recorded ovulation or a personal luteal length moves this card too. It does
- * not use fixed day thresholds.
+ * recorded ovulation, personal luteal length or recorded bleeding run moves
+ * this card too. It does not use fixed day thresholds.
  *
  * Returns null if no recorded period start occurred on or before today.
  */
 export function getCurrentPhaseStatus(
   todayDateKey: string,
   periodStarts: string[],
-  ovulationDays: string[] = []
+  ovulationDays: string[] = [],
+  periodContext: PeriodRunContext = {}
 ): CurrentPhaseStatus | null {
   if (!periodStarts || periodStarts.length === 0) return null;
 
   const today = parseDateKey(todayDateKey);
-  const model = buildCycleModel({ periodStarts, ovulationDays, today });
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today,
+    ...periodContext,
+  });
   if (!model.currentCycle) return null;
 
   return {

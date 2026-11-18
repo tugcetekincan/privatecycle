@@ -1,3 +1,7 @@
+import {
+  PeriodRunContext,
+  STANDARD_PERIOD_LENGTH_DAYS,
+} from './BleedingModel';
 import { addDays, daysBetween, formatDateKey, parseDateKey } from './dateKey';
 
 /**
@@ -48,9 +52,17 @@ export interface CycleWindow {
   /** Phase window: the ovulation day through two days after it. */
   ovulationPhaseStart: string;
   ovulationPhaseEnd: string;
+  /**
+   * Bleeding days at the start of the window. Recorded runs use their actual
+   * length; predicted windows and legacy callers use the learned/standard
+   * estimate.
+   */
+  menstrualPhaseDays: number;
+  /** Whether the menstrual boundary comes from a recorded run or an estimate. */
+  menstrualPhaseBasis: 'recorded' | 'estimated';
 }
 
-export interface CycleModelInput {
+export interface CycleModelInput extends PeriodRunContext {
   /** Recorded period start days, ascending. */
   periodStarts: string[];
   /** Recorded ovulation days, ascending. */
@@ -84,6 +96,8 @@ export interface CurrentCycleState {
   daysUntilExpected: number;
   timing: 'upcoming' | 'expected' | 'overdue';
   phase: CyclePhase | null;
+  /** The recorded window anchoring this state, for phase ranges. */
+  window: CycleWindow;
 }
 
 /** Shared, non-diagnostic wording for the recorded cycle's next expected start. */
@@ -102,8 +116,6 @@ const FERTILE_WINDOW_DAYS_BEFORE = 5;
 /** Luteal phases outside this range are treated as mis-entries, not data. */
 const LUTEAL_MIN_DAYS = 8;
 const LUTEAL_MAX_DAYS = 17;
-/** Menstrual phase: the first six days (day 0 through day 5). */
-export const MENSTRUAL_PHASE_DAYS = 6;
 /** Ovulation phase length, starting on the ovulation day. */
 const OVULATION_PHASE_DAYS = 3;
 
@@ -209,9 +221,10 @@ const lutealStats = (
 const ovulationPhaseBounds = (
   start: string,
   end: string,
-  ovulationDate: string
+  ovulationDate: string,
+  menstrualPhaseDays: number
 ): { ovulationPhaseStart: string; ovulationPhaseEnd: string } => {
-  const earliest = formatDateKey(addDays(parseDateKey(start), MENSTRUAL_PHASE_DAYS));
+  const earliest = formatDateKey(addDays(parseDateKey(start), menstrualPhaseDays));
   const latest = formatDateKey(addDays(parseDateKey(end), -1));
   const startKey = ovulationDate < earliest ? earliest : ovulationDate;
   const endRaw = formatDateKey(addDays(parseDateKey(ovulationDate), OVULATION_PHASE_DAYS - 1));
@@ -230,15 +243,28 @@ const buildWindow = (
   end: string,
   predictedEnd: boolean,
   historicalOvulations: string[],
-  effectiveLuteal: number
+  effectiveLuteal: number,
+  menstrualPhaseDays: number,
+  menstrualPhaseBasis: 'recorded' | 'estimated'
 ): CycleWindow => {
   const recorded = latestOvulationBetween(historicalOvulations, start, end);
   const ovulationDate =
     recorded ?? formatDateKey(addDays(parseDateKey(end), -effectiveLuteal));
+  // A very short cycle must still leave a day for the next period; the phase
+  // track and phase lookup both rely on this clamp.
+  const cycleDays = Math.max(
+    1,
+    daysBetween(parseDateKey(start), parseDateKey(end))
+  );
+  const clampedMenstrualDays = Math.min(
+    Math.max(1, Math.round(menstrualPhaseDays)),
+    Math.max(1, cycleDays - 1)
+  );
   const { ovulationPhaseStart, ovulationPhaseEnd } = ovulationPhaseBounds(
     start,
     end,
-    ovulationDate
+    ovulationDate,
+    clampedMenstrualDays
   );
 
   return {
@@ -254,6 +280,8 @@ const buildWindow = (
     fertileWindowEnd: ovulationDate,
     ovulationPhaseStart,
     ovulationPhaseEnd,
+    menstrualPhaseDays: clampedMenstrualDays,
+    menstrualPhaseBasis,
   };
 };
 
@@ -269,6 +297,10 @@ const buildWindow = (
 export const buildCycleModel = (input: CycleModelInput): CycleModel => {
   const { periodStarts, ovulationDays, today } = input;
   const todayKey = formatDateKey(today);
+  const periodRunDays = input.periodRunDays ?? {};
+  const periodLengthDays =
+    input.periodLengthDays ?? STANDARD_PERIOD_LENGTH_DAYS;
+  const activePeriodStart = input.activePeriodStart;
   const { average, effective } = lutealStats(periodStarts, ovulationDays);
   const observedCycle = observedCycleLength(periodStarts);
   const cycleLengthBasis = observedCycle === null ? 'standard' : 'recorded';
@@ -298,13 +330,42 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
     const start = periodStarts[index];
     const nextRecorded = periodStarts[index + 1];
     const end = nextRecorded ?? boundaries[0];
-    windows.push(buildWindow(start, end, nextRecorded === undefined, historicalOvulations, effective));
+    const runDays = periodRunDays[start];
+    // While a run is active its final length is unknown. Keeping the larger of
+    // the days so far and the estimate stops the phase track from shrinking
+    // each day; today is still labelled menstrual either way.
+    const menstrualDays =
+      runDays === undefined
+        ? periodLengthDays
+        : activePeriodStart === start
+          ? Math.max(runDays, periodLengthDays)
+          : runDays;
+    windows.push(
+      buildWindow(
+        start,
+        end,
+        nextRecorded === undefined,
+        historicalOvulations,
+        effective,
+        menstrualDays,
+        runDays === undefined ? 'estimated' : 'recorded'
+      )
+    );
   }
 
   for (let index = 0; index < PREDICTED_CYCLES; index++) {
-    windows.push(
-      { ...buildWindow(boundaries[index], boundaries[index + 1], true, [], effective), predictedStart: true }
-    );
+    windows.push({
+      ...buildWindow(
+        boundaries[index],
+        boundaries[index + 1],
+        true,
+        [],
+        effective,
+        periodLengthDays,
+        'estimated'
+      ),
+      predictedStart: true,
+    });
   }
 
   // Only a recorded start can open the current cycle, regardless of how overdue it is.
@@ -326,6 +387,7 @@ export const buildCycleModel = (input: CycleModelInput): CycleModel => {
     daysUntilExpected,
     timing: daysUntilExpected > 0 ? 'upcoming' : daysUntilExpected === 0 ? 'expected' : 'overdue',
     phase: phaseForDateInWindows(todayKey, windows),
+    window: current,
   } : null;
 
   return {
@@ -349,7 +411,7 @@ export const phaseForDateInWindows = (
   if (!window) return null;
 
   const menstrualEnd = formatDateKey(
-    addDays(parseDateKey(window.start), MENSTRUAL_PHASE_DAYS - 1)
+    addDays(parseDateKey(window.start), window.menstrualPhaseDays - 1)
   );
   if (date <= menstrualEnd) return 'menstrual';
   if (date < window.ovulationPhaseStart) return 'follicular';

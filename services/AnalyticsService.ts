@@ -1,5 +1,7 @@
 import * as SQLite from 'expo-sqlite';
+import { summarizePeriodDays, toPeriodRunContext } from './BleedingModel';
 import { buildCycleModel, phaseForDateInWindows } from './CycleModel';
+import { formatDateKey } from './dateKey';
 
 export interface CycleAnalytics {
   averageCycleLength: number;
@@ -61,11 +63,19 @@ class SQLiteAnalyticsService {
     const ovulationDays = await db.getAllAsync(
       'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
     ) as { date: string }[];
+    const periodDays = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
+    ) as { date: string }[];
+    const periodLength = summarizePeriodDays(
+      periodDays.map((row) => row.date),
+      formatDateKey(new Date())
+    );
 
     return buildCycleModel({
       periodStarts: periodStarts.map((row) => row.date),
       ovulationDays: ovulationDays.map((row) => row.date),
       today: new Date(),
+      ...toPeriodRunContext(periodLength),
     });
   }
 
@@ -93,10 +103,18 @@ class SQLiteAnalyticsService {
     const ovulationRows = await db.getAllAsync(
       'SELECT date FROM daily_data WHERE is_ovulation = 1 ORDER BY date'
     ) as { date: string }[];
+    const periodDays = await db.getAllAsync(
+      'SELECT date FROM daily_data WHERE is_period = 1 ORDER BY date'
+    ) as { date: string }[];
+    const periodLength = summarizePeriodDays(
+      periodDays.map((row) => row.date),
+      formatDateKey(new Date())
+    );
     const cycleModel = buildCycleModel({
       periodStarts: periodStarts.map((row) => row.date),
       ovulationDays: ovulationRows.map((row) => row.date),
       today: new Date(),
+      ...toPeriodRunContext(periodLength),
     });
 
     // Calculate cycle lengths and variability

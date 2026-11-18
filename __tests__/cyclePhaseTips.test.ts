@@ -2,6 +2,7 @@ import {
   CYCLE_PHASE_TIPS,
   getCurrentPhaseStatus,
   PHASE_ORDER,
+  phaseDayRanges,
   PhaseTipCategory,
   TODAY_FOCUS,
   UNCERTAIN_PHASE_FOCUS,
@@ -155,6 +156,28 @@ describe('getCurrentPhaseStatus', () => {
       daysSinceLastPeriod: 19,
     });
   });
+
+  it('uses the recorded bleeding run for the current phase', () => {
+    const context = {
+      periodRunDays: { '2026-10-01': 10 },
+      periodLengthDays: 5,
+      activePeriodStart: '2026-10-01',
+    };
+
+    expect(getCurrentPhaseStatus('2026-10-10', ['2026-10-01'], [], context)).toMatchObject({
+      phase: 'menstrual',
+      cycleDay: 10,
+    });
+    expect(
+      getCurrentPhaseStatus('2026-10-11', ['2026-10-01'], [], {
+        periodRunDays: { '2026-10-01': 10 },
+        periodLengthDays: 5,
+      })
+    ).toMatchObject({
+      phase: 'follicular',
+      cycleDay: 11,
+    });
+  });
 });
 
 describe('CYCLE_PHASE_TIPS', () => {
@@ -168,7 +191,6 @@ describe('CYCLE_PHASE_TIPS', () => {
       expect(info).toBeDefined();
       expect(info.phase).toBe(phase);
       expect(info.title.length).toBeGreaterThan(0);
-      expect(info.dayRange.length).toBeGreaterThan(0);
       expect(info.tagline.length).toBeGreaterThan(0);
       expect(info.summary.length).toBeGreaterThan(0);
       expect(info.hormones.length).toBeGreaterThan(0);
@@ -198,5 +220,42 @@ describe('CYCLE_PHASE_TIPS', () => {
     expect(UNCERTAIN_PHASE_FOCUS.title).toBe('Let your body set the pace');
     expect(UNCERTAIN_PHASE_FOCUS.emoji).toBeTruthy();
     expect(UNCERTAIN_PHASE_FOCUS.description).toContain('how you feel today');
+  });
+});
+
+describe('phaseDayRanges', () => {
+  it('derives the guide ranges from the current window', () => {
+    const model = buildCycleModel({
+      periodStarts: ['2026-09-01', '2026-10-01'],
+      ovulationDays: [],
+      today: new Date('2026-09-15T12:00:00'),
+    });
+    const current = model.windows.find((window) => window.isCurrent)!;
+
+    expect(phaseDayRanges(current)).toEqual({
+      menstrual: 'Days 1–5',
+      follicular: 'Days 6–16',
+      ovulation: 'Days 17–19',
+      luteal: 'Days 20–30',
+    });
+  });
+
+  it('uses a recorded bleeding run for the menstrual boundary', () => {
+    const model = buildCycleModel({
+      periodStarts: ['2026-09-01', '2026-10-01'],
+      ovulationDays: [],
+      today: new Date('2026-09-15T12:00:00'),
+      periodRunDays: { '2026-09-01': 7 },
+      periodLengthDays: 5,
+    });
+    const current = model.windows.find((window) => window.isCurrent)!;
+
+    expect(current.menstrualPhaseDays).toBe(7);
+    expect(phaseDayRanges(current)).toEqual({
+      menstrual: 'Days 1–7',
+      follicular: 'Days 8–16',
+      ovulation: 'Days 17–19',
+      luteal: 'Days 20–30',
+    });
   });
 });

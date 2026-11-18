@@ -33,6 +33,7 @@ describe('DataService.getNotificationStats', () => {
     await expect(DataService.getNotificationStats()).resolves.toEqual({
       periodStarts: [],
       ovulationDays: [],
+      periodDays: [],
       trackedDays: 0,
     });
   });

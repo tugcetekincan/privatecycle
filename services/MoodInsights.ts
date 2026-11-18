@@ -7,6 +7,7 @@
  * phase buckets cannot drift from the calendar's ovulation dates.
  */
 
+import type { PeriodRunContext } from './BleedingModel';
 import type { CyclePhase } from './CycleModel';
 import { buildCycleModel, PHASE_ORDER, phaseForDateInWindows } from './CycleModel';
 import { MoodTag } from './MoodTags';
@@ -61,18 +62,30 @@ export interface PhaseMoodSummary {
 export function phaseForDate(
   date: string,
   periodStarts: string[],
-  ovulationDays: string[] = []
+  ovulationDays: string[] = [],
+  periodContext: PeriodRunContext = {}
 ): CyclePhase | null {
-  const model = buildCycleModel({ periodStarts, ovulationDays, today: parseDateKey(date) });
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today: parseDateKey(date),
+    ...periodContext,
+  });
   return phaseForDateInWindows(date, model.windows);
 }
 
 export function summarizeMoodByPhase(
   days: MoodDay[],
   periodStarts: string[],
-  ovulationDays: string[] = []
+  ovulationDays: string[] = [],
+  periodContext: PeriodRunContext = {}
 ): PhaseMoodSummary[] {
-  const model = buildCycleModel({ periodStarts, ovulationDays, today: new Date() });
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today: new Date(),
+    ...periodContext,
+  });
   const accumulators = new Map<
     CyclePhase,
     {

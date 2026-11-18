@@ -1,3 +1,4 @@
+import { summarizePeriodDays } from '@/services/BleedingModel';
 import {
   averageCycleLength,
   computeFertilityForecast,
@@ -297,5 +298,61 @@ describe('cycle windows', () => {
         expect(phaseForDateInWindows(cycle.ovulationDate, model.windows)).toBeNull();
       }
     }
+  });
+
+  it('uses a recorded bleeding run for that cycle only', () => {
+    const today = parseDateKey('2026-02-05');
+    const model = buildCycleModel({
+      periodStarts: ['2026-01-05', '2026-02-02'],
+      ovulationDays: [],
+      today,
+      periodRunDays: { '2026-01-05': 7, '2026-02-02': 4 },
+      periodLengthDays: 5,
+      activePeriodStart: '2026-02-02',
+    });
+
+    expect(model.windows[0].menstrualPhaseDays).toBe(7);
+    expect(model.windows[0].menstrualPhaseBasis).toBe('recorded');
+    expect(phaseForDateInWindows('2026-01-11', model.windows)).toBe('menstrual');
+    expect(phaseForDateInWindows('2026-01-12', model.windows)).toBe('follicular');
+
+    // The open run is still active, so the phase track keeps the larger of
+    // the days so far and the estimate instead of shrinking daily.
+    expect(model.windows[1].menstrualPhaseDays).toBe(5);
+    expect(phaseForDateInWindows('2026-02-05', model.windows)).toBe('menstrual');
+
+    const predicted = model.windows.find((window) => window.predictedStart)!;
+    expect(predicted.menstrualPhaseDays).toBe(5);
+    expect(predicted.menstrualPhaseBasis).toBe('estimated');
+  });
+
+  it('surfaces the learned period length without moving ovulation', () => {
+    const periodStarts = ['2026-01-05', '2026-02-02', '2026-03-01'];
+    const ovulationDays: string[] = [];
+    const today = parseDateKey('2026-03-02');
+    const periodLength = summarizePeriodDays(
+      [
+        '2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09',
+        '2026-02-02', '2026-02-03', '2026-02-04', '2026-02-05',
+      ],
+      '2026-03-02'
+    );
+
+    const withoutLength = computeFertilityForecast({ periodStarts, ovulationDays, today });
+    const forecast = computeFertilityForecast({
+      periodStarts,
+      ovulationDays,
+      today,
+      periodLength,
+    });
+
+    expect(forecast.stats.periodLength.basis).toBe('recorded');
+    expect(forecast.stats.periodLength.predictionDays).toBe(5);
+    expect(forecast.stats.periodLength.sampleSize).toBe(2);
+    expect(forecast.stats.periodLength.lastPeriod?.days).toBe(4);
+    // Bleeding duration is not an ovulation input.
+    expect(forecast.cycles.map((cycle) => cycle.ovulationDate)).toEqual(
+      withoutLength.cycles.map((cycle) => cycle.ovulationDate)
+    );
   });
 });

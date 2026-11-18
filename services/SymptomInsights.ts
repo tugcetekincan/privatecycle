@@ -7,6 +7,7 @@
  * SQLite/Expo so it is unit-testable.
  */
 
+import { PeriodRunContext } from './BleedingModel';
 import {
   buildCycleModel,
   CyclePhase,
@@ -47,7 +48,7 @@ export interface SymptomPatternSummary {
   unphasedDays: number;
 }
 
-export interface SymptomPatternOptions {
+export interface SymptomPatternOptions extends PeriodRunContext {
   /** Maximum number of patterns to return. Default 4. */
   limit?: number;
   /** Recorded ovulation days, ascending; they override the prediction. */
@@ -73,8 +74,21 @@ export function summarizeSymptomPatterns(
   trackedDays: number,
   options: SymptomPatternOptions = {}
 ): SymptomPatternSummary {
-  const { limit = 4, ovulationDays = [] } = options;
-  const model = buildCycleModel({ periodStarts, ovulationDays, today: new Date() });
+  const {
+    limit = 4,
+    ovulationDays = [],
+    periodRunDays,
+    periodLengthDays,
+    activePeriodStart,
+  } = options;
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today: new Date(),
+    periodRunDays,
+    periodLengthDays,
+    activePeriodStart,
+  });
   const totals = new Map<
     string,
     { days: number; phaseDays: SymptomPhaseDays; phasedDays: number; unphasedDays: number }

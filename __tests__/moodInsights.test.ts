@@ -5,8 +5,8 @@ describe('phaseForDate', () => {
 
   it.each([
     ['2026-06-01', 'menstrual'], // day 0
-    ['2026-06-06', 'menstrual'], // day 5
-    ['2026-06-07', 'follicular'], // day 6
+    ['2026-06-05', 'menstrual'], // day 4
+    ['2026-06-06', 'follicular'], // day 5
     ['2026-06-14', 'follicular'], // day 13
     ['2026-06-15', 'ovulation'], // day 14
     ['2026-06-17', 'ovulation'], // day 16

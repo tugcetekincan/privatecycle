@@ -1,8 +1,8 @@
 import {
-  buildCycleModel,
-  CyclePhase,
-  MENSTRUAL_PHASE_DAYS,
-} from './CycleModel';
+  summarizePeriodDays,
+  toPeriodRunContext,
+} from './BleedingModel';
+import { buildCycleModel, CyclePhase } from './CycleModel';
 import {
   addDaysToDateKey,
   dateKeyAtTimeInTimeZone,
@@ -66,6 +66,8 @@ export interface NotificationPlanInput {
   periodStarts: string[];
   /** Recorded ovulation day keys, ascending. */
   ovulationDays: string[];
+  /** Recorded period day keys, ascending; used for the learned span. */
+  periodDays?: string[];
   /** Whether today already has a saved entry (suppresses today's log nudge). */
   todayHasData: boolean;
   /** `BackupService` lastBackupTime, or null when no backup was tracked. */
@@ -131,9 +133,18 @@ const isWithinHorizon = (date: Date, now: Date): boolean =>
   date.getTime() <= now.getTime() + HORIZON_DAYS * DAY_MS;
 
 export function buildNotificationPlan(input: NotificationPlanInput): PlannedNotification[] {
-  const { settings, now, periodStarts, ovulationDays, todayHasData, timeZone } = input;
+  const {
+    settings,
+    now,
+    periodStarts,
+    ovulationDays,
+    periodDays = [],
+    todayHasData,
+    timeZone,
+  } = input;
   // "Today" must come from the live Intl zone, not Hermes's cached Date zone.
   const todayKey = timeZone ? getDateKeyInTimeZone(now, timeZone) : formatDateKey(now);
+  const periodLength = summarizePeriodDays(periodDays, todayKey);
   const items: PlannedNotification[] = [];
   const seen = new Set<string>();
 
@@ -145,7 +156,12 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
     items.push(item);
   };
 
-  const model = buildCycleModel({ periodStarts, ovulationDays, today: parseDateKey(todayKey) });
+  const model = buildCycleModel({
+    periodStarts,
+    ovulationDays,
+    today: parseDateKey(todayKey),
+    ...toPeriodRunContext(periodLength),
+  });
   const futureStarts = model.futurePeriodStarts.slice(0, PREDICTED_CYCLES_TO_SCHEDULE);
   const windowByEnd = new Map(model.windows.map((window) => [window.end, window]));
 
@@ -203,7 +219,7 @@ export function buildNotificationPlan(input: NotificationPlanInput): PlannedNoti
         { phase: 'menstrual', dateKey: window.start },
         {
           phase: 'follicular',
-          dateKey: addDaysKey(window.start, MENSTRUAL_PHASE_DAYS),
+          dateKey: addDaysKey(window.start, window.menstrualPhaseDays),
         },
         { phase: 'ovulation', dateKey: window.ovulationPhaseStart },
         { phase: 'luteal', dateKey: addDaysKey(window.ovulationPhaseEnd, 1) },

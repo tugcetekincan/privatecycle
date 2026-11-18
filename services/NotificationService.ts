@@ -235,6 +235,7 @@ export class NotificationService {
         timeZone,
         periodStarts: stats.periodStarts,
         ovulationDays: stats.ovulationDays,
+        periodDays: stats.periodDays,
         todayHasData: todayData !== null,
         lastBackupAt: backupSettings.lastBackupTime,
         trackedDays: stats.trackedDays,

@@ -6,7 +6,7 @@
  * `YYYY-MM-DD` day keys and compare chronologically as strings.
  */
 
-import { CyclePhase, CycleWindow, MENSTRUAL_PHASE_DAYS } from './CycleModel';
+import { CyclePhase, CycleWindow } from './CycleModel';
 import { daysBetween, parseDateKey } from './dateKey';
 
 /** How many recent completed cycles the averages, variation and regularity use. */
@@ -114,7 +114,7 @@ export function phaseTrackSegments(window: CycleWindow): PhaseTrackSegment[] {
   const total = Math.max(1, daysBetween(parseDateKey(window.start), parseDateKey(window.end)));
   let remaining = total;
 
-  const menstrual = Math.min(MENSTRUAL_PHASE_DAYS, remaining);
+  const menstrual = Math.min(window.menstrualPhaseDays, remaining);
   remaining -= menstrual;
 
   const follicular = Math.min(
