@@ -232,6 +232,16 @@ is a gitignored drop box for a user export — the app's normal
 - Period-start detection lives in SQL (`DATE(date, '-1 day')`); the shared
   cycle model (`CycleModel.buildCycleModel`) must consume that same ascending
   list so the calendar and Insights stay aligned.
+- Bleeding duration is learned separately from cycle length in
+  `services/BleedingModel.ts`: consecutive `is_period` days form runs, and the
+  typical span is the median of the last six complete runs, clamped to 2–10
+  days, with a labelled 5-day fallback until two complete runs exist. An active
+  run is excluded and shown as “in progress”. `CycleWindow.menstrualPhaseDays`
+  uses the actual run for recorded cycles and the learned/standard estimate for
+  predicted cycles; the calendar's predicted spans and notification phase-tip
+  dates use the same value. **Never feed bleeding duration into ovulation,
+  luteal-length or fertile-window math** — recorded bleeding is not evidence of
+  ovulation. Overview shows “Typical period” and “Last period” separately.
 - Ovulation/fertile-window forecasting and cycle phases are pure math in
   `services/CycleModel.ts` (day helpers in `services/dateKey.ts`), exposed
   through `DataService.getFertilityForecast()`. Recorded ovulation beats the

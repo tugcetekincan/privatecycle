@@ -90,6 +90,12 @@ Use these consistently in the calendar, charts, legends and Insights:
 Never communicate phase or state with color alone. Pair it with a label,
 number, dot position or icon. Phase colors are data, not decoration.
 
+Phase timing is an estimate derived from the user's log, not a measured hormone
+phase. Label it as estimated in the Overview pill and Insights Today badge, and
+show phase-guide day ranges as typical for the user (or “Days vary” without
+data). The menstrual phase follows the recorded bleeding run when one exists;
+predicted cycles use the learned/standard bleeding span.
+
 ### Tint rules
 
 - Hero and Today cards use a soft two-stop gradient from `surface` to
