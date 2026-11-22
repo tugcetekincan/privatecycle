@@ -4,18 +4,9 @@
 The app should feel like a thoughtful paper journal, not a clinical dashboard
 and not a generic collection of settings cards.
 
-This document is the source of truth for the visual layer. The HTML boards are
-the visual reference; this file explains the rules and the tokens so future
-features can be built without re-inventing the look.
-
-Visual references:
-
-- `design/overview-insights-redesign.html` — Overview + Insights
-- `design/app-language-design.html` — Calendar card + Settings
-- `design/onboarding-alternatives.html` — onboarding directions; Tidemark (B)
-  is the selected first-run flow
-- `design/privatecyc-6-alternatives.html` — empty/partial journal states;
-  Adaptive journal (B) is selected and implemented
+This document is the source of truth for the visual layer. It explains the
+rules and the tokens so future features can be built without re-inventing the
+look; the implemented screens and `design/tokens.ts` are the reference.
 
 ## 1. Product decisions baked into the visual language
 
@@ -272,8 +263,7 @@ One diffuse shadow language:
 
 ### Calendar card
 
-The calendar is a signature surface. See
-`design/app-language-design.html` for the visual.
+The calendar is a signature surface; these are its rules.
 
 - One 18px card contains: month nav, today pill, weekday row, day grid and
   legend.
@@ -473,14 +463,11 @@ The calendar is a signature surface. See
 
 - `design/tokens.ts` — spacing, radii, typography, shadows, tints.
 - `hooks/useTheme.tsx` — extend `ThemeColors` with the tints above.
-- `components/ui/` — `ScreenHeader`, `SectionHeader`, `Card`, `GradientCard`,
-  `Pill`, `Stat`, `EmptyState`, `PrimaryButton`, `IconTile`, `ScreenFade`.
+- `components/ui/` — `ScreenHeader`, `SectionHeader`, `Card`/`GradientCard`,
+  `Pill`, `EmptyState`, `PrimaryButton`, `IconTile`, `SettingsRow`, `ScreenFade`
+  and `Sheet`.
 - Use `react-native-svg` for gradients; do not add a gradient dependency.
 - Use the existing system font stack.
-- The visual references remain `design/overview-insights-redesign.html`,
-  `design/app-language-design.html`, `design/onboarding-alternatives.html`
-  (Tidemark is the selected onboarding direction) and
-  `design/privatecyc-6-alternatives.html` (Adaptive journal B is selected).
 
 ### New-feature checklist
 

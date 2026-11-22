@@ -45,7 +45,7 @@ components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
                         Sheet (shared daily/private/PIN entry sheet with safe
                         footer insets and reduced-motion support)
 design/                 DESIGN.md (authoritative visual language), tokens.ts,
-                        and the HTML design studies
+                        tidemark-vector/ (launcher trace and proof)
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFirstRun (root gate),
                         useFrameworkReady, useOpenCalendar (typed Calendar
@@ -371,8 +371,7 @@ is a gitignored drop box for a user export — the app's normal
   one start card; symptoms keep counts with a neutral bar until a phase exists;
   moods keep ratings/tags and a recent list; Insights Today renders log-backed
   tips without a phase; pattern panels state the exact 3-starts / phased-days /
-  mood-comparison thresholds without promising a pattern. See
-  `design/privatecyc-6-review.md`.
+  mood-comparison thresholds without promising a pattern.
 - The Calendar grid is a soft card with rounded day cells; tracked non-period
   days are a tiny muted dot, not a grey fill. Today is a transparent ring so a
   period fill remains visible.
