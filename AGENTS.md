@@ -36,7 +36,7 @@ app/                    expo-router screens
   notifications.tsx     Reminder setup: privacy, voice, per-reminder toggles
   private/index.tsx     PIN-protected intimacy calendar (outside the tab bar)
 app.config.js           base identity from app.json + APP_VARIANT=dev overrides
-components/             CustomDialog (+ demo), MoodPicker (faces + tags),
+components/             CustomDialog, MoodPicker (faces + tags),
                         PrivateGate (PIN gate), PrivateCalendar (month + day sheet),
                         onboarding/FirstRun (skippable first-run guide)
 components/ui/          ScreenHeader, SectionHeader, Card/GradientCard, Pill,
@@ -59,7 +59,7 @@ services/               DataService (SQLite owner), BackupService,
                         NotificationService (local delivery + permissions),
                         NotificationPlanner (pure reminder dates/copy),
                         NotificationSettings (stored preferences),
-                        AnalyticsService, DevSeedService, CycleModel
+                        DevSeedService, CycleModel
                         (shared cycle windows, ovulation + phase math),
                         JournalReadiness (cycle/mood/pattern thresholds + copy),
                         CalendarIntent (typed consumed-once tab handoffs),
@@ -291,7 +291,7 @@ is a gitignored drop box for a user export — the app's normal
 **Private calendar**
 - `intimate_data` is its own table (migration v5); a row means activity was
   logged for that local day. Never merge it into `daily_data`, the main
-  calendar, Insights, notifications, seed data or `AnalyticsService`.
+  calendar, Insights, notifications or seed data.
 - Reached only through Settings → Privacy → Private calendar (`/private`,
   outside the tabs). `PrivateAccessService` owns the 4–6 digit PIN: salted
   SHA-256 hash in SecureStore on native / AsyncStorage on web, 5 failed

@@ -6,6 +6,9 @@
 > screenshots were reviewed. Physical-device notification delivery was not
 > re-checked because no device/emulator was attached; planner dates are covered
 > by unit tests.
+>
+> **Cleanup note:** `services/AnalyticsService.ts` was removed as unused after
+> this plan shipped; references to it below are historical only.
 
 Reviewed 2026-11-18 against `main` at `ef49561`. Related tickets: PRIVATECYC-3
 (Done), PRIVATECYC-1 (Done), PRIVATECYC-24/25/37/40 (open).
