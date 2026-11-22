@@ -52,7 +52,7 @@ has its own applicationId and data sandbox, so they coexist on one device:
 | --- | --- | --- | --- |
 | applicationId | `com.ncan.privatecycle` | `com.ncan.privatecycle.dev` | `com.ncan.privatecycle.nightly` |
 | Label / scheme | PrivateCycle / `myapp` | PrivateCycle Dev / `privatecycle-dev` | PrivateCycle Nightly / `privatecycle-nightly` |
-| Icon | cream/teal Tidemark | blue sprig | dark teal Tidemark + amber marker |
+| Icon | cream/teal Tidemark | cream/teal Tidemark (same artwork) | dark teal Tidemark + amber marker |
 | Signed with | release key (CI) | debug key | release key (CI) |
 | JS source | embedded | Metro (dev client) | embedded |
 | How to get it | newest production release | `npm run android:dev` | newest nightly prerelease |
@@ -90,9 +90,10 @@ Launcher artwork is generated from `assets/images/tidemark/*.svg` using
 `npm run icons:generate`. Commit the generated PNGs with the source edit.
 Check `APP_VARIANT=nightly npx expo config --type public` selects the nightly
 icon and its adaptive foreground/background/monochrome layers. Production
-uses the base `app.json` paths; dev retains its existing blue artwork. For icon
-verification, inspect the generated `mipmap-*` resources and the installed
-launcher icon; a matching SVG preview alone does not prove the APK uses it.
+uses the base `app.json` paths; dev reuses the same production Tidemark
+artwork. For icon verification, inspect the generated `mipmap-*` resources and
+the installed launcher icon; a matching SVG preview alone does not prove the
+APK uses it.
 
 ## Screenshots and inspection
 

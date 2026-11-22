@@ -20,7 +20,8 @@ Visual proof and measurements:
   design/tidemark-vector/verification.json
 
 app.json uses the production PNG exports; app.config.js selects the nightly
-exports for APP_VARIANT=nightly. The local dev variant retains its blue icon.
+exports for APP_VARIANT=nightly. The local dev variant reuses the production
+exports, so there is no separate dev launcher design to maintain.
 
 Regenerate the committed platform PNG exports after editing a master:
   npm run icons:generate

@@ -20,10 +20,8 @@ const VARIANTS = {
     slug: 'privatecycle-dev',
     scheme: 'privatecycle-dev',
     package: 'com.ncan.privatecycle.dev',
-    icon: './assets/images/icon.png',
-    foregroundImage: './assets/images/adaptive-icon.png',
-    favicon: './assets/images/favicon.png',
-    iconColor: '#4f7cff',
+    // Launcher artwork deliberately inherits the production Tidemark
+    // identity; only the name, scheme and package distinguish a dev build.
   },
   nightly: {
     name: 'PrivateCycle Nightly',
@@ -96,7 +94,7 @@ module.exports = ({ config }) => {
   return {
     ...base,
     name: variant.name,
-    icon: variant.icon,
+    icon: variant.icon ?? base.icon,
     // Distinct slug too: expo-dev-client derives its `exp+<slug>` deep-link
     // scheme from it, and sharing one would make `expo run:android` ambiguous
     // when another dev build is also installed.
@@ -105,15 +103,17 @@ module.exports = ({ config }) => {
     android: {
       ...base.android,
       package: variant.package,
-      adaptiveIcon: {
-        ...base.android?.adaptiveIcon,
-        // Select the actual artwork too: tinting the production foreground
-        // alone would leave nightly showing the wrong mark.
-        foregroundImage: variant.foregroundImage,
-        backgroundImage: variant.backgroundImage,
-        monochromeImage: variant.monochromeImage,
-        backgroundColor: variant.iconColor,
-      },
+      adaptiveIcon: variant.foregroundImage
+        ? {
+            ...base.android?.adaptiveIcon,
+            // Select the actual artwork too: tinting the production foreground
+            // alone would leave nightly showing the wrong mark.
+            foregroundImage: variant.foregroundImage,
+            backgroundImage: variant.backgroundImage,
+            monochromeImage: variant.monochromeImage,
+            backgroundColor: variant.iconColor,
+          }
+        : base.android?.adaptiveIcon,
     },
     ios: {
       ...base.ios,
@@ -121,7 +121,7 @@ module.exports = ({ config }) => {
     },
     web: {
       ...base.web,
-      favicon: variant.favicon,
+      favicon: variant.favicon ?? base.web?.favicon,
     },
   };
 };

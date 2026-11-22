@@ -15,7 +15,11 @@ function appConfig(variant: string) {
 }
 
 describe('launcher artwork', () => {
-  test.each([['', 'production'], ['nightly', 'nightly']])('%s build uses the selected Tidemark artwork in every launcher path', (variant, artwork) => {
+  test.each([
+    ['production', '', 'production'],
+    ['nightly', 'nightly', 'nightly'],
+    ['dev', 'dev', 'production'],
+  ])('%s build uses the selected Tidemark artwork in every launcher path', (_label, variant, artwork) => {
     const config = appConfig(variant);
     const folder = './assets/images/tidemark/';
     expect(config.icon).toBe(`${folder}${artwork}-icon.png`);
@@ -24,7 +28,7 @@ describe('launcher artwork', () => {
     expect(config.android.adaptiveIcon.monochromeImage).toBe(`${folder}${artwork}-monochrome.png`);
     expect(config.web.favicon).toBe(`${folder}${artwork}-favicon.png`);
     // Platform-level icon overrides take precedence over config.icon. Guard
-    // against accidentally leaving an old sprig override on either platform.
+    // against accidentally leaving a stale override on either platform.
     expect(config.android.icon).toBeUndefined();
     expect(config.ios.icon).toBeUndefined();
     for (const relative of [config.icon, ...Object.values(config.android.adaptiveIcon).filter(value => typeof value === 'string' && value.endsWith('.png')), config.web.favicon] as string[]) {
@@ -46,13 +50,13 @@ describe('launcher artwork', () => {
     expect(fs.readFileSync(path.resolve(root, production.icon)).equals(fs.readFileSync(path.resolve(root, nightly.icon)))).toBe(false);
   });
 
-  test('dev keeps its existing blue launcher without inheriting the production background', () => {
-    const config = appConfig('dev');
-    expect(config.android.package).toBe('com.ncan.privatecycle.dev');
-    expect(config.icon).toBe('./assets/images/icon.png');
-    expect(config.android.adaptiveIcon.foregroundImage).toBe('./assets/images/adaptive-icon.png');
-    expect(config.android.adaptiveIcon.backgroundColor).toBe('#4f7cff');
-    expect(config.android.adaptiveIcon.backgroundImage).toBeUndefined();
-    expect(config.android.adaptiveIcon.monochromeImage).toBeUndefined();
+  test('dev keeps its separate identity but reuses the production Tidemark launcher', () => {
+    const dev = appConfig('dev');
+    const production = appConfig('');
+    expect(dev.name).toBe('PrivateCycle Dev');
+    expect(dev.android.package).toBe('com.ncan.privatecycle.dev');
+    expect(dev.icon).toBe(production.icon);
+    expect(dev.android.adaptiveIcon).toEqual(production.android.adaptiveIcon);
+    expect(dev.web.favicon).toBe(production.web.favicon);
   });
 });

@@ -402,10 +402,11 @@ is a gitignored drop box for a user export — the app's normal
 - Launcher sources live in `assets/images/tidemark/*.svg`; regenerate their
   committed PNG exports with `npm run icons:generate` after editing. `app.json`
   selects production and `app.config.js` selects nightly (dark teal + amber
-  marker); dev keeps its existing blue icon. Android adaptive exports have
-  separate full-bleed backgrounds, padded foregrounds and monochrome layers.
-  Validate the resolved Expo config and generated Android resources, not just
-  the SVG preview: changing source artwork alone does not update the app icon.
+  marker); dev reuses the production Tidemark artwork, so only the name, scheme
+  and package distinguish that identity. Android adaptive exports have separate
+  full-bleed backgrounds, padded foregrounds and monochrome layers. Validate the
+  resolved Expo config and generated Android resources, not just the SVG
+  preview: changing source artwork alone does not update the app icon.
 
 **Tests**
 - Put pure logic in services so it can be tested without a database.
@@ -521,8 +522,8 @@ not trigger builds. Bump rules, verification and recovery details:
   protected.
 - **Three installable identities.** Stable `com.ncan.privatecycle` (release
   APK from the newest release), local dev `com.ncan.privatecycle.dev`
-  ("PrivateCycle Dev", blue icon, debug-signed dev client,
-  `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
+  ("PrivateCycle Dev", same Tidemark launcher as production, debug-signed dev
+  client, `npm run android:dev`), and nightly `com.ncan.privatecycle.nightly`
   ("PrivateCycle Nightly", dark teal Tidemark icon with an amber marker,
   release-signed, downloaded from the
   Nightly prereleases). They
