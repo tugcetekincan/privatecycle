@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { Lightbulb } from 'lucide-react-native';
+import { Lightbulb, LineChart } from 'lucide-react-native';
 import { useFocusEffect } from 'expo-router';
 import { emptyBleedingSummary, toPeriodRunContext } from '@/services/BleedingModel';
 import { DataService } from '@/services/DataService';
@@ -21,14 +21,16 @@ import {
   UNCERTAIN_PHASE_FOCUS,
 } from '@/services/CyclePhaseTips';
 import { buildNarrative, NarrativePattern } from '@/services/CycleNarrative';
-import { buildTodayTips } from '@/services/TodayTips';
+import { buildTodayTips, hasTodayLog, summarizeTodayLog } from '@/services/TodayTips';
+import { patternReadiness } from '@/services/JournalReadiness';
 import { formatDateKey } from '@/services/dateKey';
 import { useTheme } from '@/hooks/useTheme';
+import { useOpenCalendar } from '@/hooks/useOpenCalendar';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { Card, GradientCard } from '@/components/ui/Card';
 import Pill from '@/components/ui/Pill';
-import EmptyState from '@/components/ui/EmptyState';
+import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScreenFade from '@/components/ui/ScreenFade';
 import { radii, spacing, typography } from '@/design/tokens';
 
@@ -53,6 +55,7 @@ const EMPTY_STATS: InsightStats = {
   totalPeriods: 0,
   moodSeries: [],
   moodPhases: [],
+  recentMoods: [],
   periodStarts: [],
   ovulationDays: [],
   symptomPatterns: [],
@@ -61,9 +64,11 @@ const EMPTY_STATS: InsightStats = {
 
 export default function InsightsTab() {
   const { theme } = useTheme();
+  const openCalendar = useOpenCalendar();
   const [stats, setStats] = useState<InsightStats>(EMPTY_STATS);
   const [todayLog, setTodayLog] = useState<DailyData | null>(null);
   const [selectedPhase, setSelectedPhase] = useState<CyclePhase | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const loadInsights = useCallback(async () => {
     const [data, today] = await Promise.all([
@@ -73,6 +78,7 @@ export default function InsightsTab() {
     setStats(data);
     setTodayLog(today);
     setSelectedPhase(null);
+    setLoaded(true);
   }, []);
 
   useFocusEffect(
@@ -95,16 +101,37 @@ export default function InsightsTab() {
     periodStarts: stats.periodStarts,
   });
   const todayTips = buildTodayTips(todayLog);
+  const todayHasLog = hasTodayLog(todayLog);
+  const todaySummary = summarizeTodayLog(todayLog);
+  const readiness = patternReadiness({
+    periodStarts: stats.periodStarts,
+    symptomPatterns: stats.symptomPatterns,
+    moodPhases: stats.moodPhases,
+    trackedDays: stats.trackedDays,
+  });
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  const phaseNote =
+    stats.periodStarts.length === 0
+      ? 'Cycle phase unavailable — no period start logged.'
+      : 'Cycle phase unavailable right now.';
 
-  const activePhase: CyclePhase = selectedPhase ?? currentStatus?.phase ?? 'menstrual';
-  const phaseInfo = CYCLE_PHASE_TIPS[activePhase];
+  const activePhase: CyclePhase | null =
+    selectedPhase ?? currentStatus?.phase ?? null;
+  const phaseInfo = activePhase ? CYCLE_PHASE_TIPS[activePhase] : null;
   const phaseRanges = currentStatus?.phase
     ? phaseDayRanges(currentStatus.window)
     : null;
-  const activeDayRange = phaseRanges?.[activePhase] ?? 'Days vary';
+  const activeDayRange = activePhase
+    ? phaseRanges?.[activePhase] ?? 'Days vary'
+    : 'Days vary';
   const currentPhaseInfo = currentStatus?.phase ? CYCLE_PHASE_TIPS[currentStatus.phase] : null;
   const todayFocus = currentStatus?.phase ? TODAY_FOCUS[currentStatus.phase] : UNCERTAIN_PHASE_FOCUS;
-  const showPhaseSummary = !currentStatus || activePhase !== currentStatus.phase;
+  const showPhaseSummary =
+    Boolean(activePhase) && (!currentStatus || activePhase !== currentStatus.phase);
 
   const phaseColors: { [phase in CyclePhase]: string } = {
     menstrual: theme.colors.primary,
@@ -209,7 +236,14 @@ export default function InsightsTab() {
           />
 
           {/* Today */}
-          {currentStatus ? (
+          <SectionHeader
+            title="TODAY"
+            meta={todayLabel}
+            dotColor={theme.colors.primary}
+            style={styles.todaySection}
+          />
+
+          {!loaded ? null : currentStatus ? (
             <GradientCard testID="insights-today-card" style={styles.todayCard}>
             <View style={styles.todayTop}>
               <Text style={styles.todayKicker}>TODAY</Text>
@@ -239,7 +273,9 @@ export default function InsightsTab() {
 
             {todayTips.length > 0 && (
               <View testID="insights-today-tips" style={styles.todayTipsBlock}>
-                <Text style={styles.todayTipsLabel}>TODAY'S TIPS</Text>
+                <Text style={styles.todayTipsLabel}>
+                  {todayTips.length === 1 ? "TODAY'S TIP" : "TODAY'S TIPS"}
+                </Text>
                 {todayTips.map((tip) => (
                   <View
                     key={`${tip.label}-${tip.text}`}
@@ -255,16 +291,92 @@ export default function InsightsTab() {
               </View>
             )}
             </GradientCard>
-          ) : (
-            <Card testID="insights-today-empty" style={styles.todayCard}>
-              <Text style={styles.todayKicker}>TODAY</Text>
-              <Text style={styles.todayTitle}>Your phase will appear here</Text>
-              <Text style={styles.todaySummary}>
-                Log a period in Calendar to see today's phase, focus and tips.
+          ) : todayHasLog ? (
+            <GradientCard testID="insights-today-card" style={styles.todayCard}>
+              <View style={styles.todayTop}>
+                <Text style={styles.todayLoggedSource}>From today's log</Text>
+                <Text testID="insights-today-date" style={styles.todayDateText}>
+                  {todayLabel.toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.todayTitle}>
+                {todaySummary?.headline ?? 'Today is logged'}
               </Text>
-            </Card>
+
+              {todayTips.length > 0 ? (
+                <View testID="insights-today-tips" style={styles.todayTipsBlock}>
+                  <Text style={styles.todayTipsLabel}>
+                    {todayTips.length === 1 ? "TODAY'S TIP" : "TODAY'S TIPS"}
+                  </Text>
+                  {todayTips.map((tip) => (
+                    <View
+                      key={`${tip.label}-${tip.text}`}
+                      testID={`insights-today-tip-${tip.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      style={styles.todayTipRow}>
+                      <Text style={styles.todayTipEmoji}>{tip.icon}</Text>
+                      <View style={styles.todayTipCopy}>
+                        <Text style={styles.todayTipLabel}>{tip.label}</Text>
+                        <Text style={styles.todayTipText}>{tip.text}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text testID="insights-today-logged" style={styles.todaySummary}>
+                  {todaySummary?.detail} There is no phase-specific tip without a period
+                  start.
+                </Text>
+              )}
+
+              <View testID="insights-today-phase-note" style={styles.phaseNoteRow}>
+                <View style={styles.phaseNoteDot} />
+                <Text style={styles.phaseNoteText}>{phaseNote}</Text>
+              </View>
+
+              <View style={styles.todayActions}>
+                <PrimaryButton
+                  testID="insights-edit-today"
+                  title="Edit today in Calendar"
+                  variant="secondary"
+                  onPress={() => openCalendar('today')}
+                />
+              </View>
+            </GradientCard>
+          ) : (
+            <GradientCard testID="insights-today-empty" style={styles.todayCard}>
+              <View style={styles.todayTop}>
+                <Text style={styles.todayKicker}>Today · no entries yet</Text>
+                <Text style={styles.todayDateText}>{todayLabel.toUpperCase()}</Text>
+              </View>
+              <Text style={styles.todayTitle}>Begin with a small note</Text>
+              <Text style={styles.todaySummary}>
+                Log a symptom or feeling for tips based on today. Add a period start for
+                an estimated cycle phase.
+              </Text>
+
+              <View testID="insights-today-phase-note" style={styles.phaseNoteRow}>
+                <View style={styles.phaseNoteDot} />
+                <Text style={styles.phaseNoteText}>{phaseNote}</Text>
+              </View>
+
+              <View style={styles.todayActions}>
+                <PrimaryButton
+                  testID="insights-log-today"
+                  title="Log today"
+                  onPress={() => openCalendar('today')}
+                />
+                <PrimaryButton
+                  testID="insights-start-period"
+                  title="Add a period start"
+                  variant="secondary"
+                  onPress={() => openCalendar('last-period')}
+                />
+              </View>
+            </GradientCard>
           )}
 
+        {loaded && (
+          <>
           {/* Patterns */}
           <SectionHeader
             title="YOUR PATTERNS"
@@ -310,18 +422,67 @@ export default function InsightsTab() {
           </View>
         ) : (
           <View style={styles.patternsEmptyWrap}>
-            <EmptyState
-              testID="insights-patterns-empty"
-              title="Patterns need a little more data"
-              body="Keep logging in Calendar — insights appear after a few cycles."
-            />
+            <Card testID="insights-patterns-empty" style={styles.patternContextCard} padding={15}>
+              <View style={styles.patternContextTop}>
+                <View style={styles.patternContextIcon}>
+                  <LineChart size={16} color={theme.colors.textSecondary} />
+                </View>
+                <View style={styles.patternContextCopy}>
+                  <Text style={styles.patternContextEyebrow}>AS YOUR HISTORY GROWS</Text>
+                  <Text style={styles.patternContextTitle}>{readiness.title}</Text>
+                </View>
+              </View>
+              <Text style={styles.patternContextBody}>{readiness.lead}</Text>
+              <View testID="insights-patterns-requirements" style={styles.requirementList}>
+                {readiness.rows.map((row) => (
+                  <View key={row.label} style={styles.requirementRow}>
+                    <Text style={styles.requirementLabel}>{row.label}</Text>
+                    <Text style={styles.requirementDetail}>{row.detail}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.patternContextLinks}>
+                {readiness.action === 'add-period' ? (
+                  <TouchableOpacity
+                    testID="insights-patterns-add-period"
+                    accessibilityRole="button"
+                    onPress={() => openCalendar('last-period')}
+                    style={styles.patternContextLink}>
+                    <Text style={[typography.caption, styles.patternContextLinkText, { color: theme.colors.primaryText }]}>
+                      Add a period start
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    testID="insights-patterns-open-calendar"
+                    accessibilityRole="button"
+                    onPress={() => openCalendar()}
+                    style={styles.patternContextLink}>
+                    <Text style={[typography.caption, styles.patternContextLinkText, { color: theme.colors.primaryText }]}>
+                      Open Calendar
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {stats.trackedDays === 0 && (
+                  <TouchableOpacity
+                    testID="insights-patterns-import"
+                    accessibilityRole="button"
+                    onPress={() => openCalendar('import')}
+                    style={styles.patternContextLink}>
+                    <Text style={[typography.caption, styles.patternContextLinkText, { color: theme.colors.textSecondary }]}>
+                      Import a backup
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Card>
           </View>
         )}
 
         {/* Phase guide */}
         <SectionHeader
           title="PHASE GUIDE"
-          meta="General wellness tips"
+          meta={currentStatus?.phase ? 'General wellness tips' : 'General · available now'}
           dotColor={theme.colors.teal}
         />
 
@@ -359,55 +520,70 @@ export default function InsightsTab() {
             })}
           </View>
 
-          {!currentStatus && (
+          {!currentStatus?.phase && (
             <Text testID="insights-phase-no-data" style={styles.phaseNoData}>
-              Track your period to see which phase you're in. You can still browse all phases.
+              General guide — no current phase is assumed.
             </Text>
           )}
 
-          <View style={styles.guidePhaseRow}>
-            <View style={styles.guidePhaseMain}>
-              <Text testID="insights-phase-summary-title" style={styles.guidePhaseTitle}>
-                {phaseInfo.title}
-              </Text>
-              <Text style={styles.guideHormones}>Hormones · {phaseInfo.hormones}</Text>
-            </View>
-            <Text testID="insights-phase-day-range" style={styles.guideDayRange}>
-              {activeDayRange}
-            </Text>
-          </View>
-
-          {showPhaseSummary && (
+          {phaseInfo ? (
             <>
-              <Text style={styles.guideTagline}>{sentenceCase(phaseInfo.tagline)}</Text>
-              <Text style={styles.guideSummary}>{phaseInfo.summary}</Text>
-            </>
-          )}
-
-          <View style={styles.tipsList}>
-            {phaseInfo.tips.map((tip) => (
-              <View
-                key={tip.category}
-                testID={`insights-phase-tip-${tip.category}`}
-                style={styles.tipItem}>
-                <Text style={styles.tipEmoji}>{tip.iconEmoji}</Text>
-                <View style={styles.tipCopy}>
-                  <Text style={styles.tipCategory}>{tip.categoryLabel}</Text>
-                  <Text style={styles.tipTitle}>{tip.title}</Text>
-                  <Text style={styles.tipDescription}>{tip.description}</Text>
+              <View style={styles.guidePhaseRow}>
+                <View style={styles.guidePhaseMain}>
+                  <Text testID="insights-phase-summary-title" style={styles.guidePhaseTitle}>
+                    {phaseInfo.title}
+                  </Text>
+                  <Text style={styles.guideHormones}>Hormones · {phaseInfo.hormones}</Text>
                 </View>
+                <Text testID="insights-phase-day-range" style={styles.guideDayRange}>
+                  {activeDayRange}
+                </Text>
               </View>
-            ))}
-          </View>
+
+              {showPhaseSummary && (
+                <>
+                  <Text style={styles.guideTagline}>{sentenceCase(phaseInfo.tagline)}</Text>
+                  <Text style={styles.guideSummary}>{phaseInfo.summary}</Text>
+                </>
+              )}
+
+              <View style={styles.tipsList}>
+                {phaseInfo.tips.map((tip) => (
+                  <View
+                    key={tip.category}
+                    testID={`insights-phase-tip-${tip.category}`}
+                    style={styles.tipItem}>
+                    <Text style={styles.tipEmoji}>{tip.iconEmoji}</Text>
+                    <View style={styles.tipCopy}>
+                      <Text style={styles.tipCategory}>{tip.categoryLabel}</Text>
+                      <Text style={styles.tipTitle}>{tip.title}</Text>
+                      <Text style={styles.tipDescription}>{tip.description}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : (
+            <View style={styles.guideGeneral}>
+              <Text testID="insights-phase-summary-title" style={styles.guidePhaseTitle}>
+                A general guide to the four phases
+              </Text>
+              <Text style={styles.guideHormones}>
+                Choose a phase above to browse its typical patterns.
+              </Text>
+            </View>
+          )}
 
           <Text testID="insights-phase-estimate-note" style={styles.guideNote}>
             {currentStatus?.phase
               ? 'Day ranges are typical for you, estimated from your logged cycles. '
-              : 'Day ranges appear when your current phase is known. '}
+              : 'Day ranges stay general until a current phase can be estimated. '}
             Phase timing is an estimate, not a hormone measurement. Observations come
             from your own log and are not medical advice.
           </Text>
         </Card>
+          </>
+        )}
         </ScrollView>
       </ScreenFade>
     </View>
@@ -423,9 +599,12 @@ const createStyles = (theme: any) =>
     scrollView: {
       flex: 1,
     },
+    todaySection: {
+      marginTop: spacing.md,
+    },
     todayCard: {
       marginHorizontal: 20,
-      marginTop: 10,
+      marginTop: 0,
     },
     todayTop: {
       flexDirection: 'row',
@@ -436,6 +615,43 @@ const createStyles = (theme: any) =>
     todayKicker: {
       ...typography.micro,
       color: theme.colors.textSecondary,
+    },
+    todayLoggedSource: {
+      fontSize: 10,
+      lineHeight: 13,
+      fontWeight: '800',
+      letterSpacing: 0.2,
+      color: theme.colors.primaryText,
+    },
+    todayDateText: {
+      fontSize: 9,
+      lineHeight: 12,
+      fontWeight: '800',
+      letterSpacing: 0.6,
+      color: theme.colors.textSecondary,
+    },
+    phaseNoteRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.xs,
+      marginTop: spacing.md,
+    },
+    phaseNoteDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      marginTop: 4,
+      backgroundColor: theme.colors.borderStrong,
+    },
+    phaseNoteText: {
+      flex: 1,
+      fontSize: 11,
+      lineHeight: 15,
+      color: theme.colors.textSecondary,
+    },
+    todayActions: {
+      gap: spacing.xs,
+      marginTop: spacing.base,
     },
     todayPill: {
       backgroundColor: theme.isDark ? '#2a1a20' : theme.colors.white,
@@ -701,6 +917,87 @@ const createStyles = (theme: any) =>
     patternsEmptyWrap: {
       marginHorizontal: 20,
     },
+    patternContextCard: {
+      marginBottom: 0,
+    },
+    patternContextTop: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+    },
+    patternContextIcon: {
+      width: 30,
+      height: 30,
+      flexShrink: 0,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.secondary,
+    },
+    patternContextCopy: {
+      flex: 1,
+    },
+    patternContextEyebrow: {
+      fontSize: 8,
+      lineHeight: 10,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      color: theme.colors.textSecondary,
+    },
+    patternContextTitle: {
+      fontSize: 14,
+      lineHeight: 18,
+      fontWeight: '800',
+      letterSpacing: -0.2,
+      color: theme.colors.text,
+      marginTop: 3,
+    },
+    patternContextBody: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      marginTop: spacing.xs,
+    },
+    requirementList: {
+      marginTop: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    requirementRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.base,
+      paddingVertical: 7,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    requirementLabel: {
+      ...typography.caption,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    requirementDetail: {
+      ...typography.caption,
+      color: theme.colors.textSecondary,
+      flex: 1,
+      textAlign: 'right',
+      lineHeight: 16,
+    },
+    patternContextLinks: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      columnGap: spacing.base,
+      marginTop: spacing.xs,
+    },
+    patternContextLink: {
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    patternContextLinkText: {
+      fontWeight: '700',
+    },
     phaseGuideCard: {
       marginHorizontal: 20,
       marginBottom: 24,
@@ -762,6 +1059,10 @@ const createStyles = (theme: any) =>
     },
     guidePhaseMain: {
       flex: 1,
+    },
+    guideGeneral: {
+      marginTop: spacing.xs,
+      marginBottom: spacing.sm,
     },
     guidePhaseTitle: {
       fontSize: 16,

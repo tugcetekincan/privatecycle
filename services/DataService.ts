@@ -754,16 +754,23 @@ export class SQLiteDataService {
       // Mood detail: every day with valence or feeling tags feeds the phase
       // summary; the last 60 calendar days feed the valence trend chart.
       const moodRows = await db.getAllAsync(`
-        SELECT date, is_period, mood_valence, mood_tags
+        SELECT date, is_period, mood, mood_valence, mood_tags
         FROM daily_data
-        WHERE mood_valence > 0 OR mood_tags != '[]'
+        WHERE mood_valence > 0 OR mood_tags != '[]' OR (mood IS NOT NULL AND mood != '')
         ORDER BY date
-      `) as { date: string; is_period: number; mood_valence: number; mood_tags: string }[];
+      `) as {
+        date: string;
+        is_period: number;
+        mood: string | null;
+        mood_valence: number;
+        mood_tags: string;
+      }[];
 
       const moodDays: MoodDay[] = moodRows.map(row => ({
         date: row.date,
         valence: row.mood_valence ?? 0,
         tags: parseMoodTags(row.mood_tags),
+        legacyMood: row.mood ?? '',
       }));
 
       const seriesStartKey = formatDateKey(addDays(today, -(MOOD_SERIES_DAYS - 1)));
@@ -787,12 +794,18 @@ export class SQLiteDataService {
         periodContext
       );
 
+      // A small, all-history recent list keeps useful ratings and feeling tags
+      // visible when no phase summary exists yet. Older entries are not hidden
+      // behind the 60-day trend window.
+      const recentMoods = moodDays.slice(-5);
+
       return {
         periodLength,
         nextPeriodIn,
         totalPeriods: periodStarts.length,
         moodSeries,
         moodPhases,
+        recentMoods,
         periodStarts,
         ovulationDays,
         symptomPatterns,
@@ -806,6 +819,7 @@ export class SQLiteDataService {
         totalPeriods: 0,
         moodSeries: [],
         moodPhases: [],
+        recentMoods: [],
         periodStarts: [],
         ovulationDays: [],
         symptomPatterns: [],

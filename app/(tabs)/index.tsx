@@ -19,8 +19,14 @@ import { expectedPeriodLabel } from '@/services/CycleModel';
 import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
 import { SYMPTOMS } from '@/services/Symptoms';
+import {
+  calendarIntentKey,
+  CalendarIntent,
+  parseCalendarIntent,
+  parseCalendarIntentNonce,
+} from '@/services/CalendarIntent';
 import MoodPicker from '@/components/MoodPicker';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import ScreenHeader from '@/components/ui/ScreenHeader';
@@ -57,6 +63,10 @@ export default function CalendarTab() {
   const { width: screenWidth } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const { showSuccess, showInfo, showConfirm, showError, DialogComponent } = useDialog();
+  const routeParams = useLocalSearchParams<{
+    calendarIntent?: string | string[];
+    calendarIntentAt?: string | string[];
+  }>();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [periodDates, setPeriodDates] = useState<string[]>([]);
   const [noPeriodDates, setNoPeriodDates] = useState<string[]>([]);
@@ -68,8 +78,19 @@ export default function CalendarTab() {
   const [forecast, setForecast] = useState<FertilityForecast | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [allDailyData, setAllDailyData] = useState<{ [date: string]: DailyData }>({});
+  const allDailyDataRef = useRef<{ [date: string]: DailyData }>({});
   const [calendarHeight, setCalendarHeight] = useState(252);
   const [lastPeriodMode, setLastPeriodMode] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<{
+    intent: CalendarIntent;
+    key: string;
+  } | null>(null);
+  const handledIntentKey = useRef('');
+  // Keep the guided banner on through a stale, concurrently resolving read.
+  const lastPeriodModeRequested = useRef(false);
+  const focusedRef = useRef(false);
+  const intentRunGeneration = useRef(0);
+  const loadRevision = useRef(0);
   
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -90,10 +111,6 @@ export default function CalendarTab() {
   const nextMonthAnim = useRef(new Animated.Value(screenWidth)).current;
   const heightAnim = useRef(new Animated.Value(252)).current;
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   useEffect(
     () => () => {
       moodSaveRevision.current += 1;
@@ -110,59 +127,76 @@ export default function CalendarTab() {
 
   useFocusEffect(
     React.useCallback(() => {
-      loadData();
+      focusedRef.current = true;
+      void loadData();
+      return () => {
+        focusedRef.current = false;
+        intentRunGeneration.current += 1;
+        setPendingIntent(null);
+      };
     }, [])
   );
 
-  const loadData = async () => {
-    const [data, dailyData, fertility, pendingLastPeriod] = await Promise.all([
-      DataService.getPeriodData(),
-      DataService.getAllDailyData(),
-      DataService.getFertilityForecast(),
-      OnboardingService.getPendingLastPeriod(),
-    ]);
+  const loadData = async (): Promise<boolean> => {
+    const revision = ++loadRevision.current;
+    const run = (async (): Promise<boolean> => {
+      const [data, dailyData, fertility, pendingLastPeriod] = await Promise.all([
+        DataService.getPeriodData(),
+        DataService.getAllDailyData(),
+        DataService.getFertilityForecast(),
+        OnboardingService.getPendingLastPeriod(),
+      ]);
 
-    setAllDailyData(dailyData);
-    setPeriodDates(data.periods);
-    setOvulationDates(data.ovulationDays);
-    setForecast(fertility);
-    setFuturePeriods(fertility.futurePeriodStarts);
-    setLastPeriodMode(pendingLastPeriod);
+      // A later focus/intent read wins; never let an older response overwrite
+      // fresher data or the guided banner state.
+      if (revision !== loadRevision.current) return false;
 
-    // Get dates where user explicitly marked "no period"
-    const noPeriodDates = Object.entries(dailyData)
-      .filter(([_, dayData]) => !dayData.isPeriod)
-      .map(([date, _]) => date);
-    setNoPeriodDates(noPeriodDates);
+      setAllDailyData(dailyData);
+      allDailyDataRef.current = dailyData;
+      setPeriodDates(data.periods);
+      setOvulationDates(data.ovulationDays);
+      setForecast(fertility);
+      setFuturePeriods(fertility.futurePeriodStarts);
+      setLastPeriodMode(pendingLastPeriod || lastPeriodModeRequested.current);
 
-    // Predicted period days use the learned (or clearly standard) duration
-    // shared with the Overview and notifications.
-    const predictedPeriodKeys = new Set<string>();
-    const predictedPeriodDays = fertility.stats.periodLength.predictionDays;
-    for (const start of fertility.futurePeriodStarts) {
-      const startDate = parseDateKey(start);
-      for (let offset = 0; offset < predictedPeriodDays; offset++) {
-        const key = formatDateKey(addDays(startDate, offset));
-        if (key >= formatDateKey(new Date())) predictedPeriodKeys.add(key);
+      // Get dates where user explicitly marked "no period"
+      const noPeriodDates = Object.entries(dailyData)
+        .filter(([_, dayData]) => !dayData.isPeriod)
+        .map(([date, _]) => date);
+      setNoPeriodDates(noPeriodDates);
+
+      // Predicted period days use the learned (or clearly standard) duration
+      // shared with the Overview and notifications.
+      const predictedPeriodKeys = new Set<string>();
+      const predictedPeriodDays = fertility.stats.periodLength.predictionDays;
+      for (const start of fertility.futurePeriodStarts) {
+        const startDate = parseDateKey(start);
+        for (let offset = 0; offset < predictedPeriodDays; offset++) {
+          const key = formatDateKey(addDays(startDate, offset));
+          if (key >= formatDateKey(new Date())) predictedPeriodKeys.add(key);
+        }
       }
-    }
-    setPredictedPeriodKeys(predictedPeriodKeys);
+      setPredictedPeriodKeys(predictedPeriodKeys);
 
-    // Predicted fertile window / ovulation days; the service already omits
-    // cycles whose window has passed and cycles with a recorded ovulation.
-    const todayKey = formatDateKey(new Date());
-    const ovulationKeys = new Set<string>();
-    const windowKeys = new Set<string>();
-    for (const cycle of fertility.cycles) {
-      ovulationKeys.add(cycle.ovulationDate);
-      const windowStart = parseDateKey(cycle.windowStart);
-      for (let offset = 0; offset <= FERTILE_WINDOW_DAYS_BEFORE; offset++) {
-        const key = formatDateKey(addDays(windowStart, offset));
-        if (key >= todayKey) windowKeys.add(key);
+      // Predicted fertile window / ovulation days; the service already omits
+      // cycles whose window has passed and cycles with a recorded ovulation.
+      const todayKey = formatDateKey(new Date());
+      const ovulationKeys = new Set<string>();
+      const windowKeys = new Set<string>();
+      for (const cycle of fertility.cycles) {
+        ovulationKeys.add(cycle.ovulationDate);
+        const windowStart = parseDateKey(cycle.windowStart);
+        for (let offset = 0; offset <= FERTILE_WINDOW_DAYS_BEFORE; offset++) {
+          const key = formatDateKey(addDays(windowStart, offset));
+          if (key >= todayKey) windowKeys.add(key);
+        }
       }
-    }
-    setPredictedOvulationKeys(ovulationKeys);
-    setFertileWindowKeys(windowKeys);
+      setPredictedOvulationKeys(ovulationKeys);
+      setFertileWindowKeys(windowKeys);
+      return true;
+    })();
+
+    return run;
   };
 
   const hasDataForDate = (date: Date): boolean => {
@@ -185,7 +219,7 @@ export default function CalendarTab() {
     }
 
     const dateKey = formatDateKey(date);
-    const existingData = allDailyData[dateKey] || null;
+    const existingData = allDailyDataRef.current[dateKey] || null;
     const lastPeriodStart = options?.lastPeriodStart === true;
     moodSaveRevision.current += 1;
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
@@ -239,7 +273,10 @@ export default function CalendarTab() {
       }
 
       await loadData(); // Reload all data to update the calendar
-      if (completedLastPeriod) setLastPeriodMode(false);
+      if (completedLastPeriod) {
+        lastPeriodModeRequested.current = false;
+        setLastPeriodMode(false);
+      }
       void NotificationService.syncSchedule();
       setModalVisible(false);
       setSelectedDateData(null);
@@ -276,16 +313,19 @@ export default function CalendarTab() {
   };
 
   const startLastPeriodFromCard = async () => {
+    lastPeriodModeRequested.current = true;
     try {
       await OnboardingService.beginLastPeriod();
       setLastPeriodMode(true);
     } catch (error) {
+      lastPeriodModeRequested.current = false;
       console.error('Error starting last-period setup:', error);
       showInfo('Could not start setup', 'Please try again.');
     }
   };
 
   const skipLastPeriod = async () => {
+    lastPeriodModeRequested.current = false;
     try {
       await OnboardingService.markComplete('skip');
     } catch (error) {
@@ -311,6 +351,7 @@ export default function CalendarTab() {
           } catch (error) {
             console.error('Error completing onboarding after import:', error);
           }
+          lastPeriodModeRequested.current = false;
           await loadData();
           setLastPeriodMode(false);
           void NotificationService.syncSchedule();
@@ -326,6 +367,71 @@ export default function CalendarTab() {
       true
     );
   };
+
+  // Read-only tabs hand off through a typed route intent. Commit the pending
+  // intent once, clear the params immediately, and only act after the calendar
+  // has loaded so the existing day sheet sees fresh data.
+  useEffect(() => {
+    const intent = parseCalendarIntent(routeParams.calendarIntent);
+    const nonce = parseCalendarIntentNonce(routeParams.calendarIntentAt);
+    if (!intent || !nonce) return;
+    const key = calendarIntentKey(intent, nonce);
+    if (handledIntentKey.current === key) return;
+    handledIntentKey.current = key;
+    setPendingIntent({ intent, key });
+    router.setParams({ calendarIntent: undefined, calendarIntentAt: undefined });
+  }, [routeParams.calendarIntent, routeParams.calendarIntentAt]);
+
+  useEffect(() => {
+    if (!pendingIntent) return;
+    let cancelled = false;
+    const { intent, key } = pendingIntent;
+    const generation = intentRunGeneration.current;
+
+    // A tab can stay mounted while unfocused. Tie the action to the real focus
+    // lifecycle so leaving during a read cannot open a sheet on another tab or
+    // reopen it on return.
+    const isActive = () =>
+      !cancelled &&
+      focusedRef.current &&
+      generation === intentRunGeneration.current;
+
+    // Read fresh calendar data before acting: the tab may already hold stale
+    // state from an earlier focus, and the existing day sheet must show the
+    // user's latest saved entry.
+    const run = async () => {
+      try {
+        let applied = await loadData();
+        if (!applied && isActive()) applied = await loadData();
+        if (!isActive()) {
+          setPendingIntent((current) => (current?.key === key ? null : current));
+          return;
+        }
+        if (!applied) return;
+      } catch (error) {
+        console.error('Error loading calendar before intent:', error);
+        if (isActive()) {
+          setPendingIntent((current) => (current?.key === key ? null : current));
+        }
+        return;
+      }
+
+      if (!isActive()) return;
+      if (intent === 'today') {
+        void handleDayPress(new Date());
+      } else if (intent === 'last-period') {
+        void startLastPeriodFromCard();
+      } else {
+        importBackupFromCard();
+      }
+      setPendingIntent((current) => (current?.key === key ? null : current));
+    };
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingIntent]);
 
   const toggleModalSymptom = (symptomId: string) => {
     if (!editingData) return;

@@ -1,4 +1,12 @@
-import { buildMoodSeries, MoodDay, phaseForDate, summarizeMoodByPhase } from '@/services/MoodInsights';
+import {
+  buildMoodSeries,
+  formatMoodEntryDate,
+  MoodDay,
+  MOOD_TREND_MIN_RATED_DAYS,
+  phaseForDate,
+  summarizeMoodByPhase,
+  summarizeMoodTrend,
+} from '@/services/MoodInsights';
 
 describe('phaseForDate', () => {
   const starts = ['2026-06-01'];
@@ -104,5 +112,52 @@ describe('buildMoodSeries', () => {
       { date: '2026-06-14', valence: 4, isPeriod: true },
       { date: '2026-06-15', valence: 2, isPeriod: false },
     ]);
+  });
+});
+
+describe('summarizeMoodTrend', () => {
+  const point = (valence: number) => ({ date: '2026-06-01', valence, isPeriod: false });
+
+  it('counts rated days only and reports the remaining threshold', () => {
+    const readiness = summarizeMoodTrend([
+      point(3),
+      point(0),
+      point(4),
+      point(5),
+    ]);
+
+    expect(readiness).toEqual({
+      ratedDays: 3,
+      minRatedDays: MOOD_TREND_MIN_RATED_DAYS,
+      remaining: 2,
+      ready: false,
+    });
+  });
+
+  it('is ready at five rated days', () => {
+    expect(
+      summarizeMoodTrend([point(1), point(2), point(3), point(4), point(5)])
+    ).toMatchObject({ ratedDays: 5, remaining: 0, ready: true });
+  });
+
+  it('does not count a legacy mood as a rating', () => {
+    expect(
+      summarizeMoodTrend([
+        { date: '2026-06-01', valence: 0, isPeriod: false },
+        point(3),
+      ])
+    ).toMatchObject({ ratedDays: 1, ready: false });
+  });
+});
+
+describe('formatMoodEntryDate', () => {
+  const today = new Date(2026, 10, 22);
+
+  it('omits the year within the current year', () => {
+    expect(formatMoodEntryDate('2026-11-20', today)).toBe('Nov 20');
+  });
+
+  it('keeps the year for an older all-history entry', () => {
+    expect(formatMoodEntryDate('2025-11-20', today)).toBe('Nov 20, 2025');
   });
 });

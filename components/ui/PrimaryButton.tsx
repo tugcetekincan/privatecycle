@@ -34,7 +34,7 @@ export default function PrimaryButton({
     secondary: {
       background: theme.colors.surface,
       border: theme.colors.borderStrong,
-      text: theme.colors.primary,
+      text: theme.colors.primaryText,
     },
     destructive: {
       background: theme.colors.surface,

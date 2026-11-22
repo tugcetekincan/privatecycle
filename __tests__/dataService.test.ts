@@ -1,4 +1,5 @@
 import { DataService, dayHasContent, normalizeProtection, DailyData } from '@/services/DataService';
+import * as SQLite from 'expo-sqlite';
 
 describe('DataService.formatDateKey', () => {
   it('formats local dates as zero-padded YYYY-MM-DD', () => {
@@ -42,6 +43,97 @@ describe('DataService.getNotificationStats', () => {
 describe('DataService.getTrackedDayCount', () => {
   it('returns zero for an empty database', async () => {
     await expect(DataService.getTrackedDayCount()).resolves.toBe(0);
+  });
+});
+
+describe('DataService.getInsights recentMoods', () => {
+  it('keeps the latest five all-history entries in order, including legacy and tags-only rows', async () => {
+    await DataService.getTrackedDayCount();
+    const db = (await SQLite.openDatabaseAsync('test')) as any;
+    const originalGetAll = db.getAllAsync;
+    const originalGetFirst = db.getFirstAsync;
+
+    const moodRows = [
+      {
+        date: '2024-12-31',
+        is_period: 0,
+        mood: 'happy',
+        mood_valence: 0,
+        mood_tags: '[]',
+      },
+      {
+        date: '2025-01-02',
+        is_period: 0,
+        mood: 'calm',
+        mood_valence: 0,
+        mood_tags: '[]',
+      },
+      {
+        date: '2025-02-03',
+        is_period: 0,
+        mood: '',
+        mood_valence: 0,
+        mood_tags: '[{"id":"tired","level":1}]',
+      },
+      {
+        date: '2025-03-04',
+        is_period: 0,
+        mood: '',
+        mood_valence: 4,
+        mood_tags: '[]',
+      },
+      {
+        date: '2025-04-05',
+        is_period: 0,
+        mood: 'calm',
+        mood_valence: 3,
+        mood_tags: '[{"id":"calm","level":2}]',
+      },
+      {
+        date: '2025-05-06',
+        is_period: 0,
+        mood: '',
+        mood_valence: 2,
+        mood_tags: '[{"id":"low","level":1}]',
+      },
+    ];
+
+    db.getAllAsync = jest.fn(async (sql: string) => {
+      if (sql.includes('WITH period_days')) return [];
+      if (sql.includes('is_ovulation = 1')) return [];
+      if (sql.includes('is_period = 1')) return [];
+      if (sql.includes('WHERE symptoms !=')) return [];
+      if (sql.includes('mood_valence > 0 OR mood_tags')) return moodRows;
+      return [];
+    });
+    db.getFirstAsync = jest.fn(async () => ({ count: moodRows.length }));
+
+    try {
+      const insights = await DataService.getInsights();
+
+      expect(insights.recentMoods.map((entry) => entry.date)).toEqual([
+        '2025-01-02',
+        '2025-02-03',
+        '2025-03-04',
+        '2025-04-05',
+        '2025-05-06',
+      ]);
+      expect(insights.recentMoods[0]).toMatchObject({
+        valence: 0,
+        tags: [],
+        legacyMood: 'calm',
+      });
+      expect(insights.recentMoods[1]).toMatchObject({
+        valence: 0,
+        tags: [{ id: 'tired', level: 1 }],
+        legacyMood: '',
+      });
+      expect(insights.moodSeries.filter((point) => point.valence > 0)).toHaveLength(0);
+      expect(insights.trackedDays).toBe(moodRows.length);
+    } finally {
+      db.getAllAsync = originalGetAll;
+      db.getFirstAsync = originalGetFirst;
+    }
   });
 });
 

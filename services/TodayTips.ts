@@ -16,6 +16,12 @@ export interface TodayLog {
   symptoms?: string[];
   moodValence?: number;
   moodTags?: { id: string; level?: number }[];
+  /** Legacy single mood id; never invent a rating or tag strength from it. */
+  mood?: string;
+  /** Stored flow label; acknowledge it without inferring a period day. */
+  flowLevel?: string;
+  isPeriod?: boolean;
+  isOvulation?: boolean;
 }
 
 export interface TodayTip {
@@ -24,7 +30,118 @@ export interface TodayTip {
   text: string;
 }
 
+export interface TodayLogSummary {
+  headline: string;
+  detail: string;
+}
+
 const MAX_TIPS = 2;
+
+const joinLabels = (labels: string[]): string => {
+  if (labels.length <= 1) return labels[0] ?? '';
+  if (labels.length === 2) return `${labels[0]} and ${labels[1].toLowerCase()}`;
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1].toLowerCase()}`;
+};
+
+/** Whether today's row contains anything worth acknowledging. */
+export function hasTodayLog(log: TodayLog | null | undefined): boolean {
+  return Boolean(
+    log &&
+      ((log.symptoms?.length ?? 0) > 0 ||
+        (log.moodTags?.length ?? 0) > 0 ||
+        (log.mood ?? '') !== '' ||
+        (log.flowLevel ?? '') !== '' ||
+        (log.moodValence ?? 0) > 0 ||
+        log.isPeriod ||
+        log.isOvulation)
+  );
+}
+
+/**
+ * Describe the saved log without inventing advice. Used when buildTodayTips has
+ * nothing phase-independent to offer (for example a neutral rating with no
+ * feeling tags), so the card still acknowledges real entries.
+ */
+export function summarizeTodayLog(
+  log: TodayLog | null | undefined
+): TodayLogSummary | null {
+  if (!hasTodayLog(log)) return null;
+
+  const symptomLabels = (log?.symptoms ?? [])
+    .filter((id) => SYMPTOM_TIPS[id])
+    .map((id) => symptomMeta(id).label);
+  const tagLabels = (log?.moodTags ?? [])
+    .map((tag) => MOOD_OPTIONS.find((option) => option.id === tag.id)?.label)
+    .filter((label): label is string => Boolean(label));
+  const valence = log?.moodValence ?? 0;
+  const legacyMoodValue = (log?.mood ?? '').trim();
+  const legacyMoodLabel = legacyMoodValue
+    ? MOOD_OPTIONS.find((option) => option.id === legacyMoodValue)?.label ??
+      legacyMoodValue.charAt(0).toUpperCase() + legacyMoodValue.slice(1)
+    : null;
+  const moodDetail =
+    valence > 0
+      ? `You rated your overall mood ${valence}/5.`
+      : log?.isPeriod
+        ? 'Your period entry is saved.'
+        : log?.isOvulation
+          ? 'Your ovulation entry is saved.'
+          : 'Your entry is saved.';
+
+  if (symptomLabels.length > 0) {
+    return {
+      headline: `${joinLabels(symptomLabels)} logged`,
+      detail: moodDetail,
+    };
+  }
+
+  if (tagLabels.length > 0) {
+    return {
+      headline: `${joinLabels(tagLabels)} logged`,
+      detail: moodDetail,
+    };
+  }
+
+  if (log?.isPeriod) {
+    return {
+      headline: 'Period logged',
+      detail: moodDetail,
+    };
+  }
+
+  if (log?.isOvulation) {
+    return {
+      headline: 'Ovulation recorded',
+      detail: moodDetail,
+    };
+  }
+
+  if (valence === 0 && legacyMoodLabel) {
+    return {
+      headline: 'Mood logged',
+      detail: `Your saved feeling is ${legacyMoodLabel}. No overall rating was recorded.`,
+    };
+  }
+
+  if (valence > 0) {
+    return {
+      headline: `Mood ${valence}/5 logged`,
+      detail: moodDetail,
+    };
+  }
+
+  if ((log?.flowLevel ?? '') !== '') {
+    return {
+      headline: 'Flow noted',
+      detail: 'Your flow note is saved.',
+    };
+  }
+
+  return {
+    headline: 'Today is logged',
+    detail: moodDetail,
+  };
+}
 
 const SYMPTOM_TIPS: Record<string, string> = {
   cramps: 'Use a heat pack and keep water nearby today.',

@@ -1135,7 +1135,11 @@ try {
   for (const tab of ['overview', 'insights', 'settings']) {
     await page.getByTestId(`tab-${tab}`).click();
     await page.waitForTimeout(300);
-    await page.screenshot({ path: shot(`20-empty-${tab}`) });
+    if (tab === 'settings') {
+      await page.screenshot({ path: shot(`20-empty-${tab}`) });
+    } else {
+      await fullScreenShot(`20-empty-${tab}`, `${tab}-scroll`);
+    }
   }
   log('polish: dark/360px, reduced motion, empty states and failed-save retry passed');
 
@@ -1181,6 +1185,16 @@ try {
   await page.getByTestId('tab-overview').click();
   await page.getByTestId('overview-cycle-basis').waitFor({ state: 'visible', timeout: 15_000 });
   await page.getByTestId('overview-period-basis').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('overview-cycle-chart-empty').waitFor({ state: 'visible', timeout: 15_000 });
+  if (!(await page.getByTestId('overview-cycle-chart-empty').innerText()).includes('completes your first cycle')) {
+    failures.push('one-period overview: next-start guidance missing');
+  }
+  if ((await page.getByTestId('overview-avg-cycle-hint').textContent())?.trim() !== '1 more period start') {
+    failures.push('one-period overview: average hint is not contextual');
+  }
+  if ((await page.getByTestId('overview-variation-hint').textContent())?.trim() !== '2 more period starts') {
+    failures.push('one-period overview: variation hint is not contextual');
+  }
   const avgCycleOne = (await page.getByTestId('overview-avg-cycle').textContent())?.trim();
   const typicalPeriodOne = (await page.getByTestId('overview-typical-period').textContent())?.trim();
   const lastPeriodOne = (await page.getByTestId('overview-last-period').textContent())?.trim();
@@ -1207,6 +1221,297 @@ try {
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-darkmode-switch').click();
   log('one-period state: honest average and labelled standard estimate OK');
+
+  // --- Sparse no-period journal: real content stays visible and every CTA
+  // hands off to the existing Calendar flows. Isolated synthetic rows only. ---
+  const sparseKey = (offset) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + offset);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate()
+    ).padStart(2, '0')}`;
+  };
+  const sparseKeys = [-2, -1, 0].map(sparseKey);
+  const seedSparseJournal = async () => {
+    await page.evaluate(async (keys) => {
+      await __privatecycle.DataService.clearAllData();
+      const rows = Object.fromEntries(
+        keys.map((date, index) => [
+          date,
+          {
+            date,
+            isPeriod: false,
+            flowLevel: '',
+            symptoms: index === 2 ? ['headache'] : index === 0 ? ['fatigue'] : [],
+            mood: '',
+            isOvulation: false,
+            moodValence: [2, 3, 4][index],
+            moodTags: [{ id: 'tired', level: 1 }],
+          },
+        ])
+      );
+      await __privatecycle.DataService.saveManyDailyData(rows);
+    }, sparseKeys);
+  };
+
+  await seedSparseJournal();
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-start-card').waitFor({ timeout: 30_000 });
+  if (await page.getByTestId('overview-cycle-requirements').count()) {
+    failures.push('sparse overview: empty requirements should be hidden when entries exist');
+  }
+  if (!(await page.getByTestId('overview-cycle-start-card').innerText()).includes('already count')) {
+    failures.push('sparse overview: start card does not acknowledge logged content');
+  }
+  await page.getByTestId('overview-symptom-context-note').waitFor({ timeout: 15_000 });
+  if (await page.getByTestId('overview-symptom-segment-headache-luteal').count()) {
+    failures.push('sparse overview: neutral symptom bar claims a phase split');
+  }
+  await page.getByTestId('overview-mood-trend-progress').waitFor({ timeout: 15_000 });
+  const sparseMoodProgress = (
+    await page.getByTestId('overview-mood-trend-progress').textContent()
+  )?.trim();
+  if (sparseMoodProgress !== '3 of 5 rated days in the last 60 days · 2 more for a trend') {
+    failures.push(`sparse overview: unexpected mood progress "${sparseMoodProgress}"`);
+  }
+  const recentMoodRows = (
+    await Promise.all(
+      sparseKeys.map((key) => page.getByTestId(`overview-mood-recent-${key}`).count())
+    )
+  ).reduce((total, count) => total + count, 0);
+  if (recentMoodRows !== 3) {
+    failures.push(`sparse overview: expected 3 recent mood rows, got ${recentMoodRows}`);
+  }
+  await fullScreenShot('29-sparse-overview', 'overview-scroll');
+
+  // The partial-mood action must open the existing today sheet, not a new form.
+  await page.getByTestId('overview-mood-log-today').click();
+  await page.getByTestId('day-modal').waitFor({ timeout: 30_000 });
+  await page.getByTestId('day-modal-close').click();
+
+  await page.getByTestId('tab-insights').click();
+  await page.getByTestId('insights-today-card').waitFor({ timeout: 30_000 });
+  await page.getByTestId('insights-today-tips').waitFor({ timeout: 15_000 });
+  const sparseTodayCopy = await page.getByTestId('insights-today-card').innerText();
+  if (!sparseTodayCopy.includes('Headache logged')) {
+    failures.push('sparse insights: today log headline missing');
+  }
+  if (!sparseTodayCopy.includes('no period start logged')) {
+    failures.push('sparse insights: neutral phase note missing');
+  }
+  await page.getByTestId('insights-patterns-empty').waitFor({ timeout: 15_000 });
+  const sparsePatternsCopy = await page.getByTestId('insights-patterns-empty').innerText();
+  if (!sparsePatternsCopy.includes('3 period starts')) {
+    failures.push('sparse insights: cycle requirement is not exact');
+  }
+  if (!sparsePatternsCopy.includes('2 estimated phases')) {
+    failures.push('sparse insights: mood comparison requirement is not exact');
+  }
+  if (/after a few cycles/i.test(sparsePatternsCopy)) {
+    failures.push('sparse insights: vague pattern promise is still shown');
+  }
+  const requirementRows = await page.getByTestId('insights-patterns-requirements').innerText();
+  for (const label of ['Cycle', 'Symptoms', 'Mood']) {
+    if (!requirementRows.includes(label)) {
+      failures.push(`sparse insights: missing ${label} requirement row`);
+    }
+  }
+  if (await page.getByTestId('insights-patterns-open-calendar').count()) {
+    failures.push('sparse insights: redundant second comparison action is shown');
+  }
+  await fullScreenShot('30-sparse-insights', 'insights-scroll');
+
+  // The same sparse state at the narrow target width in dark mode.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-start-card').waitFor({ timeout: 15_000 });
+  await fullScreenShot('29b-sparse-overview-dark-320', 'overview-scroll');
+  await page.getByTestId('tab-insights').click();
+  await page.getByTestId('insights-today-card').waitFor({ timeout: 15_000 });
+  await fullScreenShot('30b-sparse-insights-dark-320', 'insights-scroll');
+  await page.getByTestId('tab-settings').click();
+  await page.getByTestId('settings-darkmode-switch').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId('tab-insights').click();
+
+  // Log today from a read-only tab, save through the existing day sheet, then
+  // repeat the deliberate tap to prove the consumed intent can run again.
+  await page.getByTestId('insights-edit-today').click();
+  await page.getByTestId('day-modal-save').waitFor({ timeout: 30_000 });
+  await page.getByTestId('day-modal-symptom-cramps').click();
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('dialog-button-ok').click();
+  const savedFromInsights = await page.evaluate(
+    (key) => __privatecycle.DataService.getTodayData(key),
+    todayKey
+  );
+  if (!savedFromInsights?.symptoms?.includes('cramps')) {
+    failures.push('sparse insights: today handoff did not save through the day sheet');
+  }
+  await page.getByTestId('tab-insights').click();
+  await page.getByTestId('insights-edit-today').click();
+  await page.getByTestId('day-modal-save').waitFor({ timeout: 30_000 });
+  await page.getByTestId('day-modal-close').click();
+
+  // Add a period start from Overview enters the existing choose-date mode.
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-start-period').click();
+  await page.getByTestId('calendar-first-run-banner').waitFor({ timeout: 30_000 });
+  await page.waitForFunction(
+    (key) =>
+      document
+        .querySelector(`[data-testid="calendar-day-${key}"]`)
+        ?.getAttribute('aria-label')
+        ?.includes('set as last period start'),
+    sparseKeys[1]
+  );
+  await page.getByTestId(`calendar-day-${sparseKeys[1]}`).click();
+  await page.getByTestId('day-modal-first-run-hint').waitFor({ timeout: 15_000 });
+  if (!/Period Day/.test(await page.getByTestId('day-modal-period-toggle').innerText())) {
+    failures.push('sparse overview: last-period handoff did not pre-set Period');
+  }
+  await page.getByTestId('day-modal-save').click();
+  await page.getByTestId('calendar-first-run-banner').waitFor({ state: 'detached', timeout: 30_000 });
+  const sparsePeriods = await page.evaluate(() => __privatecycle.DataService.getPeriodData());
+  if (!sparsePeriods.periods.includes(sparseKeys[1])) {
+    failures.push('sparse overview: last-period handoff did not save the chosen date');
+  }
+  log('sparse journal: neutral content, today sheet, repeat intent and last-period handoff OK');
+
+  // Import from Overview: cancel first, then use a synthetic backup file.
+  await seedSparseJournal();
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-import-backup').click();
+  await page.getByTestId('dialog').waitFor({ timeout: 30_000 });
+  await page.getByTestId('dialog-button-cancel').click();
+  const periodsAfterCancel = await page.evaluate(
+    () => __privatecycle.DataService.getPeriodData()
+  );
+  if (periodsAfterCancel.periods.length !== 0) {
+    failures.push('overview import cancel changed period data');
+  }
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-import-backup').click();
+  const importBackup = {
+    version: '1.0.0',
+    timestamp: Date.now(),
+    data: {
+      dailyData: {
+        [sparseKeys[2]]: {
+          date: sparseKeys[2],
+          isPeriod: true,
+          flowLevel: 'medium',
+          symptoms: [],
+          mood: '',
+          isOvulation: false,
+        },
+      },
+    },
+    metadata: {
+      totalDays: 1,
+      dateRange: { start: sparseKeys[2], end: sparseKeys[2] },
+    },
+  };
+  const [importChooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 30_000 }),
+    page.getByTestId('dialog-button-import').click(),
+  ]);
+  await importChooser.setFiles({
+    name: 'cycle_backup_sparse_import.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(importBackup)),
+  });
+  await page.getByText('Import Successful').waitFor({ timeout: 30_000 });
+  await page.getByTestId('dialog-button-ok').click();
+  const importedPeriods = await page.evaluate(() => __privatecycle.DataService.getPeriodData());
+  if (!importedPeriods.periods.includes(sparseKeys[2])) {
+    failures.push('overview import did not restore the synthetic backup');
+  }
+  log('sparse journal: import confirmation cancels safely and restores a backup');
+
+  // Tags-only and five-rating no-period states must both be visually useful.
+  const tagsOnlyKeys = [-2, -1].map(sparseKey);
+  await page.evaluate(async (keys) => {
+    await __privatecycle.DataService.clearAllData();
+    const rows = Object.fromEntries(
+      keys.map((date) => [
+        date,
+        {
+          date,
+          isPeriod: false,
+          flowLevel: '',
+          symptoms: [],
+          mood: '',
+          isOvulation: false,
+          moodValence: 0,
+          moodTags: [{ id: 'calm', level: 1 }],
+        },
+      ])
+    );
+    await __privatecycle.DataService.saveManyDailyData(rows);
+  }, tagsOnlyKeys);
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-start-card').waitFor({ timeout: 30_000 });
+  await page.getByTestId(`overview-mood-recent-${tagsOnlyKeys[0]}-no-rating`).waitFor({
+    timeout: 15_000,
+  });
+  const tagsOnlyProgress = (
+    await page.getByTestId('overview-mood-trend-progress').textContent()
+  )?.trim();
+  if (tagsOnlyProgress !== '0 of 5 rated days in the last 60 days · 5 more for a trend') {
+    failures.push(`tags-only overview: unexpected progress "${tagsOnlyProgress}"`);
+  }
+  if (!(await page.getByTestId('overview-mood-log-today').count())) {
+    failures.push('tags-only overview: partial mood action is missing');
+  }
+  await fullScreenShot('31-tags-only-overview', 'overview-scroll');
+
+  const fiveRatingKeys = [-4, -3, -2, -1, 0].map(sparseKey);
+  await page.evaluate(async (keys) => {
+    await __privatecycle.DataService.clearAllData();
+    const rows = Object.fromEntries(
+      keys.map((date, index) => [
+        date,
+        {
+          date,
+          isPeriod: false,
+          flowLevel: '',
+          symptoms: [],
+          mood: '',
+          isOvulation: false,
+          moodValence: index + 1,
+          moodTags: [],
+        },
+      ])
+    );
+    await __privatecycle.DataService.saveManyDailyData(rows);
+  }, fiveRatingKeys);
+  await page.goto(`http://127.0.0.1:${PROXY_PORT}/`, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.getByTestId('calendar-welcome').waitFor({ timeout: 30_000 });
+  await page.getByTestId('tab-overview').click();
+  await page.getByTestId('overview-cycle-start-card').waitFor({ timeout: 30_000 });
+  await page.getByTestId('overview-mood-trend').waitFor({ timeout: 15_000 });
+  if ((await page.getByTestId('overview-mood-meta').textContent())?.trim() !== 'Trend') {
+    failures.push('five-rating overview: mood meta is not the truthful trend label');
+  }
+  if (
+    !(await page.getByTestId('overview-mood-phase-context').textContent())?.includes(
+      'needs a recorded period start'
+    )
+  ) {
+    failures.push('five-rating overview: phase context copy is not truthful');
+  }
+  await fullScreenShot('32-five-ratings-overview', 'overview-scroll');
+  log('journal states: tags-only and five-rating no-period captures OK');
+
 
   // --- Recorded cycle vs predicted boundary / overdue regression (PRIVATECYC-1). ---
   await page.clock.setFixedTime(new Date(2026, 10, 1, 12));
@@ -1246,6 +1551,16 @@ try {
     if (await page.getByTestId('overview-phase-track').count()) failures.push(`${scenario.name}: uncertain phase has a phase-specific timeline`);
     await page.getByTestId('overview-cycle-chart').waitFor({ state: 'visible' });
     await page.getByTestId('overview-symptom-patterns-card').waitFor({ state: 'visible' });
+    if (scenario.name === 'overdue') {
+      await page.getByTestId('overview-symptom-context-note').waitFor({ state: 'visible' });
+      if (
+        (await page.getByTestId('overview-symptom-context-note').textContent())?.includes(
+          'Period history adds'
+        )
+      ) {
+        failures.push(`${scenario.name}: unphased symptom copy implies missing history`);
+      }
+    }
     await page.getByTestId('overview-mood-trend').waitFor({ state: 'visible' });
     await fullScreenShot(`16-${scenario.name}-overview`, 'overview-scroll');
     await page.getByTestId('tab-insights').click();

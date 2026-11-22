@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -25,21 +26,23 @@ import {
 } from '@/services/CycleTrends';
 import { getCurrentPhaseStatus } from '@/services/CyclePhaseTips';
 import {
+  formatMoodEntryDate,
   MOOD_SERIES_DAYS,
+  MOOD_TREND_MIN_RATED_DAYS,
   MoodSeriesPoint,
-  PhaseMoodSummary,
 } from '@/services/MoodInsights';
+import { moodSectionState, cycleMetricHints } from '@/services/JournalReadiness';
 import { MOOD_OPTIONS } from '@/services/MoodTags';
-import { SymptomPattern } from '@/services/SymptomInsights';
 import { symptomMeta } from '@/services/Symptoms';
 import { daysBetween, formatDateKey, parseDateKey } from '@/services/dateKey';
 import { FertilityForecast } from '@/services/FertilityService';
 import { useTheme } from '@/hooks/useTheme';
+import { useOpenCalendar } from '@/hooks/useOpenCalendar';
 import ScreenHeader from '@/components/ui/ScreenHeader';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { Card, GradientCard } from '@/components/ui/Card';
 import Pill from '@/components/ui/Pill';
-import EmptyState from '@/components/ui/EmptyState';
+import PrimaryButton from '@/components/ui/PrimaryButton';
 import ScreenFade from '@/components/ui/ScreenFade';
 import { radii, spacing, typography } from '@/design/tokens';
 
@@ -63,6 +66,7 @@ const EMPTY_STATS: OverviewStats = {
   totalPeriods: 0,
   moodSeries: [],
   moodPhases: [],
+  recentMoods: [],
   periodStarts: [],
   ovulationDays: [],
   symptomPatterns: [],
@@ -173,9 +177,11 @@ function MoodTrendChart({
 
 export default function OverviewTab() {
   const { theme } = useTheme();
+  const openCalendar = useOpenCalendar();
   const { width: windowWidth } = useWindowDimensions();
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [forecast, setForecast] = useState<FertilityForecast | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [measuredChartWidth, setMeasuredChartWidth] = useState(0);
   const chartScrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const lastChartScrollKey = useRef('');
@@ -187,6 +193,7 @@ export default function OverviewTab() {
     ]);
     setStats(data);
     setForecast(fertility);
+    setLoaded(true);
   }, []);
 
   useFocusEffect(
@@ -233,6 +240,16 @@ export default function OverviewTab() {
   const lastPeriodActive = lastPeriod?.active ?? false;
   const periodLengthClamped = stats.periodLength.clamped;
   const variation = cycleSummary.halfRange;
+  const hasPeriodStarts = stats.periodStarts.length > 0;
+  const metricHints = cycleMetricHints(stats.periodStarts.length, stats.periodLength);
+  const moodState = moodSectionState({
+    moodSeries: stats.moodSeries,
+    moodPhases: stats.moodPhases,
+    recentMoods: stats.recentMoods,
+  });
+  const hasPhasedSymptomData = stats.symptomPatterns.some(
+    (pattern) => pattern.phasedDays > 0
+  );
 
   const nextPeriodStart =
     currentStatus?.expectedPeriodStart ?? null;
@@ -296,7 +313,6 @@ export default function OverviewTab() {
     chartScrollRef.current?.scrollToEnd({ animated: false });
   }, [chartOverflows, cycleChartWidth, cyclePoints.length]);
 
-  const valenceDays = stats.moodSeries.filter((point) => point.valence > 0).length;
   const chartWidth = 310;
   const cycleMeta =
     stats.totalPeriods > 0
@@ -309,7 +325,34 @@ export default function OverviewTab() {
           'cycle',
           'cycles'
         )}`
-      : 'No periods yet';
+      : stats.trackedDays > 0
+        ? 'No period starts yet'
+        : 'Getting started';
+  const moodSectionMeta =
+    moodState.trend.ratedDays > 0
+      ? `${moodState.trend.ratedDays} rated ${plural(
+          moodState.trend.ratedDays,
+          'day',
+          'days'
+        )}`
+      : stats.recentMoods.length > 0
+        ? `Latest ${stats.recentMoods.length} ${plural(
+            stats.recentMoods.length,
+            'entry',
+            'entries'
+          )}`
+        : 'No moods yet';
+  const symptomCardIntro = hasPhasedSymptomData
+    ? 'How often each symptom shows up, split by cycle phase'
+    : stats.symptomPatterns.length > 0
+      ? 'How often each symptom shows up across all logged days'
+      : 'A summary starts with one logged symptom';
+  const symptomNeutralNote =
+    stats.periodStarts.length === 0
+      ? 'Period history adds estimated phase context. Counts stay visible without it.'
+      : "These symptom days don't have an estimated phase yet. Counts stay visible.";
+  const hasMoodContent =
+    stats.moodPhases.length > 0 || stats.recentMoods.length > 0;
 
   return (
     <View style={styles.container}>
@@ -330,6 +373,8 @@ export default function OverviewTab() {
             testID="overview-cycle-meta"
           />
 
+          {!loaded ? null : hasPeriodStarts ? (
+            <>
           <GradientCard testID="overview-cycle-hero" style={styles.heroCard}>
           <View style={styles.heroRow}>
             <View style={styles.heroMain}>
@@ -426,22 +471,42 @@ export default function OverviewTab() {
           <View style={styles.cycleStatsRow}>
             <View style={styles.cycleStat}>
               <View style={styles.cycleStatValueRow}>
-                <Text testID="overview-avg-cycle" style={styles.cycleStatValue}>
+                <Text
+                  testID="overview-avg-cycle"
+                  style={[
+                    styles.cycleStatValue,
+                    averageCycle === null && styles.cycleStatValueUnknown,
+                  ]}>
                   {averageCycle ?? '—'}
                 </Text>
                 {averageCycle !== null && <Text style={styles.cycleStatUnit}>d</Text>}
               </View>
               <Text style={styles.cycleStatLabel}>Avg cycle</Text>
+              {metricHints.average && (
+                <Text testID="overview-avg-cycle-hint" style={styles.cycleStatHint}>
+                  {metricHints.average}
+                </Text>
+              )}
             </View>
             <View style={styles.cycleStatDivider} />
             <View style={styles.cycleStat}>
               <View style={styles.cycleStatValueRow}>
-                <Text testID="overview-typical-period" style={styles.cycleStatValue}>
+                <Text
+                  testID="overview-typical-period"
+                  style={[
+                    styles.cycleStatValue,
+                    typicalPeriodDays === null && styles.cycleStatValueUnknown,
+                  ]}>
                   {typicalPeriodDays ?? '—'}
                 </Text>
                 {typicalPeriodDays !== null && <Text style={styles.cycleStatUnit}>d</Text>}
               </View>
               <Text style={styles.cycleStatLabel}>Typical period</Text>
+              {metricHints.typicalPeriod && (
+                <Text testID="overview-typical-period-hint" style={styles.cycleStatHint}>
+                  {metricHints.typicalPeriod}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -465,12 +530,22 @@ export default function OverviewTab() {
             <View style={styles.cycleStatDivider} />
             <View style={styles.cycleStat}>
               <View style={styles.cycleStatValueRow}>
-                <Text testID="overview-cycle-variation" style={styles.cycleStatValue}>
+                <Text
+                  testID="overview-cycle-variation"
+                  style={[
+                    styles.cycleStatValue,
+                    variation === null && styles.cycleStatValueUnknown,
+                  ]}>
                   {variation !== null ? `±${variation}` : '—'}
                 </Text>
                 {variation !== null && <Text style={styles.cycleStatUnit}>d</Text>}
               </View>
               <Text style={styles.cycleStatLabel}>Cycle variation</Text>
+              {metricHints.variation && (
+                <Text testID="overview-variation-hint" style={styles.cycleStatHint}>
+                  {metricHints.variation}
+                </Text>
+              )}
             </View>
           </View>
 
@@ -512,7 +587,11 @@ export default function OverviewTab() {
                       'cycle',
                       'cycles'
                     )}`
-                : 'Cycle history'}
+                : `${stats.totalPeriods} ${plural(
+                    stats.totalPeriods,
+                    'start',
+                    'starts'
+                  )}`}
             </Text>
           </View>
 
@@ -599,15 +678,82 @@ export default function OverviewTab() {
               </Text>
             </>
           ) : (
-            <EmptyState
-              plain
-              title="Track two periods"
-              body="Your cycle length trend appears once you have two recorded starts."
-            />
+            <View testID="overview-cycle-chart-empty">
+              <Text style={styles.cardBody}>
+                {lastPeriodDays !== null
+                  ? `${lastPeriodDays} period ${plural(
+                      lastPeriodDays,
+                      'day',
+                      'days'
+                    )} logged · `
+                  : ''}
+                {stats.totalPeriods} period {plural(stats.totalPeriods, 'start', 'starts')}.
+                The start of your next period completes your first cycle and starts the
+                length trend.
+              </Text>
+              <TouchableOpacity
+                testID="overview-cycle-chart-open-calendar"
+                accessibilityRole="button"
+                onPress={() => openCalendar()}
+                style={styles.textAction}>
+                <Text style={[typography.caption, styles.textActionLabel, { color: theme.colors.primaryText }]}>
+                  Open Calendar
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </Card>
+            </>
+          ) : (
+            <GradientCard testID="overview-cycle-start-card" style={styles.heroCard}>
+              <Text testID="overview-cycle-start-eyebrow" style={styles.startEyebrow}>
+                NO PERIOD STARTS YET
+              </Text>
+              <Text style={styles.startTitle}>Start with what you know</Text>
+              <Text style={styles.startBody}>
+                {stats.trackedDays > 0
+                  ? 'Add a period start when you can. Your logged symptoms and moods already count.'
+                  : 'Add the first day of your last period for a starting estimate. You can log moods and symptoms without it.'}
+              </Text>
+              <View style={styles.startActions}>
+                <PrimaryButton
+                  testID="overview-start-period"
+                  title="Add a period start"
+                  onPress={() => openCalendar('last-period')}
+                />
+                <PrimaryButton
+                  testID="overview-import-backup"
+                  title="Import a backup"
+                  variant="secondary"
+                  onPress={() => openCalendar('import')}
+                />
+              </View>
+              <Text style={styles.startDefinition}>
+                A period start is the first day of a separate period — consecutive
+                bleeding days count as one start.
+              </Text>
+              {stats.trackedDays === 0 && (
+                <View testID="overview-cycle-requirements" style={styles.startRequirements}>
+                  <Text style={styles.startRequirementsTitle}>WHAT APPEARS NEXT</Text>
+                  <View style={styles.requirementRow}>
+                    <Text style={styles.requirementName}>Cycle length</Text>
+                    <Text style={styles.requirementMeta}>after 2 period starts</Text>
+                  </View>
+                  <View style={styles.requirementRow}>
+                    <Text style={styles.requirementName}>Cycle variation</Text>
+                    <Text style={styles.requirementMeta}>after 3 period starts</Text>
+                  </View>
+                  <Text style={styles.startRequirementsFoot}>
+                    Typical period needs two completed bleeding runs.
+                  </Text>
+                </View>
+              )}
+            </GradientCard>
+          )}
 
         {/* SYMPTOMS */}
+        {loaded && (
+          <>
         <SectionHeader
           title="SYMPTOMS"
           dotColor={theme.colors.warning}
@@ -619,15 +765,13 @@ export default function OverviewTab() {
         />
 
         <Card testID="overview-symptom-patterns-card" style={styles.card} padding={18}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Symptoms</Text>
-            <Text style={styles.cardMeta}>Top 4</Text>
-          </View>
-          <Text style={styles.cardIntro}>
-            How often each symptom shows up, split by cycle phase
-          </Text>
           {stats.symptomPatterns.length > 0 ? (
             <>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Symptoms</Text>
+                <Text style={styles.cardMeta}>Top 4</Text>
+              </View>
+              <Text style={styles.cardIntro}>{symptomCardIntro}</Text>
               <View style={styles.symptomsList}>
                 {stats.symptomPatterns.map((pattern) => {
                   const meta = symptomMeta(pattern.id);
@@ -654,7 +798,9 @@ export default function OverviewTab() {
                           `${meta.label}: ${formatPercent(pattern.rate)} of tracked days` +
                           (pattern.dominantPhase
                             ? `. Mostly ${PHASE_LABELS[pattern.dominantPhase].toLowerCase()}`
-                            : '')
+                            : pattern.phasedDays === 0
+                              ? '. Count only; no cycle phase recorded.'
+                              : '')
                         }
                         style={styles.symptomBarTrack}>
                         {pattern.phasedDays > 0 ? (
@@ -677,7 +823,13 @@ export default function OverviewTab() {
                               ) : null
                           )
                         ) : (
-                          <View style={styles.symptomBarEmpty} />
+                          <View
+                            testID={`overview-symptom-fill-${pattern.id}`}
+                            style={[
+                              styles.symptomBarNeutral,
+                              { width: `${Math.min(100, pattern.rate * 100)}%` },
+                            ]}
+                          />
                         )}
                       </View>
                       <View style={styles.symptomFooter}>
@@ -690,115 +842,225 @@ export default function OverviewTab() {
                             ? `${formatPercent(pattern.dominantShare)} in ${PHASE_LABELS[
                                 pattern.dominantPhase
                               ].toLowerCase()}`
-                            : 'Track periods for phase split'}
+                            : pattern.phasedDays === 0
+                              ? 'Count only'
+                              : 'No dominant phase'}
                         </Text>
                       </View>
                     </View>
                   );
                 })}
               </View>
-              <View style={styles.phaseLegend}>
-                {(['menstrual', 'follicular', 'ovulation', 'luteal'] as CyclePhase[]).map(
-                  (phase) => (
-                    <View key={phase} style={styles.phaseLegendItem}>
-                      <View
-                        style={[styles.phaseLegendDot, { backgroundColor: phaseColors[phase] }]}
-                      />
-                      <Text style={styles.phaseLegendText}>{PHASE_LABELS[phase]}</Text>
-                    </View>
-                  )
-                )}
-              </View>
-              <Text style={styles.symptomFootnote}>
-                Bars split each symptom's logged days across your recorded cycle phases.
-              </Text>
+              {hasPhasedSymptomData ? (
+                <>
+                  <View style={styles.phaseLegend}>
+                    {(['menstrual', 'follicular', 'ovulation', 'luteal'] as CyclePhase[]).map(
+                      (phase) => (
+                        <View key={phase} style={styles.phaseLegendItem}>
+                          <View
+                            style={[styles.phaseLegendDot, { backgroundColor: phaseColors[phase] }]}
+                          />
+                          <Text style={styles.phaseLegendText}>{PHASE_LABELS[phase]}</Text>
+                        </View>
+                      )
+                    )}
+                  </View>
+                  <Text style={styles.symptomFootnote}>
+                    Bars split each symptom's logged days across your recorded cycle phases.
+                  </Text>
+                </>
+              ) : (
+                <Text testID="overview-symptom-context-note" style={styles.symptomFootnoteless}>
+                  {symptomNeutralNote}
+                </Text>
+              )}
             </>
           ) : (
-            <EmptyState
-              plain
-              testID="overview-symptom-empty"
-              title="No symptom patterns yet"
-              body="Track symptoms in Calendar to see how they split across phases."
-            />
+            <View testID="overview-symptom-empty" style={styles.emptyPanel}>
+              <Text style={styles.emptyPanelTitle}>Make a note of how you feel</Text>
+              <Text style={styles.emptyPanelBody}>
+                Your symptom summary starts with one logged symptom.
+              </Text>
+              <TouchableOpacity
+                testID="overview-symptom-log-today"
+                accessibilityRole="button"
+                onPress={() => openCalendar('today')}
+                style={styles.textAction}>
+                <Text style={[typography.caption, styles.textActionLabel, { color: theme.colors.primaryText }]}>
+                  Log today
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </Card>
 
         {/* MOOD */}
-        <SectionHeader title="MOOD" meta="By phase" dotColor={OVULATION_COLOR} />
+        <SectionHeader
+          title="MOOD"
+          meta={moodSectionMeta}
+          dotColor={OVULATION_COLOR}
+        />
 
-        <Card style={styles.card} padding={18}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Mood</Text>
-            <Text style={styles.cardMeta}>
-              {valenceDays >= 5 ? 'Trend + phases' : 'Phase averages'}
-            </Text>
-          </View>
-
-          {valenceDays >= 5 && (
+        <Card testID="overview-mood-card" style={styles.card} padding={18}>
+          {hasMoodContent ? (
             <>
-              <View testID="overview-mood-trend" style={styles.trendWrap}>
-                <MoodTrendChart
-                  series={stats.moodSeries}
-                  width={chartWidth}
-                  color={theme.colors.primary}
-                />
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>
+                  {moodState.hasPhaseContext ? 'Mood' : 'Recent moods'}
+                </Text>
+                <Text testID="overview-mood-meta" style={styles.cardMeta}>
+                  {moodState.label}
+                </Text>
               </View>
-              <Text style={styles.trendCaption}>
-                Last {MOOD_SERIES_DAYS} days · shaded days are period days
-              </Text>
-            </>
-          )}
 
-          {stats.moodPhases.length > 0 ? (
-            <View style={styles.moodPhaseList}>
-              {stats.moodPhases.map((entry) => (
-                <View
-                  key={entry.phase}
-                  testID={`overview-mood-phase-${entry.phase}`}
-                  style={styles.moodPhaseRow}>
-                  <View style={styles.moodPhaseMain}>
-                    <Text style={styles.moodPhaseName}>{PHASE_LABELS[entry.phase]}</Text>
-                    <View style={styles.moodScoreWrap}>
-                      {entry.averageValence !== null && (
-                        <Text style={styles.moodFace}>
-                          {
-                            VALENCE_FACES[
-                              Math.min(5, Math.max(1, Math.round(entry.averageValence)))
-                            ]
-                          }
-                        </Text>
-                      )}
-                      <Text style={styles.moodScore}>
-                        {entry.averageValence !== null ? entry.averageValence.toFixed(1) : '—'}
+              {moodState.trend.ready && (
+                <>
+                  <View testID="overview-mood-trend" style={styles.trendWrap}>
+                    <MoodTrendChart
+                      series={stats.moodSeries}
+                      width={chartWidth}
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                  <Text style={styles.trendCaption}>
+                    Last {MOOD_SERIES_DAYS} days · shaded days are period days
+                  </Text>
+                </>
+              )}
+
+              {stats.moodPhases.length > 0 ? (
+                <View style={styles.moodPhaseList}>
+                  {stats.moodPhases.map((entry) => (
+                    <View
+                      key={entry.phase}
+                      testID={`overview-mood-phase-${entry.phase}`}
+                      style={styles.moodPhaseRow}>
+                      <View style={styles.moodPhaseMain}>
+                        <Text style={styles.moodPhaseName}>{PHASE_LABELS[entry.phase]}</Text>
+                        <View style={styles.moodScoreWrap}>
+                          {entry.averageValence !== null && (
+                            <Text style={styles.moodFace}>
+                              {
+                                VALENCE_FACES[
+                                  Math.min(5, Math.max(1, Math.round(entry.averageValence)))
+                                ]
+                              }
+                            </Text>
+                          )}
+                          <Text style={styles.moodScore}>
+                            {entry.averageValence !== null ? entry.averageValence.toFixed(1) : '—'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.moodPhaseDetail}>
+                        {entry.topTags.length > 0
+                          ? entry.topTags
+                              .map((tag) => `${moodLabel(tag.id)} ${levelDots(tag.averageLevel)}`)
+                              .join(' · ') + ' · '
+                          : ''}
+                        {entry.days === 1 ? '1 day' : `${entry.days} days`}
                       </Text>
                     </View>
-                  </View>
-                  <Text style={styles.moodPhaseDetail}>
-                    {entry.topTags.length > 0
-                      ? entry.topTags
-                          .map((tag) => `${moodLabel(tag.id)} ${levelDots(tag.averageLevel)}`)
-                          .join(' · ') + ' · '
-                      : ''}
-                    {entry.days === 1 ? '1 day' : `${entry.days} days`}
-                  </Text>
+                  ))}
                 </View>
-              ))}
-            </View>
-          ) : (
-            <EmptyState
-              plain
-              testID="overview-mood-empty"
-              title="No mood patterns yet"
-              body="Track your mood in Calendar to see your cycle patterns."
-            />
-          )}
+              ) : (
+                <View style={styles.recentMoodList}>
+                  {stats.recentMoods.map((entry) => {
+                    const legacyMood = (entry.legacyMood ?? '').trim();
+                    return (
+                      <View
+                        key={entry.date}
+                        testID={`overview-mood-recent-${entry.date}`}
+                        style={styles.recentMoodRow}>
+                        <Text style={styles.recentMoodDate}>
+                          {formatMoodEntryDate(entry.date)}
+                        </Text>
+                        {entry.valence > 0 ? (
+                          <>
+                            <Text style={styles.recentMoodFace}>
+                              {VALENCE_FACES[Math.min(5, Math.max(1, entry.valence))]}
+                            </Text>
+                            <Text
+                              testID={`overview-mood-recent-${entry.date}-rating`}
+                              style={styles.recentMoodScore}>
+                              {entry.valence}/5
+                            </Text>
+                          </>
+                        ) : (
+                          <Text
+                            testID={`overview-mood-recent-${entry.date}-no-rating`}
+                            style={styles.recentMoodNoRating}>
+                            No rating
+                          </Text>
+                        )}
+                        <View style={styles.recentMoodTags}>
+                          {entry.tags.length > 0 ? (
+                            entry.tags.map((tag) => (
+                              <View key={tag.id} style={styles.recentMoodTag}>
+                                <Text style={styles.recentMoodTagText}>{moodLabel(tag.id)}</Text>
+                              </View>
+                            ))
+                          ) : legacyMood ? (
+                            <View
+                              testID={`overview-mood-recent-${entry.date}-legacy`}
+                              style={styles.recentMoodTag}>
+                              <Text style={styles.recentMoodTagText}>{moodLabel(legacyMood)}</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.recentMoodNoRating}>Overall mood</Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
 
-          {valenceDays > 0 && valenceDays < 5 && (
-            <Text style={styles.moodPartialNote}>
-              Log a few more moods to unlock the {MOOD_SERIES_DAYS}-day trend.
-            </Text>
+              {moodState.trendCopy && (
+                <Text testID="overview-mood-trend-progress" style={styles.moodPartialNote}>
+                  {moodState.trendCopy}
+                </Text>
+              )}
+
+              {moodState.needsPhaseContext && (
+                <Text testID="overview-mood-phase-context" style={styles.moodPhaseContext}>
+                  {stats.periodStarts.length === 0
+                    ? 'Mood by estimated phase needs a recorded period start.'
+                    : "These mood days don't have an estimated phase yet; your entries stay visible."}
+                </Text>
+              )}
+
+              <TouchableOpacity
+                testID="overview-mood-log-today"
+                accessibilityRole="button"
+                onPress={() => openCalendar('today')}
+                style={styles.textAction}>
+                <Text style={[typography.caption, styles.textActionLabel, { color: theme.colors.primaryText }]}>
+                  Log today
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View testID="overview-mood-empty" style={styles.emptyPanel}>
+              <Text style={styles.emptyPanelTitle}>Your moods belong here too</Text>
+              <Text style={styles.emptyPanelBody}>
+                Your first entry appears here right away. A trend needs{' '}
+                {MOOD_TREND_MIN_RATED_DAYS} overall-rated days within {MOOD_SERIES_DAYS} days.
+              </Text>
+              <TouchableOpacity
+                testID="overview-mood-log-today"
+                accessibilityRole="button"
+                onPress={() => openCalendar('today')}
+                style={styles.textAction}>
+                <Text style={[typography.caption, styles.textActionLabel, { color: theme.colors.primaryText }]}>
+                  Log today
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </Card>
+          </>
+        )}
 
         <View style={styles.footnote}>
           <Text style={[typography.caption, styles.footnoteText, { color: theme.colors.textSecondary }]}>
@@ -826,6 +1088,70 @@ const createStyles = (theme: any) =>
     heroCard: {
       marginHorizontal: 20,
       marginTop: 2,
+    },
+    startEyebrow: {
+      ...typography.micro,
+      color: theme.colors.primaryText,
+    },
+    startTitle: {
+      ...typography.cardTitle,
+      fontSize: 21,
+      lineHeight: 25,
+      color: theme.colors.text,
+      marginTop: spacing.xs,
+    },
+    startBody: {
+      ...typography.body,
+      color: theme.colors.textSecondary,
+      marginTop: spacing.xs,
+    },
+    startActions: {
+      gap: spacing.xs,
+      marginTop: spacing.base,
+    },
+    startDefinition: {
+      ...typography.caption,
+      color: theme.colors.textSecondary,
+      marginTop: spacing.md,
+      paddingTop: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.primarySoft,
+      lineHeight: 16,
+    },
+    startRequirements: {
+      marginTop: spacing.md,
+      paddingTop: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.primarySoft,
+    },
+    startRequirementsTitle: {
+      ...typography.micro,
+      color: theme.colors.textSecondary,
+      marginBottom: spacing.xs,
+    },
+    requirementRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: spacing.base,
+      paddingVertical: 4,
+    },
+    requirementName: {
+      ...typography.caption,
+      color: theme.colors.text,
+      fontWeight: '700',
+    },
+    requirementMeta: {
+      ...typography.caption,
+      color: theme.colors.textSecondary,
+      flexShrink: 1,
+      textAlign: 'right',
+    },
+    startRequirementsFoot: {
+      ...typography.caption,
+      color: theme.colors.textSecondary,
+      lineHeight: 16,
+      marginTop: spacing.xs,
     },
     heroRow: {
       flexDirection: 'row',
@@ -1008,6 +1334,13 @@ const createStyles = (theme: any) =>
       lineHeight: 30,
       color: theme.colors.text,
     },
+    cycleStatValueUnknown: {
+      fontSize: 16,
+      lineHeight: 20,
+      color: theme.colors.textSecondary,
+      fontWeight: '700',
+      paddingVertical: 5,
+    },
     cycleStatUnit: {
       fontSize: 10,
       fontWeight: '600',
@@ -1024,9 +1357,11 @@ const createStyles = (theme: any) =>
       marginVertical: 2,
     },
     cycleStatHint: {
-      fontSize: 9,
+      fontSize: 11,
+      lineHeight: 15,
       color: theme.colors.textSecondary,
       marginTop: 1,
+      textAlign: 'center',
     },
     periodBasisNote: {
       fontSize: 10,
@@ -1065,6 +1400,34 @@ const createStyles = (theme: any) =>
       color: theme.colors.textSecondary,
       marginTop: 3,
       marginBottom: 14,
+    },
+    cardBody: {
+      ...typography.body,
+      color: theme.colors.textSecondary,
+      lineHeight: 19,
+    },
+    emptyPanel: {
+      paddingVertical: spacing.xs,
+    },
+    emptyPanelTitle: {
+      ...typography.rowTitle,
+      fontSize: 14,
+      lineHeight: 19,
+      color: theme.colors.text,
+    },
+    emptyPanelBody: {
+      ...typography.body,
+      color: theme.colors.textSecondary,
+      marginTop: spacing.xs,
+    },
+    textAction: {
+      minHeight: 44,
+      alignSelf: 'flex-start',
+      justifyContent: 'center',
+      paddingRight: spacing.md,
+    },
+    textActionLabel: {
+      fontWeight: '700',
     },
     regularityPill: {
       backgroundColor: theme.isDark ? '#1f3a24' : '#e8f5e9',
@@ -1190,6 +1553,11 @@ const createStyles = (theme: any) =>
       flex: 1,
       backgroundColor: theme.colors.border,
     },
+    symptomBarNeutral: {
+      height: '100%',
+      borderRadius: 5,
+      backgroundColor: theme.colors.borderStrong,
+    },
     symptomFooter: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -1236,6 +1604,15 @@ const createStyles = (theme: any) =>
       fontStyle: 'italic',
       marginTop: 9,
     },
+    symptomFootnoteless: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: theme.colors.textSecondary,
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
     trendWrap: {
       alignItems: 'stretch',
       marginTop: 4,
@@ -1281,12 +1658,75 @@ const createStyles = (theme: any) =>
       ...typography.caption,
       color: theme.colors.textSecondary,
     },
+    recentMoodList: {
+      marginTop: spacing.xs,
+    },
+    recentMoodRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    recentMoodDate: {
+      width: 58,
+      flexShrink: 0,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '700',
+      color: theme.colors.text,
+    },
+    recentMoodFace: {
+      fontSize: 15,
+    },
+    recentMoodScore: {
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '800',
+      color: theme.colors.text,
+    },
+    recentMoodNoRating: {
+      fontSize: 11,
+      lineHeight: 14,
+      color: theme.colors.textSecondary,
+      fontWeight: '500',
+    },
+    recentMoodTags: {
+      marginLeft: 'auto',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 4,
+      justifyContent: 'flex-end',
+      flexShrink: 1,
+    },
+    recentMoodTag: {
+      borderRadius: radii.pill,
+      backgroundColor: theme.colors.secondary,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    recentMoodTagText: {
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '700',
+      color: theme.colors.textSecondary,
+    },
     moodPartialNote: {
       fontSize: 11,
       lineHeight: 15,
       color: theme.colors.textSecondary,
       fontStyle: 'italic',
       marginTop: 10,
+    },
+    moodPhaseContext: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: theme.colors.textSecondary,
+      marginTop: 10,
+      paddingTop: 9,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
     },
     emptyText: {
       fontSize: 14,

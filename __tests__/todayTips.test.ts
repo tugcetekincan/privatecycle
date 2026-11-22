@@ -1,4 +1,8 @@
-import { buildTodayTips } from '@/services/TodayTips';
+import {
+  buildTodayTips,
+  hasTodayLog,
+  summarizeTodayLog,
+} from '@/services/TodayTips';
 
 describe('buildTodayTips', () => {
   it('returns no tips without a log', () => {
@@ -64,5 +68,67 @@ describe('buildTodayTips', () => {
     });
 
     expect(tips.map((tip) => tip.label)).toEqual(['MOOD CHANGES', 'LOW']);
+  });
+});
+
+describe('hasTodayLog and summarizeTodayLog', () => {
+  it('treats an empty row as no log', () => {
+    expect(hasTodayLog(null)).toBe(false);
+    expect(hasTodayLog({ symptoms: [], moodTags: [], moodValence: 0 })).toBe(false);
+    expect(summarizeTodayLog({ symptoms: [] })).toBeNull();
+  });
+
+  it('acknowledges a headache without inventing phase advice', () => {
+    const summary = summarizeTodayLog({ symptoms: ['headache'] });
+
+    expect(summary).toEqual({
+      headline: 'Headache logged',
+      detail: 'Your entry is saved.',
+    });
+    expect(hasTodayLog({ symptoms: ['headache'] })).toBe(true);
+  });
+
+  it('acknowledges a neutral rating with no tips', () => {
+    const summary = summarizeTodayLog({ moodValence: 4, moodTags: [] });
+
+    expect(summary).toEqual({
+      headline: 'Mood 4/5 logged',
+      detail: 'You rated your overall mood 4/5.',
+    });
+    expect(buildTodayTips({ moodValence: 4, moodTags: [] })).toEqual([]);
+  });
+
+  it('acknowledges tags-only entries and a recorded ovulation', () => {
+    expect(
+      summarizeTodayLog({ moodValence: 0, moodTags: [{ id: 'calm', level: 2 }] })
+    ).toEqual({
+      headline: 'Calm logged',
+      detail: 'Your entry is saved.',
+    });
+    expect(summarizeTodayLog({ isOvulation: true })).toEqual({
+      headline: 'Ovulation recorded',
+      detail: 'Your ovulation entry is saved.',
+    });
+  });
+
+  it('acknowledges legacy mood text without inventing a rating or strength', () => {
+    const log = { mood: 'happy' };
+
+    expect(hasTodayLog(log)).toBe(true);
+    expect(buildTodayTips(log)).toEqual([]);
+    expect(summarizeTodayLog(log)).toEqual({
+      headline: 'Mood logged',
+      detail: 'Your saved feeling is Happy. No overall rating was recorded.',
+    });
+  });
+
+  it('acknowledges a flow-only row without inferring a period', () => {
+    const log = { flowLevel: 'light' };
+
+    expect(hasTodayLog(log)).toBe(true);
+    expect(summarizeTodayLog(log)).toEqual({
+      headline: 'Flow noted',
+      detail: 'Your flow note is saved.',
+    });
   });
 });

@@ -19,11 +19,16 @@ export { PHASE_ORDER } from './CycleModel';
 /** How many days the valence trend chart covers. */
 export const MOOD_SERIES_DAYS = 60;
 
+/** Rated days needed inside the trend window before the chart appears. */
+export const MOOD_TREND_MIN_RATED_DAYS = 5;
+
 export interface MoodDay {
   date: string;
   /** 0 = not set, otherwise 1-5. */
   valence: number;
   tags: MoodTag[];
+  /** Legacy single mood id from old backups; no rating or tag strength. */
+  legacyMood?: string;
 }
 
 export interface MoodSeriesPoint {
@@ -31,6 +36,34 @@ export interface MoodSeriesPoint {
   /** 0 = no entry for that day. */
   valence: number;
   isPeriod: boolean;
+}
+
+export interface MoodTrendReadiness {
+  /** Days with an overall rating inside the trend window. */
+  ratedDays: number;
+  /** Threshold for showing the trend. */
+  minRatedDays: number;
+  /** Ratings still needed inside the window. */
+  remaining: number;
+  ready: boolean;
+}
+
+/**
+ * Trend eligibility uses overall ratings only. Feeling tags without a rating
+ * stay useful in the recent list and phase summaries, but they do not advance
+ * this count.
+ */
+export function summarizeMoodTrend(
+  series: MoodSeriesPoint[],
+  minRatedDays: number = MOOD_TREND_MIN_RATED_DAYS
+): MoodTrendReadiness {
+  const ratedDays = series.filter((point) => point.valence > 0).length;
+  return {
+    ratedDays,
+    minRatedDays,
+    remaining: Math.max(0, minRatedDays - ratedDays),
+    ready: ratedDays >= minRatedDays,
+  };
 }
 
 export interface PhaseTagSummary {
@@ -138,6 +171,23 @@ export function summarizeMoodByPhase(
       averageValence: acc.valenceDays > 0 ? acc.valenceSum / acc.valenceDays : null,
       topTags,
     };
+  });
+}
+
+/**
+ * Compact recent-entry date. Older years keep the year so an all-history list
+ * cannot be mistaken for the current year's entries.
+ */
+export function formatMoodEntryDate(
+  dateKey: string,
+  today: Date = new Date()
+): string {
+  const date = parseDateKey(dateKey);
+  const includeYear = date.getFullYear() !== today.getFullYear();
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(includeYear ? { year: 'numeric' as const } : {}),
   });
 }
 
