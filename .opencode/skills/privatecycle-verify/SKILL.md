@@ -144,24 +144,40 @@ Naming convention: `area-element`, kebab-case.
   `mood-valence-{1..5}`, `mood-tag-{id}`, `mood-tag-{id}-clear`, `mood-saved`;
   the day modal uses the `day-modal-mood-…` prefix. Mood auto-saves, so there
   is no mood save button anywhere.
-- Overview (route `/track`): `overview-scroll`, `overview-cycle-hero`, `overview-cycle-day`,
-  `overview-cycle-basis`, `overview-phase-track`,
-  `overview-phase-track-uncertain`,
+- Overview (route `/track`): `overview-scroll`, `overview-cycle-hero`,
+  `overview-cycle-day`, `overview-cycle-basis`, `overview-phase-track`,
+  `overview-phase-track-uncertain`, `overview-cycle-start-card`,
+  `overview-cycle-start-eyebrow`, `overview-start-period`,
+  `overview-import-backup`, `overview-cycle-requirements`,
   `overview-next-period`, `overview-cycle-meta`, `overview-avg-cycle`,
-  `overview-typical-period`, `overview-last-period`,
+  `overview-avg-cycle-hint`, `overview-typical-period`,
+  `overview-typical-period-hint`, `overview-last-period`,
   `overview-last-period-note`, `overview-period-basis`,
-  `overview-cycle-variation`, `overview-cycle-chart`,
-  `overview-cycle-chart-meta`, `overview-cycle-chart-scroll`,
-  `overview-cycle-bar-{start}`, `overview-cycle-regularity`,
-  `overview-symptom-patterns-card`,
+  `overview-cycle-variation`, `overview-variation-hint`,
+  `overview-cycle-chart`, `overview-cycle-chart-meta`,
+  `overview-cycle-chart-scroll`, `overview-cycle-chart-empty`,
+  `overview-cycle-chart-open-calendar`, `overview-cycle-bar-{start}`,
+  `overview-cycle-regularity`, `overview-symptom-patterns-card`,
   `overview-symptom-row-{id}`, `overview-symptom-rate-{id}`,
   `overview-symptom-bar-{id}`, `overview-symptom-segment-{id}-{phase}`,
-  `overview-symptom-empty`, `overview-mood-trend`, `overview-mood-phase-{phase}`,
-  `overview-mood-empty`
+  `overview-symptom-fill-{id}` (neutral count bar),
+  `overview-symptom-context-note`, `overview-symptom-empty`,
+  `overview-symptom-log-today`, `overview-mood-card`, `overview-mood-meta`,
+  `overview-mood-trend`, `overview-mood-phase-{phase}`,
+  `overview-mood-recent-{date}`,
+  `overview-mood-recent-{date}-rating`,
+  `overview-mood-recent-{date}-no-rating`,
+  `overview-mood-recent-{date}-legacy`,
+  `overview-mood-trend-progress`, `overview-mood-phase-context`,
+  `overview-mood-empty`, `overview-mood-log-today`
 - Insights: `insights-scroll`, `insights-today-card`, `insights-current-phase-badge`,
   `insights-today-focus`, `insights-today-tips`, `insights-today-tip-{label}`,
-  `insights-today-empty`,
+  `insights-today-empty`, `insights-today-date`, `insights-today-logged`,
+  `insights-today-phase-note`, `insights-edit-today`, `insights-log-today`,
+  `insights-start-period`,
   `insights-pattern-{symptom-<id>|mood|cycle}`, `insights-patterns-empty`,
+  `insights-patterns-requirements`, `insights-patterns-add-period`,
+  `insights-patterns-open-calendar`, `insights-patterns-import`,
   `insights-phase-tips-card`, `insights-phase-tab-{phase}`,
   `insights-phase-day-range`, `insights-phase-estimate-note`,
   `insights-phase-tip-{category}`, `insights-phase-summary-title`,
@@ -207,6 +223,27 @@ Naming convention: `area-element`, kebab-case.
 Add testIDs to any new interactive element. Prefer stable IDs over text
 selectors so flows don't break when copy changes.
 
+## Empty / partial journal states
+
+PRIVATECYC-6 option B uses the same eligibility everywhere:
+
+| State | What to expect |
+| --- | --- |
+| No periods, no rows | Overview start card plus compact requirements; Insights “Begin with a small note”; no fake phase |
+| Rows, no period start | Start card says logged content counts; symptoms use neutral count bars; moods keep ratings/tags; Today tips still render |
+| One start | Real cycle day + labelled standard fallback; `—` with exact hints for average/variation; empty chart says the next start completes the first cycle |
+| Sparse moods | Recent-entry list; `3 of 5 rated days in the last 60 days · 2 more for a trend`; tags only never advance the counter; Log today stays available |
+| Legacy mood text | A saved `mood` string shows read-only (no rating/strength) in recent entries and Today; it never advances the trend |
+| Flow-only row | Today acknowledges “Flow noted” without inferring a period |
+| Loaded | Existing hero, stats, chart, phase bars and mood trend/labels; feel-only phases say “Feelings by phase” |
+| Overdue / phase uncertain | Recorded history stays visible; neutral uncertain track and Today focus (PRIVATECYC-1) |
+
+Read-only CTAs use `services/CalendarIntent.ts` with a fresh nonce. Calendar
+consumes each intent once, clears its params and refreshes data before opening
+the existing day sheet (`today`), last-period choose-date mode (`last-period`)
+or import confirmation (`import`). A refocus must not reopen a consumed flow;
+a deliberate repeat tap must work.
+
 ## Smoke script internals
 
 `scripts/smoke-web.mjs`:
@@ -234,7 +271,13 @@ selectors so flows don't break when copy changes.
    logs today with protection + a note, screenshots the setup/day modal/
    calendar/change-PIN/lock screens, locks, checks a wrong PIN, unlocks,
    reloads `/private` and asserts the gate reappears and the entry survives,
-10. fails on page errors / console errors, then kills the whole process tree.
+10. runs an isolated sparse journal (3 days, no period starts): neutral symptom
+    counts, 3-of-5 mood progress, today's headache tip, Today-sheet save and
+    repeat, last-period choose-date handoff from Overview, then import cancel
+    and a successful synthetic import; captures light and dark/320 screenshots,
+11. captures tags-only and five-rating no-period moods, including partial
+    Log today and the truthful Trend / phase-context copy,
+12. fails on page errors / console errors, then kills the whole process tree.
 
 The first-run context is disposable; it never affects the seeded screenshots.
 Because `?reset=1` also clears onboarding, empty-state checks must click
@@ -245,7 +288,11 @@ empty histories and a simulated storage failure followed by a successful
 retry. It checks return-to-today navigation, that Overview shows `—` for an
 unknown average cycle, and that a single recorded period still shows the
 standard 28-day estimate as a labelled fallback instead of a fabricated
-average. These are screenshots 14–20 and 25–28.
+average. Empty Overview/Insights use `fullScreenShot` so the start card,
+requirements and context panel are not clipped. Sparse state screenshots are
+`29-sparse-overview`, `30-sparse-insights`, and `29b/30b` at 320px dark;
+tags-only and five-rating states are `31-tags-only-overview` and
+`32-five-ratings-overview`.
 
 After the polish regression flow, smoke freezes the browser date at 1 Nov 2026
 and loads synthetic overdue/predicted-boundary histories (PRIVATECYC-1). It
@@ -290,8 +337,11 @@ deprecation, `props.pointerEvents` deprecation, favicon 404s. Anything else in
 and validation, bulk restore, private calendar backup inclusion/preservation,
 seed generator determinism, date-key formatting, fertility forecast math,
 dialog component, cycle trends/phase tracks, narrative cards, today tips,
-notification settings/planner/scheduler/screen, private-access PIN
-hashing/lockout and intimacy summaries. First-run coverage walks the three
+journal readiness/copy plus cross-service narrative boundaries, empty and
+sparse Overview/Insights states, DataService recent-mood history (legacy and
+tags-only), Calendar intent focus/blur lifecycle, notification
+settings/planner/scheduler/screen, private-access PIN hashing/lockout and
+intimacy summaries. First-run coverage walks the three
 Tidemark steps (next/back/skip on every step), the import/start exits, the
 decorative calendar labelling and the pure marker-on-arc geometry.
 Calendar interaction regressions cover month-end navigation, queued mood saves

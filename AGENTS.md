@@ -48,7 +48,8 @@ design/                 DESIGN.md (authoritative visual language), tokens.ts,
                         and the HTML design studies
 hooks/                  useTheme, useDialog, useMigration, useAutoBackup,
                         useDevSeed (URL-seed handling), useFirstRun (root gate),
-                        useFrameworkReady,
+                        useFrameworkReady, useOpenCalendar (typed Calendar
+                        handoff intents),
                         useNotifications (scheduling + tap routing),
                         useNotificationSettings (local preference loader),
                         usePrivateScreenProtection (native screenshot block)
@@ -60,6 +61,8 @@ services/               DataService (SQLite owner), BackupService,
                         NotificationSettings (stored preferences),
                         AnalyticsService, DevSeedService, CycleModel
                         (shared cycle windows, ovulation + phase math),
+                        JournalReadiness (cycle/mood/pattern thresholds + copy),
+                        CalendarIntent (typed consumed-once tab handoffs),
                         FertilityService (forecast built on CycleModel),
                         CyclePhaseTips (phase tips + current phase + Today focus),
                         CycleTrends (cycle length summary + phase track segments),
@@ -220,7 +223,9 @@ is a gitignored drop box for a user export — the app's normal
   empty-row upsert.
 - Mood detail is additive: `mood_valence` (1-5, 0 = unset) and `mood_tags`
   (`[{id, level}]`, level 1-3). The legacy `mood` string mirrors the first tag
-  so the calendar and insights keep working. Feeling ids/labels live in
+  so the calendar and insights keep working; old backups may contain only that
+  string, so `getInsights.recentMoods` preserves it read-only without inventing
+  a valence or tag strength. Feeling ids/labels live in
   `MOOD_OPTIONS` (`services/MoodTags.ts`); the phase summary and trend series
   are pure helpers in `services/MoodInsights.ts`. Phases come from the shared
   cycle model (`services/CycleModel.ts`), the same source as the calendar's
@@ -357,6 +362,17 @@ is a gitignored drop box for a user export — the app's normal
   `components/ui/*` primitives instead of one-off card/header styles.
 - Daily entry lives only in the Calendar day modal. Overview (`track.tsx`) and
   Insights are read-only; do not bring the old inline Track form back.
+- Read-only CTAs hand off through `useOpenCalendar` + `CalendarIntent`
+  (`today`, `last-period`, `import`) with a fresh nonce. Calendar consumes the
+  intent once, clears the route params and refreshes data before opening the
+  existing sheet, choose-date mode or import confirmation. Never duplicate
+  entry/import logic or reopen a consumed flow on tab refocus.
+- Empty/partial states follow PRIVATECYC-6 option B: no-period Overview uses
+  one start card; symptoms keep counts with a neutral bar until a phase exists;
+  moods keep ratings/tags and a recent list; Insights Today renders log-backed
+  tips without a phase; pattern panels state the exact 3-starts / phased-days /
+  mood-comparison thresholds without promising a pattern. See
+  `design/privatecyc-6-review.md`.
 - The Calendar grid is a soft card with rounded day cells; tracked non-period
   days are a tiny muted dot, not a grey fill. Today is a transparent ring so a
   period fill remains visible.
@@ -396,9 +412,12 @@ is a gitignored drop box for a user export — the app's normal
 - Native/Expo modules are mocked centrally in `jest.setup.js`.
 - Existing suites: backup envelope/validation/restore, seed generator
   determinism, date keys, first-run state + welcome screen + calendar handoff,
-  dialog + mood picker components, mood tags/insights,
-  fertility forecast + cycle phases, cycle phase tips, cycle trends + phase
-  tracks, cycle narrative cards, today tips, symptom patterns, notification
+  dialog + mood picker components, mood tags/insights, journal readiness
+  thresholds + cross-service narrative boundaries, empty/sparse Overview +
+  Insights states, DataService recent/summary mood data, Calendar intent
+  consume/repeat/blur lifecycle, fertility forecast + cycle phases, cycle phase
+  tips, cycle trends + phase tracks, cycle narrative cards, today tips
+  (including legacy mood/flow-only rows), symptom patterns, notification
   settings/planner/screen, private-access PIN/lockout, intimacy summaries and
   private backup sections. Extend rather than duplicate.
 

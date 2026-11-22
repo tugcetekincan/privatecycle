@@ -14,6 +14,8 @@ Visual references:
 - `design/app-language-design.html` — Calendar card + Settings
 - `design/onboarding-alternatives.html` — onboarding directions; Tidemark (B)
   is the selected first-run flow
+- `design/privatecyc-6-alternatives.html` — empty/partial journal states;
+  Adaptive journal (B) is selected and implemented
 
 ## 1. Product decisions baked into the visual language
 
@@ -347,21 +349,53 @@ The calendar is a signature surface. See
 ### Overview
 
 1. Screen header: "Overview", "Cycle, symptoms and mood over time", trend icon.
-2. `CYCLE` section: hero gradient, three-stat card, cycle-length card.
-3. `SYMPTOMS` section: 68 tracked days meta; symptom card with phase bars.
-4. `MOOD` section: "By phase" meta; 60-day trend when enough valence, always
-   the phase rows and a partial-data note.
+2. `CYCLE` section. With no recorded start, one warm start card replaces the
+   hero, stats and chart: "Start with what you know", a primary "Add a period
+   start", secondary "Import a backup", the period-start definition, and (only
+   on a truly empty journal) a compact "What appears next" list. With one or
+   more starts, keep the hero cycle day, estimated phase pill/track, labelled
+   standard fallback, three-stat card and cycle-length chart. Missing metrics
+   stay `—` at a quieter size with the exact missing count beneath ("Needs 1
+   period start", "Needs 2 completed periods"). The one-start chart explains
+   that the next start completes the first cycle and offers Open Calendar.
+3. `SYMPTOMS` section: all tracked days in the denominator; phase legend and
+   split only when at least one symptom day has a phase. Otherwise use a
+   neutral percent bar, "Count only", and a phase-context note that says
+   whether there is no period yet or the existing days are simply unphased.
+   Empty is one compact panel: "Make a note of how you feel", the one-symptom
+   requirement and Log today.
+4. `MOOD` section: trend when five rated days exist in the last 60 days; phase
+   rows when phases exist (tags-only phases say "Feelings by phase"); otherwise
+   a chronological recent-entry list (up to five, all history) that shows
+   ratings, feeling tags and legacy mood text without inventing a rating.
+   Show exact trend progress (`3 of 5 rated days in the last 60 days … · 2
+   more`) and one Log today action. Tags alone never advance the trend counter.
+   Empty is one compact panel: "Your moods belong here too", the five-rating
+   threshold and Log today.
 5. Footnote: everything comes from Calendar entries.
 
 ### Insights
 
 1. Screen header: "Insights", "What your log is telling you", lightbulb icon.
-2. Today gradient card: phase/day pill, tagline, summary, one focus row and a
-   compact today's-tips block backed by today's symptoms/mood.
-3. `YOUR PATTERNS` section: up to three cards (symptom, mood, cycle) with mini
-   visual, sample chip, stat and "TRY THIS"/"WHY IT MATTERS".
-4. `PHASE GUIDE` section: four phase chips, phase title/hormones, summary only
-   when browsing another phase, four tips, disclaimer.
+2. Today gradient card: phase/day pill and focus when a current phase exists.
+   With no current phase, still render today's log-backed tips ("From today's
+   log", headline, tip rows), a neutral phase-unavailable note and "Edit today
+   in Calendar". A logged day without a tip acknowledges the actual rating,
+   legacy mood or flow note. A truly empty day offers "Begin with a small
+   note", Log today and Add a period start.
+3. `YOUR PATTERNS` section: up to three cards when they qualify. Otherwise one
+   calm context panel has a short state-specific lead and three labelled rows
+   (Cycle / Symptoms / Mood) carrying the exact prerequisites. It
+   distinguishes no log, no period context, a small sample, and enough sample
+   without a clear pattern; the last is neutral rather than a request to keep
+   inventing entries. Never promise a pattern after a count. One primary
+   handoff: Add a period start with no starts, otherwise Open Calendar; an
+   Import a backup link appears only on a truly empty journal.
+4. `PHASE GUIDE` section: four phase chips. With no current phase, show one
+   general-guide instruction plus the existing estimate disclaimer and let the
+   user browse; do not imply a current menstrual phase. The note says timing
+   stays general until a current phase can be estimated, so overdue history is
+   still truthful.
 5. Tab bar with Insights active.
 
 ### Settings
@@ -444,8 +478,9 @@ The calendar is a signature surface. See
 - Use `react-native-svg` for gradients; do not add a gradient dependency.
 - Use the existing system font stack.
 - The visual references remain `design/overview-insights-redesign.html`,
-  `design/app-language-design.html` and `design/onboarding-alternatives.html`
-  (Tidemark is the selected onboarding direction).
+  `design/app-language-design.html`, `design/onboarding-alternatives.html`
+  (Tidemark is the selected onboarding direction) and
+  `design/privatecyc-6-alternatives.html` (Adaptive journal B is selected).
 
 ### New-feature checklist
 

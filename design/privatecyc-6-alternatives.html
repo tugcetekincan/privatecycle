@@ -1,0 +1,3319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PrivateCycle — PRIVATECYC-6 design review</title>
+<style>
+  /* ============================================================
+     BOARD
+     ============================================================ */
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  :root {
+    --b-bg: #eef0f4;
+    --b-glow: rgba(233, 30, 99, 0.10);
+    --b-surface: #ffffff;
+    --b-surface-2: #f7f8fa;
+    --b-nav: rgba(255, 255, 255, 0.86);
+    --b-text: #20242c;
+    --b-muted: #687080;
+    --b-faint: #8b93a1;
+    --b-border: #dfe3ea;
+    --b-border-strong: #cbd1db;
+    --b-ink: #171b23;
+    --b-pink: #e91e63;
+    --b-pink-ink: #ad1457;
+    --b-pink-soft: #fce4ec;
+    --b-pink-line: #f2c3d5;
+    --b-green: #2e7d32;
+    --b-green-soft: #e8f5e9;
+    --b-amber-soft: #fff3e0;
+    --b-amber-ink: #8a5200;
+    --b-shadow: rgba(24, 30, 42, 0.09);
+    --b-phone-border: rgba(18, 27, 43, 0.10);
+    --b-code: #f1f3f7;
+  }
+  body.dark {
+    --b-bg: #0d0f13;
+    --b-glow: rgba(233, 30, 99, 0.16);
+    --b-surface: #16191f;
+    --b-surface-2: #1c2027;
+    --b-nav: rgba(22, 25, 31, 0.88);
+    --b-text: #f2f3f6;
+    --b-muted: #a1a8b5;
+    --b-faint: #7f8794;
+    --b-border: #2a2f39;
+    --b-border-strong: #3b4250;
+    --b-ink: #ffffff;
+    --b-pink: #f06292;
+    --b-pink-ink: #ff9ec4;
+    --b-pink-soft: #3a1c28;
+    --b-pink-line: #5a2b3d;
+    --b-green: #9ccc9f;
+    --b-green-soft: #1d3222;
+    --b-amber-soft: #382813;
+    --b-amber-ink: #ffc16b;
+    --b-shadow: rgba(0, 0, 0, 0.35);
+    --b-phone-border: #2d323c;
+    --b-code: #1f242c;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--b-bg);
+    color: var(--b-text);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 520px at 8% -6%, var(--b-glow), transparent 62%),
+      radial-gradient(760px 440px at 100% 4%, rgba(0, 150, 136, 0.05), transparent 66%);
+    z-index: 0;
+  }
+  a { color: inherit; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--b-pink); outline-offset: 3px; }
+
+  .board {
+    position: relative;
+    z-index: 1;
+    max-width: 1288px;
+    margin: 0 auto;
+    padding: 44px 32px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .hero-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: var(--b-pink-ink);
+  }
+  .hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--b-border);
+    background: var(--b-surface);
+    color: var(--b-muted);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    white-space: nowrap;
+  }
+  .badge.proposed { color: var(--b-pink-ink); border-color: var(--b-pink-line); background: var(--b-pink-soft); }
+  .badge .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  h1 {
+    margin: 14px 0 0;
+    max-width: 900px;
+    font-size: 46px;
+    line-height: 1.03;
+    font-weight: 800;
+    letter-spacing: -0.045em;
+  }
+  h1 em { font-style: normal; color: var(--b-pink); }
+  .lede {
+    max-width: 790px;
+    margin: 16px 0 0;
+    font-size: 15px;
+    line-height: 1.62;
+    color: var(--b-muted);
+  }
+  .lede strong { color: var(--b-text); font-weight: 700; }
+  .hero-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 820px;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--b-pink-line);
+    border-radius: 11px;
+    background: var(--b-pink-soft);
+    color: var(--b-pink-ink);
+    font-size: 11px;
+    line-height: 1.5;
+    font-weight: 600;
+  }
+  .hero-note svg { width: 14px; height: 14px; flex: 0 0 14px; margin-top: 1px; }
+
+  /* ---------- Navigation ---------- */
+  .board-nav {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 24px;
+    padding: 7px;
+    border: 1px solid var(--b-border);
+    border-radius: 16px;
+    background: var(--b-nav);
+    box-shadow: 0 10px 32px var(--b-shadow);
+  }
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 0 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: var(--b-text);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .nav-btn:hover { background: var(--b-surface-2); }
+  .nav-btn[aria-current="true"] {
+    background: var(--b-pink-soft);
+    border-color: var(--b-pink-line);
+    color: var(--b-pink-ink);
+  }
+  .nav-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: var(--b-ink);
+    color: var(--b-surface);
+    font-size: 10px;
+    font-weight: 800;
+  }
+  .nav-btn[aria-current="true"] .nav-letter { background: var(--b-pink); color: #fff; }
+  .nav-short { display: none; }
+  .nav-spacer { flex: 1; }
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 13px;
+    border: 1px solid var(--b-border-strong);
+    border-radius: 10px;
+    background: var(--b-surface);
+    color: var(--b-text);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .theme-toggle:hover { border-color: var(--b-pink-line); }
+  .toggle-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--b-border-strong);
+    background: linear-gradient(135deg, #fafafa 0 50%, #1e1e1e 50% 100%);
+  }
+  .toggle-mobile { display: none; }
+  .mock-flag {
+    padding: 0 8px;
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--b-faint);
+    white-space: nowrap;
+  }
+
+  /* ---------- Tradeoffs ---------- */
+  .tradeoffs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 26px;
+  }
+  .tradeoff {
+    position: relative;
+    padding: 18px 18px 17px;
+    border: 1px solid var(--b-border);
+    border-radius: 16px;
+    background: var(--b-surface);
+    box-shadow: 0 4px 18px var(--b-shadow);
+  }
+  .tradeoff.recommended {
+    border-color: var(--b-pink-line);
+    background: linear-gradient(150deg, var(--b-surface) 0%, var(--b-pink-soft) 165%);
+  }
+  .tradeoff-top { display: flex; align-items: center; gap: 8px; }
+  .tradeoff-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--b-surface-2);
+    color: var(--b-muted);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .tradeoff.recommended .tradeoff-letter { background: var(--b-pink); color: #fff; }
+  .tradeoff h2 { margin: 0; font-size: 15px; line-height: 1.2; letter-spacing: -0.02em; }
+  .rec-label {
+    margin-left: auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: var(--b-pink);
+    color: #fff;
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .tradeoff p { margin: 9px 0 0; font-size: 12px; line-height: 1.55; color: var(--b-muted); }
+  .tradeoff p b { color: var(--b-text); font-weight: 700; }
+
+  /* ---------- Shared band ---------- */
+  .shared-band {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: 26px;
+    margin-top: 20px;
+    padding: 22px;
+    border: 1px solid var(--b-border);
+    border-radius: 18px;
+    background: var(--b-surface);
+  }
+  .shared-band h2 {
+    margin: 4px 0 0;
+    font-size: 17px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  .shared-band .shared-kicker {
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--b-pink-ink);
+  }
+  .shared-band p { margin: 7px 0 0; font-size: 12px; line-height: 1.6; color: var(--b-muted); }
+  .shared-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .shared-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border: 1px solid var(--b-border);
+    border-radius: 999px;
+    background: var(--b-surface-2);
+    color: var(--b-text);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 12px;
+  }
+  .shared-chip svg { width: 11px; height: 11px; color: var(--b-green); }
+
+  /* ---------- Rows ---------- */
+  .board-row { margin-top: 54px; padding-top: 10px; scroll-margin-top: 96px; }
+  .row-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--b-border);
+    margin-bottom: 22px;
+  }
+  .row-kicker {
+    font-size: 10px;
+    line-height: 13px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    color: var(--b-pink-ink);
+  }
+  .row-head h2 {
+    margin: 7px 0 0;
+    font-size: 27px;
+    line-height: 1.18;
+    letter-spacing: -0.035em;
+  }
+  .row-head p {
+    max-width: 760px;
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--b-muted);
+  }
+  .row-badge {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    padding: 6px 9px;
+    border: 1px solid var(--b-border);
+    border-radius: 999px;
+    background: var(--b-surface);
+    color: var(--b-muted);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .phone-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    overflow-x: auto;
+    padding: 2px 2px 26px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--b-border-strong) transparent;
+  }
+  .phone-row::-webkit-scrollbar { height: 6px; }
+  .phone-row::-webkit-scrollbar-thumb { background: var(--b-border-strong); border-radius: 999px; }
+  .phone-row::-webkit-scrollbar-track { background: transparent; }
+  .swipe-hint {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    margin: -6px 2px 10px;
+    color: var(--b-faint);
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .swipe-hint svg { width: 13px; height: 13px; }
+  .option {
+    flex: 0 0 390px;
+    width: 390px;
+    min-width: 0;
+    scroll-snap-align: start;
+    scroll-margin-top: 102px;
+  }
+  .option-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 52px;
+    margin-bottom: 8px;
+  }
+  .option-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 9px;
+    background: var(--b-ink);
+    color: var(--b-surface);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .option.recommended .option-letter { background: var(--b-pink); color: #fff; }
+  .option-head h3 {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .option-head p {
+    margin: 3px 0 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--b-muted);
+  }
+  .rec-pill {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--b-green-soft);
+    color: var(--b-green);
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .mock-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 2px 7px;
+    color: var(--b-faint);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .mock-label::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--b-pink);
+    flex: 0 0 5px;
+  }
+  .option-con {
+    margin-top: 11px;
+    padding: 10px 12px;
+    border: 1px solid var(--b-border);
+    border-radius: 11px;
+    background: var(--b-surface-2);
+    color: var(--b-muted);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+  .option-con b { color: var(--b-text); font-weight: 800; }
+
+  /* ============================================================
+     PHONE SURFACES
+     ============================================================ */
+  .phone {
+    --s-bg: #fafafa;
+    --s-surface: #ffffff;
+    --s-surface-tint: #fff8fb;
+    --s-secondary: #f5f5f5;
+    --s-border: #f0f0f0;
+    --s-border-strong: #e6e6e8;
+    --s-text: #333333;
+    --s-muted: #666666;
+    --s-faint: #8a8a8a;
+    --s-primary: #e91e63;
+    --s-primary-text: #ad1457;
+    --s-primary-soft: #fce4ec;
+    --s-primary-line: #f3d3df;
+    --s-success: #4caf50;
+    --s-success-soft: #e8f5e9;
+    --s-success-text: #2e7d32;
+    --s-warning: #ff9800;
+    --s-warning-soft: #fff3e0;
+    --s-warning-text: #935800;
+    --s-teal: #009688;
+    --s-teal-soft: #e0f2f1;
+    --s-teal-text: #00796b;
+    --s-today: #0077b6;
+    --s-today-soft: #e3f2fd;
+    --s-neutral-fill: #c7c7cb;
+    --s-shadow: rgba(0, 0, 0, 0.055);
+    --s-shadow-strong: rgba(0, 0, 0, 0.10);
+    width: 390px;
+    height: 844px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--s-bg);
+    color: var(--s-text);
+    border: 1px solid var(--b-phone-border);
+    border-radius: 38px;
+    box-shadow: 0 28px 64px rgba(20, 24, 35, 0.18), 0 2px 0 rgba(255, 255, 255, 0.65) inset;
+  }
+  body.dark .phone {
+    --s-bg: #121212;
+    --s-surface: #1e1e1e;
+    --s-surface-tint: #241a1e;
+    --s-secondary: #2a2a2a;
+    --s-border: #333333;
+    --s-border-strong: #3a3a3a;
+    --s-text: #ffffff;
+    --s-muted: #b3b3b3;
+    --s-faint: #8d8d8d;
+    --s-primary-text: #ffb3d1;
+    --s-primary-soft: #3b1b28;
+    --s-primary-line: #4a2836;
+    --s-success-soft: #1f3a24;
+    --s-success-text: #a5d6a7;
+    --s-warning-soft: #3a2a14;
+    --s-warning-text: #ffbf66;
+    --s-teal-soft: #183b37;
+    --s-teal-text: #80cbc4;
+    --s-today: #4fa8e0;
+    --s-today-soft: #142a3a;
+    --s-neutral-fill: #66666a;
+    --s-shadow: rgba(0, 0, 0, 0.35);
+    --s-shadow-strong: rgba(0, 0, 0, 0.45);
+    box-shadow: 0 28px 64px rgba(0, 0, 0, 0.45);
+  }
+
+  .statusbar {
+    flex: 0 0 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    background: var(--s-bg);
+    color: var(--s-text);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .statusicons { display: flex; align-items: center; gap: 5px; color: var(--s-text); }
+  .statusicons svg { width: 13px; height: 13px; }
+
+  .phone-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--s-bg);
+    scrollbar-width: thin;
+    scrollbar-color: var(--s-border-strong) transparent;
+  }
+  .phone-scroll::-webkit-scrollbar { width: 3px; }
+  .phone-scroll::-webkit-scrollbar-thumb { background: var(--s-border-strong); border-radius: 999px; }
+  .phone-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 20px 12px;
+    background: var(--s-bg);
+  }
+  .app-title {
+    font-size: 28px;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .app-sub {
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 500;
+    color: var(--s-muted);
+  }
+  .app-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 12px;
+    background: var(--s-primary-soft);
+    color: var(--s-primary);
+  }
+  .app-icon svg { width: 21px; height: 21px; }
+
+  .content { padding: 0 20px 22px; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 18px 2px 8px;
+  }
+  .section-head.first { margin-top: 2px; }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--s-muted);
+  }
+  .section-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: 0 0 6px;
+  }
+  .section-meta {
+    font-size: 10px;
+    line-height: 13px;
+    font-weight: 500;
+    color: var(--s-muted);
+    text-align: right;
+  }
+
+  .card {
+    background: var(--s-surface);
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .card + .card { margin-top: 10px; }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .card-title {
+    margin: 0;
+    font-size: 18px;
+    line-height: 22px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .card-meta {
+    font-size: 10px;
+    line-height: 13px;
+    font-weight: 600;
+    color: var(--s-muted);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .card-sub {
+    margin: 4px 0 0;
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--s-muted);
+  }
+  .card-body {
+    margin: 5px 0 0;
+    font-size: 13px;
+    line-height: 19px;
+    color: var(--s-muted);
+  }
+  .card-body strong { color: var(--s-text); font-weight: 700; }
+  .card-note {
+    margin: 10px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-border);
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--s-muted);
+  }
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 11px;
+    padding-top: 10px;
+    border-top: 1px solid var(--s-border);
+  }
+  .card-footer-copy { font-size: 10px; line-height: 14px; color: var(--s-muted); }
+
+  /* ---------- Buttons / links (visual only) ---------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    cursor: default;
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+    text-align: center;
+  }
+  .btn svg { width: 15px; height: 15px; flex: 0 0 15px; }
+  .btn-block { width: 100%; }
+  .btn-primary { background: var(--s-primary); color: #ffffff; }
+  .btn-secondary {
+    background: var(--s-surface);
+    border: 1px solid var(--s-border-strong);
+    color: var(--s-text);
+  }
+  .btn-today {
+    width: 100%;
+    min-height: 40px;
+    margin-top: 12px;
+    border: 1px solid var(--s-primary-line);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--s-primary-text);
+    font-size: 12px;
+  }
+  body.dark .btn-today { background: rgba(0, 0, 0, 0.16); }
+  .text-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+    color: var(--s-primary-text);
+    font-size: 12px;
+    line-height: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .text-link svg { width: 12px; height: 12px; flex: 0 0 12px; }
+  .text-link.neutral { color: var(--s-muted); }
+  .link-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .link-center { justify-content: center; }
+
+  /* ---------- Option A: compact neutral hero ---------- */
+  .hero-compact {
+    padding: 15px;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+  }
+  .kicker {
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+    color: var(--s-muted);
+  }
+  .na-value {
+    margin-top: 4px;
+    font-size: 18px;
+    line-height: 22px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--s-muted);
+  }
+  .na-value.small { font-size: 14px; line-height: 18px; letter-spacing: -0.01em; }
+  .hero-side { text-align: right; }
+  .hero-copy {
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--s-muted);
+  }
+  .hero-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 11px;
+  }
+  .definition-note {
+    margin: 9px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--s-border);
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+
+  /* ---------- Stats ---------- */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 10px;
+    overflow: hidden;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .stat-cell {
+    min-height: 76px;
+    padding: 11px 13px;
+  }
+  .stat-cell:nth-child(odd) { border-right: 1px solid var(--s-border); }
+  .stat-cell:nth-child(-n+2) { border-bottom: 1px solid var(--s-border); }
+  .stat-value {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+    font-size: 22px;
+    line-height: 24px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .stat-value.unknown { color: var(--s-faint); }
+  .stat-value span { font-size: 10px; font-weight: 600; color: var(--s-muted); letter-spacing: 0; }
+  .stat-label {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 700;
+  }
+  .stat-help {
+    margin-top: 2px;
+    font-size: 9.5px;
+    line-height: 12.5px;
+    color: var(--s-muted);
+  }
+
+  /* ---------- Section-empty card ---------- */
+  .empty-panel {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px;
+    border: 1px dashed var(--s-border-strong);
+    border-radius: 12px;
+    background: var(--s-surface);
+  }
+  .empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    border-radius: 9px;
+    background: var(--s-secondary);
+    color: var(--s-muted);
+  }
+  .empty-icon svg { width: 15px; height: 15px; }
+  .empty-title { font-size: 13px; line-height: 18px; font-weight: 700; }
+  .empty-copy { margin: 2px 0 0; font-size: 11px; line-height: 16px; color: var(--s-muted); }
+  .empty-action { margin-top: 5px; }
+
+  /* ---------- Option B: warm prompt ---------- */
+  .prompt-card {
+    padding: 17px;
+    border: 1px solid var(--s-primary-line);
+    border-radius: 18px;
+    background: linear-gradient(140deg, var(--s-surface) 12%, var(--s-surface-tint) 125%);
+    box-shadow: 0 3px 14px rgba(233, 30, 99, 0.07);
+  }
+  body.dark .prompt-card { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.25); }
+  .prompt-eyebrow {
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--s-primary-text);
+  }
+  .prompt-title {
+    margin: 6px 0 0;
+    font-size: 21px;
+    line-height: 25px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .prompt-body {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 19px;
+    color: var(--s-muted);
+  }
+  .prompt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 13px;
+  }
+  .prompt-definition {
+    margin: 10px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-primary-line);
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+
+  .next-card {
+    margin-top: 10px;
+    overflow: hidden;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .next-head {
+    padding: 12px 14px 7px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .next-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 14px;
+    border-top: 1px solid var(--s-border);
+  }
+  .next-name { font-size: 11px; line-height: 15px; font-weight: 700; }
+  .next-meta {
+    max-width: 156px;
+    text-align: right;
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+  .next-foot {
+    padding: 0 14px 11px;
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+
+  .mini-card {
+    padding: 14px;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .mini-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .mini-title {
+    font-size: 15px;
+    line-height: 19px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .mini-copy {
+    margin: 3px 0 0;
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--s-muted);
+  }
+  .mini-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .mini-meta { font-size: 9.5px; color: var(--s-muted); }
+
+  /* ---------- Option C: readiness map ---------- */
+  .readiness-card {
+    padding: 16px;
+    border: 1px solid var(--s-border);
+    border-radius: 18px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .readiness-intro {
+    margin: 5px 0 0;
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--s-muted);
+  }
+  .ready-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 0;
+    border-top: 1px solid var(--s-border);
+  }
+  .ready-row:first-of-type { margin-top: 9px; }
+  .ready-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    margin-top: 1px;
+    border: 1.5px solid var(--s-border-strong);
+    border-radius: 7px;
+    color: var(--s-faint);
+  }
+  .ready-icon svg { width: 12px; height: 12px; }
+  .ready-copy { flex: 1; min-width: 0; }
+  .ready-title { font-size: 11.5px; line-height: 15px; font-weight: 800; }
+  .ready-sub { margin-top: 1px; font-size: 9.5px; line-height: 13px; color: var(--s-muted); }
+  .ready-go {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    align-self: center;
+    color: var(--s-faint);
+    font-size: 8px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .ready-go svg { width: 11px; height: 11px; }
+  .readiness-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 3px;
+  }
+  .readiness-definition {
+    margin: 10px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-border);
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+
+  .preview-card {
+    margin-top: 9px;
+    overflow: hidden;
+    border: 1px solid var(--s-border);
+    border-radius: 14px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 8px var(--s-shadow);
+  }
+  .preview-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 13px 9px;
+  }
+  .preview-name { flex: 1; font-size: 12.5px; line-height: 16px; font-weight: 800; }
+  .preview-pill {
+    padding: 2px 6px;
+    border: 1px solid var(--s-border-strong);
+    border-radius: 999px;
+    background: var(--s-secondary);
+    color: var(--s-muted);
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .preview-chevron { color: var(--s-faint); }
+  .preview-chevron svg { width: 12px; height: 12px; }
+  .preview-body {
+    margin: 0 13px 11px;
+    padding: 9px 10px;
+    border: 1px dashed var(--s-border-strong);
+    border-radius: 9px;
+    background: var(--s-secondary);
+    font-size: 9.5px;
+    line-height: 13.5px;
+    color: var(--s-muted);
+  }
+
+  /* ---------- Insights: Today ---------- */
+  .today-card {
+    position: relative;
+    overflow: hidden;
+    padding: 16px;
+    border: 1px solid var(--s-primary-line);
+    border-radius: 18px;
+    background: linear-gradient(145deg, var(--s-surface) 0%, var(--s-surface) 34%, var(--s-primary-soft) 150%);
+    box-shadow: 0 3px 16px rgba(233, 30, 99, 0.08);
+  }
+  body.dark .today-card { box-shadow: 0 3px 16px rgba(0, 0, 0, 0.28); }
+  .today-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .today-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    line-height: 13px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--s-primary-text);
+  }
+  .today-source::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--s-primary);
+  }
+  .today-date {
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--s-muted);
+  }
+  .today-title {
+    margin: 9px 0 0;
+    font-size: 22px;
+    line-height: 26px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .today-copy {
+    margin: 5px 0 0;
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--s-muted);
+  }
+  .today-tip {
+    margin-top: 11px;
+    padding: 10px;
+    border: 1px solid var(--s-primary-line);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.72);
+  }
+  body.dark .today-tip { background: rgba(0, 0, 0, 0.16); }
+  .today-tip-label {
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: var(--s-primary-text);
+  }
+  .today-tip-copy {
+    margin: 4px 0 0;
+    font-size: 11.5px;
+    line-height: 16px;
+    color: var(--s-text);
+  }
+  .phase-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 10px;
+    line-height: 14px;
+    color: var(--s-muted);
+  }
+  .phase-note-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 6px;
+    margin-top: 4px;
+    border-radius: 50%;
+    background: var(--s-border-strong);
+  }
+  .today-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 12px;
+  }
+
+  /* ---------- Insights: patterns / phase ---------- */
+  .pattern-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px 16px;
+    border: 1px dashed var(--s-border-strong);
+    border-radius: 16px;
+    background: var(--s-surface);
+  }
+  .pattern-empty .empty-icon { margin-bottom: 8px; }
+  .pattern-empty .empty-title { font-size: 14px; }
+  .pattern-empty .empty-copy { max-width: 250px; }
+  .quiet-panel {
+    padding: 15px;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .quiet-panel-top { display: flex; align-items: flex-start; gap: 9px; }
+  .quiet-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    border-radius: 9px;
+    background: var(--s-secondary);
+    color: var(--s-muted);
+  }
+  .quiet-icon svg { width: 15px; height: 15px; }
+  .quiet-eyebrow {
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: var(--s-muted);
+  }
+  .quiet-title {
+    margin: 3px 0 0;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .quiet-copy {
+    margin: 6px 0 0;
+    font-size: 11px;
+    line-height: 15.5px;
+    color: var(--s-muted);
+  }
+  .quiet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-border);
+  }
+  .quiet-meta { font-size: 9px; line-height: 12px; color: var(--s-muted); }
+
+  .req-card {
+    padding: 15px;
+    border: 1px solid var(--s-border);
+    border-radius: 16px;
+    background: var(--s-surface);
+    box-shadow: 0 2px 10px var(--s-shadow);
+  }
+  .req-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid var(--s-border);
+  }
+  .req-row:first-of-type { margin-top: 8px; }
+  .req-name { display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 15px; font-weight: 700; }
+  .req-state { max-width: 190px; text-align: right; font-size: 9.5px; line-height: 13px; color: var(--s-muted); }
+  .req-ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+    color: var(--s-success-text);
+  }
+  .req-ok svg { width: 10px; height: 10px; }
+  .req-foot {
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-border);
+    font-size: 9.5px;
+    line-height: 13.5px;
+    color: var(--s-muted);
+  }
+
+  .phase-chips { display: flex; gap: 4px; margin-top: 11px; }
+  .phase-chip {
+    flex: 1;
+    padding: 6px 2px;
+    border-radius: 7px;
+    background: var(--s-secondary);
+    color: var(--s-muted);
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .guide-title {
+    margin: 11px 0 0;
+    font-size: 13px;
+    line-height: 17px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .guide-copy {
+    margin: 3px 0 0;
+    font-size: 10.5px;
+    line-height: 15px;
+    color: var(--s-muted);
+  }
+  .phase-list { margin-top: 9px; }
+  .phase-list-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 0;
+    font-size: 10px;
+    line-height: 13px;
+  }
+  .phase-list-row + .phase-list-row { border-top: 1px solid var(--s-border); }
+  .phase-list-name { font-weight: 700; }
+  .phase-list-days { margin-left: auto; font-size: 9px; color: var(--s-muted); }
+  .guide-note {
+    margin: 8px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--s-border);
+    font-size: 9px;
+    line-height: 12.5px;
+    color: var(--s-muted);
+    font-style: italic;
+  }
+
+  /* ---------- Overview data ---------- */
+  .hero-card {
+    padding: 17px 17px 15px;
+    border: 1px solid var(--s-primary-line);
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--s-surface) 0%, var(--s-surface) 52%, var(--s-primary-soft) 150%);
+    box-shadow: 0 3px 14px rgba(233, 30, 99, 0.08);
+  }
+  body.dark .hero-card { box-shadow: 0 3px 14px rgba(0, 0, 0, 0.26); }
+  .hero-card-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+  }
+  .hero-number {
+    margin-top: 4px;
+    font-size: 44px;
+    line-height: 46px;
+    font-weight: 800;
+    letter-spacing: -0.045em;
+  }
+  .hero-number span { font-size: 12px; line-height: 14px; font-weight: 600; letter-spacing: 0; color: var(--s-muted); }
+  .estimate-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: var(--s-warning-soft);
+    color: var(--s-warning-text);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
+  }
+  .estimate-pill .dot { background: currentColor; }
+  .phase-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+    padding: 4px 7px;
+    border-radius: 999px;
+    background: var(--s-success-soft);
+    color: var(--s-success-text);
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 800;
+  }
+  .phase-pill .phase-dot {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 5px;
+    border-radius: 50%;
+    background: var(--s-success);
+  }
+  .phase-track-wrap { margin-top: 13px; }
+  .phase-track { position: relative; height: 8px; }
+  .phase-segments { display: flex; height: 8px; gap: 2px; }
+  .phase-seg { height: 8px; flex-basis: 0; min-width: 0; }
+  .phase-seg.first { border-radius: 999px 3px 3px 999px; }
+  .phase-seg.last { border-radius: 3px 999px 999px 3px; }
+  .phase-marker {
+    position: absolute;
+    top: -4px;
+    width: 2px;
+    height: 16px;
+    margin-left: -1px;
+    border-radius: 1px;
+    background: var(--s-text);
+    box-shadow: 0 0 0 3px var(--s-surface);
+    z-index: 2;
+  }
+  .phase-track-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 7px;
+    font-size: 9px;
+    line-height: 12px;
+    color: var(--s-muted);
+  }
+  .phase-track-note {
+    margin: 7px 0 0;
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+  .hero-next { text-align: right; }
+  .side-number {
+    margin-top: 4px;
+    font-size: 28px;
+    line-height: 29px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+  }
+  .side-number span { font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--s-muted); }
+  .side-date { margin-top: 3px; font-size: 11px; line-height: 14px; color: var(--s-muted); }
+  .hero-caption {
+    margin: 11px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--s-primary-line);
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--s-muted);
+  }
+
+  .symptom + .symptom { margin-top: 12px; }
+  .symptom-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .symptom-name { display: flex; align-items: center; gap: 7px; font-size: 13px; line-height: 17px; font-weight: 700; }
+  .symptom-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: var(--s-secondary);
+    font-size: 13px;
+  }
+  .symptom-rate { font-size: 12px; line-height: 15px; font-weight: 800; }
+  .sym-bar {
+    display: block;
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--s-secondary);
+  }
+  .sym-bar span { display: block; height: 100%; border-radius: 999px; background: var(--s-neutral-fill); }
+  .sym-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 9px;
+    line-height: 12px;
+    color: var(--s-muted);
+  }
+
+  .mood-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 0;
+    border-top: 1px solid var(--s-border);
+  }
+  .mood-row:first-of-type { margin-top: 8px; }
+  .mood-date { width: 56px; flex: 0 0 56px; font-size: 10px; line-height: 13px; font-weight: 700; }
+  .mood-face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+    border-radius: 50%;
+    background: var(--s-primary-soft);
+    color: var(--s-primary-text);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .mood-score { font-size: 11px; line-height: 14px; font-weight: 800; }
+  .mood-score span { font-size: 9px; font-weight: 500; color: var(--s-muted); }
+  .mood-tags { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  .mood-tag {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: var(--s-secondary);
+    color: var(--s-muted);
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 700;
+  }
+
+  .footnote {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 13px 3px 2px;
+    font-size: 9.5px;
+    line-height: 13.5px;
+    color: var(--s-muted);
+  }
+  .footnote svg { width: 12px; height: 12px; flex: 0 0 12px; margin-top: 1px; }
+
+  /* ---------- Tab bar ---------- */
+  .tabbar {
+    flex: 0 0 auto;
+    display: flex;
+    padding: 8px 6px 14px;
+    border-top: 1px solid var(--s-border);
+    background: var(--s-surface);
+  }
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: var(--s-muted);
+    font-size: 10px;
+    line-height: 12px;
+    font-weight: 500;
+  }
+  .tab.active { color: var(--s-primary); }
+  .tab svg { width: 21px; height: 21px; }
+
+  /* ============================================================
+     BOTTOM SUMMARY
+     ============================================================ */
+  .summary { margin-top: 64px; scroll-margin-top: 96px; }
+  .summary-head { border-top: 1px solid var(--b-border); padding-top: 30px; }
+  .summary-head h2 { margin: 8px 0 0; font-size: 30px; line-height: 1.15; letter-spacing: -0.04em; }
+  .summary-head p { max-width: 760px; margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--b-muted); }
+  .decision-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .decision {
+    padding: 18px;
+    border: 1px solid var(--b-border);
+    border-radius: 16px;
+    background: var(--b-surface);
+    box-shadow: 0 4px 18px var(--b-shadow);
+  }
+  .decision.pick {
+    border-color: var(--b-pink-line);
+    background: linear-gradient(150deg, var(--b-surface) 0%, var(--b-pink-soft) 170%);
+  }
+  .decision-top { display: flex; align-items: center; gap: 8px; }
+  .decision-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--b-surface-2);
+    color: var(--b-muted);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .decision.pick .decision-letter { background: var(--b-pink); color: #fff; }
+  .decision h3 { margin: 0; font-size: 14px; line-height: 1.25; letter-spacing: -0.02em; }
+  .decision p { margin: 8px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--b-muted); }
+  .decision p b { color: var(--b-text); font-weight: 700; }
+
+  .requirements {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 28px;
+    margin-top: 22px;
+    padding: 24px;
+    border: 1px solid var(--b-border);
+    border-radius: 18px;
+    background: var(--b-surface);
+  }
+  .requirements h2 { margin: 4px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -0.03em; }
+  .requirements .shared-kicker {
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--b-pink-ink);
+  }
+  .requirements-intro { margin: 8px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--b-muted); }
+  .req-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  .req-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 0;
+    border-top: 1px solid var(--b-border);
+  }
+  .req-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 21px;
+    height: 21px;
+    flex: 0 0 21px;
+    margin-top: 1px;
+    border-radius: 6px;
+    background: var(--b-pink-soft);
+    color: var(--b-pink-ink);
+    font-size: 9px;
+    font-weight: 800;
+  }
+  .req-text { font-size: 11px; line-height: 1.5; color: var(--b-muted); }
+  .req-text b { display: block; color: var(--b-text); font-weight: 800; font-size: 11.5px; }
+  .state-note {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 13px 14px;
+    border: 1px solid var(--b-border);
+    border-radius: 12px;
+    background: var(--b-surface-2);
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--b-muted);
+  }
+  .state-note b { color: var(--b-text); }
+  .state-note svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; color: var(--b-pink-ink); }
+  .cta-note {
+    grid-column: 1 / -1;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--b-border);
+    font-size: 10.5px;
+    line-height: 1.55;
+    color: var(--b-faint);
+  }
+
+  .questions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 22px;
+  }
+  .notes-label {
+    grid-column: 1 / -1;
+    margin-bottom: -2px;
+    color: var(--b-pink-ink);
+    font-size: 9px;
+    line-height: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+  .question {
+    padding: 15px;
+    border: 1px dashed var(--b-border-strong);
+    border-radius: 14px;
+    background: transparent;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--b-muted);
+  }
+  .question.note {
+    border-style: solid;
+    background: var(--b-surface);
+  }
+  .decision-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--b-green-soft);
+    color: var(--b-green);
+    font-size: 8px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .decision-flag::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .question b { display: block; margin-bottom: 4px; color: var(--b-text); font-size: 11.5px; }
+  .board-footer {
+    margin-top: 36px;
+    padding-top: 18px;
+    border-top: 1px solid var(--b-border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--b-faint);
+  }
+  .board-footer strong { color: var(--b-muted); }
+
+  @media (max-width: 1100px) {
+    .board { padding-left: 24px; padding-right: 24px; }
+    .tradeoffs { grid-template-columns: 1fr; }
+    .shared-band { grid-template-columns: 1fr; gap: 14px; }
+    .decision-grid { grid-template-columns: 1fr; }
+    .requirements { grid-template-columns: 1fr; gap: 14px; }
+    .questions { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 1260px) {
+    .swipe-hint { display: flex; }
+  }
+  @media (max-width: 820px) {
+    .nav-full { display: none; }
+    .nav-short { display: inline; }
+    .mock-flag { display: none; }
+  }
+  @media (max-width: 760px) {
+    .board { padding: 28px 16px 56px; }
+    h1 { font-size: 34px; }
+    .lede { font-size: 14px; }
+    .hero-top { flex-direction: column; }
+    .hero-badges { justify-content: flex-start; }
+    .row-head { flex-direction: column; gap: 10px; }
+    .row-head h2 { font-size: 23px; }
+    .req-list { grid-template-columns: 1fr; }
+    .board-footer { flex-direction: column; gap: 8px; }
+    .nav-spacer { display: none; }
+  }
+  @media (max-width: 600px) {
+    .theme-toggle {
+      width: auto;
+      min-width: 44px;
+      padding: 0 10px;
+      justify-content: center;
+    }
+    .toggle-text { display: none; }
+    .toggle-mobile { display: inline; font-size: 11px; font-weight: 800; }
+  }
+  @media (max-width: 400px) {
+    .toggle-mobile { display: none; }
+    .theme-toggle { width: 44px; padding: 0; }
+  }
+  @media (max-width: 430px) {
+    .nav-btn { padding: 0 6px; font-size: 11px; }
+    .theme-toggle { padding: 0 8px; }
+    .board-nav { gap: 4px; padding: 6px; }
+    .phone-row {
+      margin-left: -16px;
+      margin-right: -16px;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .option-head, .mock-label { padding-left: 16px; padding-right: 16px; }
+    .option-con { margin-left: 16px; margin-right: 16px; }
+  }
+  @media (max-width: 360px) {
+    .nav-text { display: none; }
+    .nav-btn { width: 40px; padding: 0; justify-content: center; }
+    h1 { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ============================ HEADER ============================ -->
+  <header class="hero">
+    <div class="hero-top">
+      <div class="eyebrow">PRIVATECYC-6 • DESIGN REVIEW</div>
+      <div class="hero-badges">
+        <span class="badge proposed"><span class="badge-dot"></span>PROPOSED</span>
+        <span class="badge">SYNTHETIC EXAMPLE</span>
+        <span class="badge">STATIC MOCKUP</span>
+      </div>
+    </div>
+
+    <h1>A clearer next step, <em>at every stage.</em></h1>
+    <p class="lede">
+      Three ways to make Overview and Insights useful before period history exists —
+      without inventing data, hiding what is already logged, or promising patterns early.
+      <strong>Only hierarchy and presentation differ; the data rules are shared.</strong>
+    </p>
+    <div class="hero-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      <span>Decision: option B, Adaptive journal, was selected and implemented in the app. The boards below remain synthetic design references and alternatives history, not app screenshots.</span>
+    </div>
+
+    <nav class="board-nav" aria-label="Option navigation and preview theme" data-testid="pc6-board-nav">
+      <a class="nav-btn" id="pc6-nav-a" data-testid="pc6-nav-a" href="#pc6-option-a" data-scenario-link>
+        <span class="nav-letter">A</span><span class="nav-text"><span class="nav-full">Inline guidance</span><span class="nav-short">Inline</span></span>
+      </a>
+      <a class="nav-btn" id="pc6-nav-b" data-testid="pc6-nav-b" href="#pc6-option-b" data-scenario-link aria-current="true">
+        <span class="nav-letter">B</span><span class="nav-text"><span class="nav-full">Adaptive journal</span><span class="nav-short">Adaptive</span></span>
+      </a>
+      <a class="nav-btn" id="pc6-nav-c" data-testid="pc6-nav-c" href="#pc6-option-c" data-scenario-link>
+        <span class="nav-letter">C</span><span class="nav-text"><span class="nav-full">Readiness map</span><span class="nav-short">Readiness</span></span>
+      </a>
+      <span class="nav-spacer"></span>
+      <span class="mock-flag">MOCKUP · THEME + NAV ONLY</span>
+      <button class="theme-toggle" id="pc6-theme-toggle" data-testid="pc6-theme-toggle" type="button" aria-pressed="false" aria-label="Toggle preview theme" title="Toggle preview theme">
+        <span class="toggle-swatch" aria-hidden="true"></span>
+        <span class="toggle-text">Dark preview</span>
+        <span class="toggle-mobile" aria-hidden="true">Theme</span>
+      </button>
+    </nav>
+
+    <div class="tradeoffs" aria-label="Option tradeoffs">
+      <div class="tradeoff">
+        <div class="tradeoff-top">
+          <span class="tradeoff-letter">A</span>
+          <h2>Smallest visual change</h2>
+        </div>
+        <p>Keeps the current dashboard rhythm. <b>Con:</b> repeats four empty boxes and four prompts that all ask for the same first step.</p>
+      </div>
+      <div class="tradeoff recommended">
+        <div class="tradeoff-top">
+          <span class="tradeoff-letter">B</span>
+          <h2>Clearest hierarchy</h2>
+          <span class="rec-label">RECOMMENDED</span>
+        </div>
+        <p>One warm first step, then each section earns its place as data arrives. <b>Con:</b> cycle metrics move into guidance, so the dashboard grows later.</p>
+      </div>
+      <div class="tradeoff">
+        <div class="tradeoff-top">
+          <span class="tradeoff-letter">C</span>
+          <h2>Most explicit roadmap</h2>
+        </div>
+        <p>Shows exactly what each view needs. <b>Con:</b> busier, more instructional, and more state rules to maintain.</p>
+      </div>
+    </div>
+
+    <section class="shared-band" aria-labelledby="shared-title">
+      <div>
+        <div class="shared-kicker">SHARED ACROSS ALL THREE</div>
+        <h2 id="shared-title">Same functional fixes. Different hierarchy.</h2>
+      </div>
+      <div>
+        <p>
+          Every option keeps usable log content visible without period history: existing symptom counts,
+          mood ratings and feeling tags, and tips backed by today’s log independently of a cycle. Prerequisites
+          are stated exactly, and every action is a proposed handoff to the existing Calendar entry or backup
+          import. Only hierarchy and presentation change — not data correctness.
+        </p>
+        <div class="shared-chips">
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Symptom counts stay visible</span>
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Mood ratings + tags stay visible</span>
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Today’s tips from today’s log</span>
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Honest, exact prerequisites</span>
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Calendar / import handoffs</span>
+          <span class="shared-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Log only what you know</span>
+        </div>
+      </div>
+    </section>
+  </header>
+
+  <!-- ============================ ROW 01 ============================ -->
+  <section class="board-row" id="pc6-row-empty" aria-labelledby="row-empty-title">
+    <div class="row-head">
+      <div>
+        <div class="row-kicker">01 / EMPTY OVERVIEW</div>
+        <h2 id="row-empty-title">Empty Overview — same state, three approaches</h2>
+        <p>
+          No periods, no symptoms, no moods. The screen must be useful without pretending there is a cycle.
+          Each direction keeps Overview read-only and sends entry to Calendar.
+        </p>
+      </div>
+      <span class="row-badge">SYNTHETIC EXAMPLE · NO DATA</span>
+    </div>
+
+    <div class="swipe-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Swipe to compare A · B · C</div>
+
+    <div class="phone-row">
+
+      <!-- ---------- A ---------- -->
+      <article class="option" id="pc6-option-a" aria-labelledby="opt-a-title">
+        <div class="option-head">
+          <span class="option-letter">A</span>
+          <div>
+            <h3 id="opt-a-title">Inline guidance</h3>
+            <p>Keep the existing sections and fill the gaps in place.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed Empty Overview, option A, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Overview</div>
+                <div class="app-sub">Cycle, symptoms and mood over time</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>CYCLE</div>
+                <div class="section-meta">No periods yet</div>
+              </div>
+
+              <div class="hero-compact">
+                <div class="hero-grid">
+                  <div>
+                    <div class="kicker">CYCLE DAY</div>
+                    <div class="na-value">Not available yet</div>
+                  </div>
+                  <div class="hero-side">
+                    <div class="kicker">NEXT PERIOD</div>
+                    <div class="na-value small">Not available yet</div>
+                  </div>
+                </div>
+                <p class="hero-copy">Add a period start to estimate your cycle.</p>
+                <div class="hero-actions">
+                  <span class="btn btn-primary btn-block">Add a period start</span>
+                  <span class="text-link link-center">Import a backup</span>
+                </div>
+                <p class="definition-note">A period start is the first day of a separate period — not each bleeding day.</p>
+              </div>
+
+              <div class="stat-grid" aria-label="Cycle statistics, not yet available">
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Average cycle</div>
+                  <div class="stat-help">Needs 2 starts</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Typical period</div>
+                  <div class="stat-help">Needs 2 completed periods</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Last period</div>
+                  <div class="stat-help">No period logged</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Variation</div>
+                  <div class="stat-help">Needs 3 starts</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Cycle length</h3>
+                  <span class="card-meta">No completed cycles</span>
+                </div>
+                <p class="card-body">Cycle length appears after two period starts — the gap between them is one measured cycle.</p>
+                <div class="card-footer">
+                  <span class="text-link">Open Calendar</span>
+                  <span class="card-meta">Read-only view</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-warning)"></span>SYMPTOMS</div>
+                <div class="section-meta">0 tracked days</div>
+              </div>
+              <div class="card">
+                <div class="empty-panel" style="border:0;padding:0;background:transparent">
+                  <div class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+                  </div>
+                  <div>
+                    <div class="empty-title">Nothing logged yet</div>
+                    <p class="empty-copy">Symptoms you note in Calendar collect here.</p>
+                    <div class="empty-action"><span class="text-link">Log today</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>MOOD</div>
+                <div class="section-meta">0 rated days</div>
+              </div>
+              <div class="card">
+                <div class="empty-panel" style="border:0;padding:0;background:transparent">
+                  <div class="empty-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg>
+                  </div>
+                  <div>
+                    <div class="empty-title">No moods logged yet</div>
+                    <p class="empty-copy">Ratings and feeling tags appear as you add them.</p>
+                    <div class="empty-action"><span class="text-link">Log today</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Overview is read-only. Add or edit entries in Calendar.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, option A">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> dense dashboard, many repeated prompts — four missing stats, three empty cards and four actions all ask for the same first step.</div>
+      </article>
+
+      <!-- ---------- B ---------- -->
+      <article class="option recommended" id="pc6-option-b" aria-labelledby="opt-b-title">
+        <div class="option-head">
+          <span class="option-letter">B</span>
+          <div>
+            <h3 id="opt-b-title">Adaptive journal <span class="rec-pill">RECOMMENDED</span></h3>
+            <p>One warm first step; sections fill in as data arrives.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed Empty Overview, option B, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Overview</div>
+                <div class="app-sub">Cycle, symptoms and mood over time</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>CYCLE</div>
+                <div class="section-meta">Getting started</div>
+              </div>
+
+              <div class="prompt-card">
+                <div class="prompt-eyebrow">NO PERIOD STARTS YET</div>
+                <h2 class="prompt-title">Start with what you know</h2>
+                <p class="prompt-body">Add the first day of your last period for a starting estimate. You can log moods and symptoms without it.</p>
+                <div class="prompt-actions">
+                  <span class="btn btn-primary btn-block">Add a period start</span>
+                  <span class="btn btn-secondary btn-block">Import a backup</span>
+                </div>
+                <p class="prompt-definition">A period start is the first day of a separate period — not each bleeding day.</p>
+              </div>
+
+              <div class="next-card">
+                <div class="next-head">What appears next</div>
+                <div class="next-row">
+                  <span class="next-name">Cycle length</span>
+                  <span class="next-meta">after 2 period starts</span>
+                </div>
+                <div class="next-row">
+                  <span class="next-name">Cycle variation</span>
+                  <span class="next-meta">after 3 period starts</span>
+                </div>
+                <div class="next-foot">Typical period needs two completed bleeding runs.</div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-warning)"></span>SYMPTOMS</div>
+                <div class="section-meta">0 tracked days</div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-title">Make a note of how you feel</div>
+                <p class="mini-copy">Your symptom summary starts with one logged symptom.</p>
+                <div class="mini-footer">
+                  <span class="text-link">Log today</span>
+                  <span class="mini-meta">Opens Calendar</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>MOOD</div>
+                <div class="section-meta">0 rated days</div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-title">Your moods belong here too</div>
+                <p class="mini-copy">Log an overall mood on 5 days within 60 days to show a trend.</p>
+                <div class="mini-footer">
+                  <span class="text-link">Log today</span>
+                  <span class="mini-meta">Opens Calendar</span>
+                </div>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Overview is read-only. Nothing is estimated until you add a period start.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, option B">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> unavailable cycle metrics move into guidance, so the dashboard expands as actual data becomes available.</div>
+      </article>
+
+      <!-- ---------- C ---------- -->
+      <article class="option" id="pc6-option-c" aria-labelledby="opt-c-title">
+        <div class="option-head">
+          <span class="option-letter">C</span>
+          <div>
+            <h3 id="opt-c-title">Readiness map</h3>
+            <p>Show what each view needs and where to add it.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed Empty Overview, option C, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Overview</div>
+                <div class="app-sub">Cycle, symptoms and mood over time</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>CYCLE</div>
+                <div class="section-meta">Nothing recorded</div>
+              </div>
+
+              <div class="readiness-card">
+                <div class="prompt-eyebrow">BUILD YOUR PICTURE</div>
+                <h2 class="prompt-title" style="font-size:19px;line-height:23px">Start with one detail</h2>
+                <p class="readiness-intro">Each row opens Calendar. Add only what you know — there is no daily quota.</p>
+
+                <div class="ready-row">
+                  <span class="ready-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <div class="ready-copy">
+                    <div class="ready-title">Cycle estimate</div>
+                    <div class="ready-sub">Add 1 period start</div>
+                  </div>
+                  <span class="ready-go">Calendar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                </div>
+
+                <div class="ready-row">
+                  <span class="ready-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <div class="ready-copy">
+                    <div class="ready-title">Cycle length</div>
+                    <div class="ready-sub">0 of 2 starts</div>
+                  </div>
+                  <span class="ready-go">Calendar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                </div>
+
+                <div class="ready-row">
+                  <span class="ready-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <div class="ready-copy">
+                    <div class="ready-title">Mood trend</div>
+                    <div class="ready-sub">0 of 5 rated days in 60 days</div>
+                  </div>
+                  <span class="ready-go">Calendar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                </div>
+
+                <div class="ready-row">
+                  <span class="ready-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                  <div class="ready-copy">
+                    <div class="ready-title">Symptoms</div>
+                    <div class="ready-sub">Add a symptom</div>
+                  </div>
+                  <span class="ready-go">Calendar <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></span>
+                </div>
+
+                <div class="readiness-actions">
+                  <span class="btn btn-primary btn-block">Open Calendar</span>
+                  <span class="btn btn-secondary btn-block">Import a backup</span>
+                </div>
+                <p class="readiness-definition">A period start is the first day of a separate period — not each bleeding day.</p>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>PREVIEWS</div>
+                <div class="section-meta">Not ready yet</div>
+              </div>
+
+              <div class="preview-card">
+                <div class="preview-head">
+                  <span class="preview-name">Cycle</span>
+                  <span class="preview-pill">NOT READY YET</span>
+                  <span class="preview-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                </div>
+                <div class="preview-body">Needs 1 period start. Estimated cycle day and next period will appear here.</div>
+              </div>
+
+              <div class="preview-card">
+                <div class="preview-head">
+                  <span class="preview-name">Symptoms</span>
+                  <span class="preview-pill">NOT READY YET</span>
+                  <span class="preview-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                </div>
+                <div class="preview-body">Needs a logged symptom. Counts appear from your own tracked days.</div>
+              </div>
+
+              <div class="preview-card">
+                <div class="preview-head">
+                  <span class="preview-name">Mood</span>
+                  <span class="preview-pill">NOT READY YET</span>
+                  <span class="preview-chevron" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+                </div>
+                <div class="preview-body">Needs 5 rated days in the last 60 days. Recent ratings stay visible before then.</div>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Read-only view. Nothing is estimated until you add it.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, option C">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> more explicit instructional/checklist feel and more UI complexity — four readiness rows plus three preview states.</div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============================ ROW 02 ============================ -->
+  <section class="board-row" id="pc6-row-sparse" aria-labelledby="row-sparse-title">
+    <div class="row-head">
+      <div>
+        <div class="row-kicker">02 / SPARSE INSIGHTS</div>
+        <h2 id="row-sparse-title">Three mood days + headache today, no period starts</h2>
+        <p>
+          The same three directions applied beyond the empty state. All options keep the headache tip and
+          the three logged days visible; only the hierarchy around them changes.
+        </p>
+      </div>
+      <span class="row-badge">3 MOOD DAYS · HEADACHE TODAY · 0 STARTS</span>
+    </div>
+
+    <div class="swipe-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Swipe to compare A · B · C</div>
+
+    <div class="phone-row">
+
+      <!-- ---------- A ---------- -->
+      <article class="option" aria-labelledby="sparse-a-title">
+        <div class="option-head">
+          <span class="option-letter">A</span>
+          <div>
+            <h3 id="sparse-a-title">Inline guidance</h3>
+            <p>Today card first, then the existing empty pattern panel.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed sparse Insights, option A, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Insights</div>
+                <div class="app-sub">What your log is telling you</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>TODAY</div>
+                <div class="section-meta">Sat, Nov 21</div>
+              </div>
+
+              <div class="today-card">
+                <div class="today-top">
+                  <span class="today-source">From today’s log</span>
+                  <span class="today-date">SAT, NOV 21</span>
+                </div>
+                <h2 class="today-title">Headache logged</h2>
+                <div class="today-tip">
+                  <div class="today-tip-label">TODAY’S TIP</div>
+                  <p class="today-tip-copy">Keep water and meals regular, and rest your eyes when you can.</p>
+                </div>
+                <div class="phase-note"><span class="phase-note-dot" aria-hidden="true"></span>Cycle phase unavailable — no period start logged.</div>
+                <div class="today-actions">
+                  <span class="btn btn-today">Edit today in Calendar</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>YOUR PATTERNS</div>
+                <div class="section-meta">3 logged days</div>
+              </div>
+
+              <div class="pattern-empty">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+                </div>
+                <div class="empty-title">No personal patterns yet</div>
+                <p class="empty-copy">Cycle comparisons need 3 period starts. Symptom patterns need repeated, phase-linked logs. Mood comparisons need mood days across estimated phases, with averages that differ.</p>
+                <div class="empty-action"><span class="text-link">Open Calendar</span></div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>PHASE GUIDE</div>
+                <div class="section-meta">General · available now</div>
+              </div>
+              <div class="card">
+                <div class="phase-chips" aria-label="Phase guide topics">
+                  <span class="phase-chip">Menstrual</span>
+                  <span class="phase-chip">Follicular</span>
+                  <span class="phase-chip">Ovulation</span>
+                  <span class="phase-chip">Luteal</span>
+                </div>
+                <div class="guide-title">A general guide to the four phases</div>
+                <p class="guide-copy">Phase timing is an estimate based on period starts. Without one, timing stays general — no current phase is assumed.</p>
+                <div class="phase-list">
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-primary)"></span><span class="phase-list-name">Menstrual</span><span class="phase-list-days">Bleeding days</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-success)"></span><span class="phase-list-name">Follicular</span><span class="phase-list-days">Before ovulation</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-teal)"></span><span class="phase-list-name">Ovulation</span><span class="phase-list-days">Estimated mid-cycle</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-warning)"></span><span class="phase-list-name">Luteal</span><span class="phase-list-days">After ovulation</span></div>
+                </div>
+                <p class="guide-note">General wellness information, not a diagnosis. Your timing may differ.</p>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Insights is read-only. Today’s tips come from your log, not from a cycle estimate.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, sparse Insights option A">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> the useful Today card is followed by a large empty panel, so the screen still ends on absence.</div>
+      </article>
+
+      <!-- ---------- B ---------- -->
+      <article class="option recommended" aria-labelledby="sparse-b-title">
+        <div class="option-head">
+          <span class="option-letter">B</span>
+          <div>
+            <h3 id="sparse-b-title">Adaptive journal <span class="rec-pill">RECOMMENDED</span></h3>
+            <p>Lead with what is usable; keep comparisons quiet.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed sparse Insights, option B, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Insights</div>
+                <div class="app-sub">What your log is telling you</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>TODAY</div>
+                <div class="section-meta">Sat, Nov 21</div>
+              </div>
+
+              <div class="today-card">
+                <div class="today-top">
+                  <span class="today-source">From today’s log</span>
+                  <span class="today-date">SAT, NOV 21</span>
+                </div>
+                <h2 class="today-title">Headache logged</h2>
+                <div class="today-tip">
+                  <div class="today-tip-label">TODAY’S TIP</div>
+                  <p class="today-tip-copy">Keep water and meals regular, and rest your eyes when you can.</p>
+                </div>
+                <div class="phase-note"><span class="phase-note-dot" aria-hidden="true"></span>Cycle phase unavailable — no period start logged.</div>
+                <div class="today-actions">
+                  <span class="btn btn-today">Edit today in Calendar</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>YOUR PATTERNS</div>
+                <div class="section-meta">3 logged days</div>
+              </div>
+
+              <div class="quiet-panel">
+                <div class="quiet-panel-top">
+                  <span class="quiet-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+                  </span>
+                  <div>
+                    <div class="quiet-eyebrow">AS YOUR HISTORY GROWS</div>
+                    <h3 class="quiet-title">Comparisons need a little context</h3>
+                  </div>
+                </div>
+                <p class="quiet-copy">Cycle comparisons need 3 period starts. Symptom patterns need repeated, phase-linked logs. Mood comparisons need mood days across estimated phases, with averages that differ.</p>
+                <div class="quiet-footer">
+                  <span class="text-link">Add a period start</span>
+                  <span class="quiet-meta">3 logged days so far</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>PHASE GUIDE</div>
+                <div class="section-meta">General · available now</div>
+              </div>
+              <div class="card">
+                <div class="phase-chips" aria-label="Phase guide topics">
+                  <span class="phase-chip">Menstrual</span>
+                  <span class="phase-chip">Follicular</span>
+                  <span class="phase-chip">Ovulation</span>
+                  <span class="phase-chip">Luteal</span>
+                </div>
+                <div class="guide-title">A general guide to the four phases</div>
+                <p class="guide-copy">Phase timing is an estimate based on period starts. Without one, timing stays general — no current phase is assumed.</p>
+                <div class="phase-list">
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-primary)"></span><span class="phase-list-name">Menstrual</span><span class="phase-list-days">Bleeding days</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-success)"></span><span class="phase-list-name">Follicular</span><span class="phase-list-days">Before ovulation</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-teal)"></span><span class="phase-list-name">Ovulation</span><span class="phase-list-days">Estimated mid-cycle</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-warning)"></span><span class="phase-list-name">Luteal</span><span class="phase-list-days">After ovulation</span></div>
+                </div>
+                <p class="guide-note">General wellness information, not a diagnosis. Your timing may differ.</p>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Insights is read-only. Today’s tips come from your log, not from a cycle estimate.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, sparse Insights option B">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> comparisons are quieter, so users looking for a pattern may miss why one is not available yet.</div>
+      </article>
+
+      <!-- ---------- C ---------- -->
+      <article class="option" aria-labelledby="sparse-c-title">
+        <div class="option-head">
+          <span class="option-letter">C</span>
+          <div>
+            <h3 id="sparse-c-title">Readiness map</h3>
+            <p>Today’s log is available; comparisons show their state.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed sparse Insights, option C, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Insights</div>
+                <div class="app-sub">What your log is telling you</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>TODAY</div>
+                <div class="section-meta">Sat, Nov 21</div>
+              </div>
+
+              <div class="today-card">
+                <div class="today-top">
+                  <span class="today-source">From today’s log</span>
+                  <span class="today-date">SAT, NOV 21</span>
+                </div>
+                <h2 class="today-title">Headache logged</h2>
+                <div class="today-tip">
+                  <div class="today-tip-label">TODAY’S TIP</div>
+                  <p class="today-tip-copy">Keep water and meals regular, and rest your eyes when you can.</p>
+                </div>
+                <div class="phase-note"><span class="phase-note-dot" aria-hidden="true"></span>Cycle phase unavailable — no period start logged.</div>
+                <div class="today-actions">
+                  <span class="btn btn-today">Edit today in Calendar</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>YOUR PATTERNS</div>
+                <div class="section-meta">3 logged days</div>
+              </div>
+
+              <div class="req-card">
+                <div class="req-row">
+                  <span class="req-name">Today’s log</span>
+                  <span class="req-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Available</span>
+                </div>
+                <div class="req-row">
+                  <span class="req-name">Cycle comparison</span>
+                  <span class="req-state">0 of 3 starts</span>
+                </div>
+                <div class="req-row">
+                  <span class="req-name">Phase-linked patterns</span>
+                  <span class="req-state">Need period history and suitable phase-linked entries</span>
+                </div>
+                <div class="req-foot">Symptom patterns need repeated phase-linked logs; mood comparisons need mood days across estimated phases with averages that differ. <span class="text-link">Open Calendar</span></div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>PHASE GUIDE</div>
+                <div class="section-meta">General · available now</div>
+              </div>
+              <div class="card">
+                <div class="phase-chips" aria-label="Phase guide topics">
+                  <span class="phase-chip">Menstrual</span>
+                  <span class="phase-chip">Follicular</span>
+                  <span class="phase-chip">Ovulation</span>
+                  <span class="phase-chip">Luteal</span>
+                </div>
+                <div class="guide-title">A general guide to the four phases</div>
+                <p class="guide-copy">Phase timing is an estimate based on period starts. Without one, timing stays general — no current phase is assumed.</p>
+                <div class="phase-list">
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-primary)"></span><span class="phase-list-name">Menstrual</span><span class="phase-list-days">Bleeding days</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-success)"></span><span class="phase-list-name">Follicular</span><span class="phase-list-days">Before ovulation</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-teal)"></span><span class="phase-list-name">Ovulation</span><span class="phase-list-days">Estimated mid-cycle</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-warning)"></span><span class="phase-list-name">Luteal</span><span class="phase-list-days">After ovulation</span></div>
+                </div>
+                <p class="guide-note">General wellness information, not a diagnosis. Your timing may differ.</p>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Insights is read-only. Today’s tips come from your log, not from a cycle estimate.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, sparse Insights option C">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Con:</b> the readiness rows compete with the useful Today content and make a three-day log feel like setup work.</div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============================ ROW 03 ============================ -->
+  <section class="board-row" id="pc6-row-growth" aria-labelledby="row-growth-title">
+    <div class="row-head">
+      <div>
+        <div class="row-kicker">03 / RECOMMENDED B AS DATA GROWS</div>
+        <h2 id="row-growth-title">Recommended B as data grows</h2>
+        <p>
+          The same direction at three stages: sparse notes, one period start, and no Insights history.
+          These are states, not new options.
+        </p>
+      </div>
+      <span class="row-badge">B · THREE DATA STATES</span>
+    </div>
+
+    <div class="swipe-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>Swipe to compare the three data states</div>
+
+    <div class="phone-row">
+
+      <!-- ---------- Sparse Overview ---------- -->
+      <article class="option recommended" aria-labelledby="growth-sparse-title">
+        <div class="option-head">
+          <span class="option-letter">01</span>
+          <div>
+            <h3 id="growth-sparse-title">Sparse Overview</h3>
+            <p>3 logged days · no period starts.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed sparse Overview, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Overview</div>
+                <div class="app-sub">Cycle, symptoms and mood over time</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>CYCLE</div>
+                <div class="section-meta">No period starts yet</div>
+              </div>
+
+              <div class="prompt-card">
+                <div class="prompt-eyebrow">NO PERIOD STARTS YET</div>
+                <h2 class="prompt-title" style="font-size:19px;line-height:23px">Start with what you know</h2>
+                <p class="prompt-body">Add a period start when you can. Your logged symptoms and moods already count.</p>
+                <div class="prompt-actions">
+                  <span class="btn btn-primary btn-block">Add a period start</span>
+                  <span class="text-link link-center">Import a backup</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-warning)"></span>SYMPTOMS</div>
+                <div class="section-meta">3 tracked days</div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Symptoms</h3>
+                  <span class="card-meta">All logged days</span>
+                </div>
+                <p class="card-sub">Counts use all logged days. No phase split without period history.</p>
+
+                <div class="symptom">
+                  <div class="symptom-top">
+                    <div class="symptom-name"><span class="symptom-icon" aria-hidden="true">◐</span>Headache</div>
+                    <div class="symptom-rate">67%</div>
+                  </div>
+                  <div class="sym-bar"><span style="width:67%"></span></div>
+                  <div class="sym-caption"><span>2 of 3 logged days</span><span>Neutral count</span></div>
+                </div>
+
+                <div class="symptom">
+                  <div class="symptom-top">
+                    <div class="symptom-name"><span class="symptom-icon" aria-hidden="true">☾</span>Fatigue</div>
+                    <div class="symptom-rate">33%</div>
+                  </div>
+                  <div class="sym-bar"><span style="width:33%"></span></div>
+                  <div class="sym-caption"><span>1 of 3 logged days</span><span>Neutral count</span></div>
+                </div>
+
+                <p class="card-note">Period history adds estimated phase context. Counts stay visible without it.</p>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>MOOD</div>
+                <div class="section-meta">3 rated days</div>
+              </div>
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Recent moods</h3>
+                  <span class="card-meta">Last 60 days</span>
+                </div>
+
+                <div class="mood-row">
+                  <span class="mood-date">Nov 19</span>
+                  <span class="mood-face" aria-hidden="true">3</span>
+                  <span class="mood-score">3<span>/5</span></span>
+                  <span class="mood-tags"><span class="mood-tag">Calm</span></span>
+                </div>
+                <div class="mood-row">
+                  <span class="mood-date">Nov 20</span>
+                  <span class="mood-face" aria-hidden="true">2</span>
+                  <span class="mood-score">2<span>/5</span></span>
+                  <span class="mood-tags"><span class="mood-tag">Low</span></span>
+                </div>
+                <div class="mood-row">
+                  <span class="mood-date">Nov 21</span>
+                  <span class="mood-face" aria-hidden="true">4</span>
+                  <span class="mood-score">4<span>/5</span></span>
+                  <span class="mood-tags"><span class="mood-tag">Tired</span></span>
+                </div>
+
+                <div class="card-footer">
+                  <span class="card-footer-copy">3 of 5 rated days in the last 60 days · 2 more for a trend</span>
+                  <span class="text-link">Log today</span>
+                </div>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Overview is read-only. These are your own logged days, not estimates.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, sparse Overview">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Read:</b> useful data leads; the missing cycle is one calm card, not three empty metrics.</div>
+      </article>
+
+      <!-- ---------- One-start Overview ---------- -->
+      <article class="option recommended" aria-labelledby="growth-one-title">
+        <div class="option-head">
+          <span class="option-letter">02</span>
+          <div>
+            <h3 id="growth-one-title">One-start Overview</h3>
+            <p>Period Nov 11–13 · 1 start · 0 completed cycles.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed one-start Overview, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Overview</div>
+                <div class="app-sub">Cycle, symptoms and mood over time</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>CYCLE</div>
+                <div class="section-meta">1 period · 0 completed cycles</div>
+              </div>
+
+              <div class="hero-card">
+                <div class="hero-card-grid">
+                  <div>
+                    <div class="kicker">CYCLE DAY</div>
+                    <div class="hero-number">11 <span>of ~28</span></div>
+                    <div class="phase-pill"><span class="phase-dot" aria-hidden="true"></span>Estimated follicular phase</div>
+                    <div class="estimate-pill"><span class="dot" aria-hidden="true"></span>Standard 28-day estimate</div>
+                  </div>
+                  <div class="hero-next">
+                    <div class="kicker">NEXT PERIOD</div>
+                    <div class="side-number">18 <span>days</span></div>
+                    <div class="side-date">Wed, Dec 9</div>
+                  </div>
+                </div>
+
+                <div class="phase-track-wrap">
+                  <div class="phase-track" role="img" aria-label="Estimated phase timing for day 11 of a 28-day cycle: period 3 days, follicular 11 days, ovulation 3 days, luteal 11 days. Today is in the estimated follicular phase.">
+                    <div class="phase-segments">
+                      <span class="phase-seg first" style="flex-grow:3;background:var(--s-primary)"></span>
+                      <span class="phase-seg" style="flex-grow:11;background:var(--s-success)"></span>
+                      <span class="phase-seg" style="flex-grow:3;background:var(--s-teal)"></span>
+                      <span class="phase-seg last" style="flex-grow:11;background:var(--s-warning)"></span>
+                    </div>
+                    <span class="phase-marker" style="left:39.3%"></span>
+                  </div>
+                  <div class="phase-track-labels" aria-hidden="true">
+                    <span>Period</span><span>Follicular</span><span>Ovulation</span><span>Luteal</span>
+                  </div>
+                  <p class="phase-track-note">Estimated from your recorded start; the period segment reflects 3 logged days.</p>
+                </div>
+
+                <p class="hero-caption">Uses a standard 28-day cycle until one full cycle is recorded.</p>
+              </div>
+
+              <div class="stat-grid" aria-label="Cycle statistics with one period start">
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Average cycle</div>
+                  <div class="stat-help">1 more period start needed</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value">3<span>d</span></div>
+                  <div class="stat-label">Last period</div>
+                  <div class="stat-help">Nov 11–13 · 3 logged days</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Typical period</div>
+                  <div class="stat-help">1 more completed period needed</div>
+                </div>
+                <div class="stat-cell">
+                  <div class="stat-value unknown">—</div>
+                  <div class="stat-label">Variation</div>
+                  <div class="stat-help">2 more period starts needed</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <h3 class="card-title">Cycle length</h3>
+                  <span class="card-meta">1 start</span>
+                </div>
+                <p class="card-body">3 period days logged · 1 period start. The start of your next period completes the first cycle.</p>
+                <div class="card-footer">
+                  <span class="text-link">Open Calendar</span>
+                  <span class="card-meta">No average yet</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-warning)"></span>SYMPTOMS</div>
+                <div class="section-meta">3 tracked days</div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-title">No symptoms logged yet</div>
+                <p class="mini-copy">Add a symptom in Calendar to start a summary.</p>
+                <div class="mini-footer">
+                  <span class="text-link">Log today</span>
+                  <span class="mini-meta">Opens Calendar</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>MOOD</div>
+                <div class="section-meta">0 rated days</div>
+              </div>
+              <div class="mini-card">
+                <div class="mini-title">No moods logged yet</div>
+                <p class="mini-copy">Mood ratings and feeling tags will appear here.</p>
+                <div class="mini-footer">
+                  <span class="text-link">Log today</span>
+                  <span class="mini-meta">Opens Calendar</span>
+                </div>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Nov 11–13 is 3 period days and 1 period start, not three starts.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, one-start Overview">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Read:</b> one start gives a day estimate, but nothing pretends the average or variation is known yet.</div>
+      </article>
+
+      <!-- ---------- Empty Insights ---------- -->
+      <article class="option recommended" aria-labelledby="growth-insights-title">
+        <div class="option-head">
+          <span class="option-letter">03</span>
+          <div>
+            <h3 id="growth-insights-title">Empty Insights</h3>
+            <p>No log, no period start — a general guide remains.</p>
+          </div>
+        </div>
+        <div class="mock-label">PROPOSED SCREEN · SYNTHETIC EXAMPLE</div>
+
+        <div class="phone" role="group" aria-label="Proposed empty Insights, synthetic example">
+          <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusicons" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18v-3M9 18v-6M14 18V8M19 18V4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5.5 5.5 0 0 1 7 0M12 19h.01"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 10v4"/><rect x="5" y="10" width="9" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
+            </div>
+          </div>
+          <div class="phone-scroll">
+            <div class="app-header">
+              <div>
+                <div class="app-title">Insights</div>
+                <div class="app-sub">What your log is telling you</div>
+              </div>
+              <div class="app-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              </div>
+            </div>
+
+            <div class="content">
+              <div class="section-head first">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-primary)"></span>TODAY</div>
+                <div class="section-meta">Nothing logged yet</div>
+              </div>
+
+              <div class="today-card">
+                <div class="today-top">
+                  <span class="today-source">Today · no entries yet</span>
+                  <span class="today-date">SAT, NOV 21</span>
+                </div>
+                <h2 class="today-title">Begin with a small note</h2>
+                <p class="today-copy">Log a symptom or feeling for tips based on today. Add a period start for an estimated cycle phase.</p>
+                <div class="phase-note"><span class="phase-note-dot" aria-hidden="true"></span>Cycle phase unavailable — no period start logged.</div>
+                <div class="today-actions">
+                  <span class="btn btn-primary btn-block">Log today</span>
+                  <span class="btn btn-secondary btn-block">Add a period start</span>
+                </div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>YOUR PATTERNS</div>
+                <div class="section-meta">0 logged days</div>
+              </div>
+
+              <div class="req-card">
+                <h3 class="card-title" style="font-size:15px;line-height:19px">Comparisons need a little history</h3>
+                <p class="card-sub">Log a symptom or feeling to see tips based on today. Longer comparisons need more context.</p>
+                <div class="req-row">
+                  <span class="req-name">Cycle comparison</span>
+                  <span class="req-state">3 period starts</span>
+                </div>
+                <div class="req-row">
+                  <span class="req-name">Symptom patterns</span>
+                  <span class="req-state">3+ phase-linked symptom days, mostly one estimated phase</span>
+                </div>
+                <div class="req-row">
+                  <span class="req-name">Mood patterns</span>
+                  <span class="req-state">2+ mood days in each of 2 estimated phases, with rated averages that differ</span>
+                </div>
+                <div class="req-foot">Pattern qualification is not a guaranteed quota. <span class="text-link">Import a backup</span></div>
+              </div>
+
+              <div class="section-head">
+                <div class="section-title"><span class="section-dot" style="background:var(--s-teal)"></span>PHASE GUIDE</div>
+                <div class="section-meta">General · available now</div>
+              </div>
+              <div class="card">
+                <div class="phase-chips" aria-label="Phase guide topics">
+                  <span class="phase-chip">Menstrual</span>
+                  <span class="phase-chip">Follicular</span>
+                  <span class="phase-chip">Ovulation</span>
+                  <span class="phase-chip">Luteal</span>
+                </div>
+                <div class="guide-title">A general guide to the four phases</div>
+                <p class="guide-copy">Phase timing is an estimate based on period starts. Without one, timing stays general — no current phase is assumed.</p>
+                <div class="phase-list">
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-primary)"></span><span class="phase-list-name">Menstrual</span><span class="phase-list-days">Bleeding days</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-success)"></span><span class="phase-list-name">Follicular</span><span class="phase-list-days">Before ovulation</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-teal)"></span><span class="phase-list-name">Ovulation</span><span class="phase-list-days">Estimated mid-cycle</span></div>
+                  <div class="phase-list-row"><span class="section-dot" style="background:var(--s-warning)"></span><span class="phase-list-name">Luteal</span><span class="phase-list-days">After ovulation</span></div>
+                </div>
+                <p class="guide-note">General wellness information, not a diagnosis. Your timing may differ.</p>
+              </div>
+
+              <p class="footnote">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+                Insights is read-only. Add entries in Calendar; import only when you have a backup.
+              </p>
+            </div>
+          </div>
+          <nav class="tabbar" aria-label="App tabs, empty Insights">
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              Calendar
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>
+              Overview
+            </span>
+            <span class="tab active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11v2h6v-2a6 6 0 0 0-3-11Z"/></svg>
+              Insights
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>
+              Settings
+            </span>
+          </nav>
+        </div>
+
+        <div class="option-con"><b>Read:</b> the guide is honest and available; no phase is assigned and no pattern is promised.</div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============================ SUMMARY ============================ -->
+  <section class="summary" id="pc6-summary" aria-labelledby="summary-title">
+    <div class="summary-head">
+      <div class="row-kicker">04 / DECISION SUMMARY</div>
+      <h2 id="summary-title">What each direction buys — and costs</h2>
+      <p>All three are correct on data. The choice is about how much guidance the dashboard should carry before the first period start.</p>
+    </div>
+
+    <div class="decision-grid">
+      <div class="decision">
+        <div class="decision-top"><span class="decision-letter">A</span><h3>Smallest visual change</h3></div>
+        <p><b>Fastest to ship.</b> Keeps the current dashboard shape and replaces missing values in place. Repeats empty boxes and asks for the same first step in several places.</p>
+      </div>
+      <div class="decision pick">
+        <div class="decision-top"><span class="decision-letter">B</span><h3>Clearest hierarchy</h3></div>
+        <p><b>Recommended.</b> Leads with one warm action, then each section earns its place as data arrives. Moderate layout work and the least repetitive empty-state noise.</p>
+      </div>
+      <div class="decision">
+        <div class="decision-top"><span class="decision-letter">C</span><h3>Most explicit roadmap</h3></div>
+        <p><b>Most instructional.</b> Shows exactly what each view needs. Busier: more state rules, more UI, and more places to keep requirements in sync.</p>
+      </div>
+    </div>
+
+    <div class="requirements">
+      <div>
+        <div class="shared-kicker">SHARED REQUIREMENTS</div>
+        <h2>Prerequisites, stated exactly</h2>
+        <p class="requirements-intro">No vague “after a few cycles” copy and no invented defaults. Missing data stays visible as missing.</p>
+      </div>
+      <div>
+        <div class="req-list">
+          <div class="req-item">
+            <span class="req-num">1</span>
+            <span class="req-text"><b>A period start</b>The first day of a separate period — not each bleeding day.</span>
+          </div>
+          <div class="req-item">
+            <span class="req-num">2</span>
+            <span class="req-text"><b>2 period starts</b>One measured cycle, which makes cycle length possible.</span>
+          </div>
+          <div class="req-item">
+            <span class="req-num">3</span>
+            <span class="req-text"><b>3 period starts</b>Variation and cycle comparisons become possible.</span>
+          </div>
+          <div class="req-item">
+            <span class="req-num">4</span>
+            <span class="req-text"><b>2 complete bleeding runs</b>Typical period length. One run is not enough.</span>
+          </div>
+          <div class="req-item">
+            <span class="req-num">5</span>
+            <span class="req-text"><b>5 mood-rated days in 60</b>A mood trend can appear. Recent ratings stay visible before then.</span>
+          </div>
+          <div class="req-item">
+            <span class="req-num">6</span>
+            <span class="req-text"><b>Pattern qualification</b>Symptom: 3+ phase-linked days, 50%+ in one estimated phase. Mood: 2+ mood days in each of 2+ estimated phases, an average rating in each, and a difference of 0.4+. Not a guaranteed quota.</span>
+          </div>
+        </div>
+
+        <div class="state-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span><b>Keep the later phase-uncertain state distinct.</b> With period history, when the expected end passes without a new start, show phase uncertain / period overdue. That is not a first-use empty state and should not be collapsed into one. Phase context is always <b>estimated</b>, never a proven phase.</span>
+        </div>
+
+        <div class="cta-note">
+          Every CTA in these directions is a proposed handoff to the existing Calendar day sheet or the existing backup import. No new forms in Overview or Insights.
+          Log only what you know; nothing here requires daily completion.
+        </div>
+      </div>
+    </div>
+
+    <div class="questions">
+      <div class="notes-label">DESIGN NOTES</div>
+      <div class="question note">
+        <span class="decision-flag">PROPOSED</span>
+        <b>Keep Cycle → Symptoms → Mood.</b>
+        Mood stays below symptoms; the three recent ratings remain in the card and the Overview body scrolls.
+      </div>
+      <div class="question note">
+        <span class="decision-flag">PROPOSED</span>
+        <b>Keep the general phase guide accessible.</b>
+        It remains available on empty Insights and never implies a current phase.
+      </div>
+      <div class="question note">
+        <span class="decision-flag">PROPOSED</span>
+        <b>B is recommended; the choice is yours.</b>
+        All three directions remain available for your decision. The single warm card intentionally replaces the unavailable hero, stats and chart. C’s Calendar handoffs are proposed and would need implementation.
+      </div>
+    </div>
+
+    <div class="board-footer">
+      <span><strong>PRIVATECYC-6 · design review.</strong> Static board — not the app. App buttons do not navigate or save.</span>
+      <span>PROPOSED · SYNTHETIC EXAMPLE · NO APP LOGIC · 390 × 844 PHONES</span>
+    </div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var body = document.body;
+    var toggle = document.getElementById('pc6-theme-toggle');
+    var toggleText = toggle ? toggle.querySelector('.toggle-text') : null;
+
+    function applyTheme(isDark) {
+      body.classList.toggle('dark', isDark);
+      if (toggle) toggle.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+      if (toggleText) toggleText.textContent = isDark ? 'Light preview' : 'Dark preview';
+    }
+
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        applyTheme(!body.classList.contains('dark'));
+      });
+    }
+
+    var links = Array.prototype.slice.call(document.querySelectorAll('[data-scenario-link]'));
+    links.forEach(function (link) {
+      link.addEventListener('click', function (event) {
+        var hash = link.getAttribute('href');
+        var target = hash ? document.querySelector(hash) : null;
+        if (target) {
+          event.preventDefault();
+          var nav = document.querySelector('.board-nav');
+          var offset = nav ? 16 : 0;
+          var row = target.closest('.phone-row');
+          var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          var behavior = reduce ? 'auto' : 'smooth';
+          var targetTop = target.getBoundingClientRect().top;
+
+          if (row) {
+            var left = target.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+            row.scrollTo({ left: Math.max(0, left), behavior: behavior });
+          }
+          window.scrollTo({ top: Math.max(0, window.scrollY + targetTop - offset), behavior: behavior });
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', hash);
+          }
+        }
+        links.forEach(function (other) { other.removeAttribute('aria-current'); });
+        link.setAttribute('aria-current', 'true');
+      });
+    });
+  })();
+</script>
+</body>
+</html>
