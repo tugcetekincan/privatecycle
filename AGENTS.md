@@ -385,6 +385,20 @@ is a gitignored drop box for a user export — the app's normal
 - Entry modals use `components/ui/Sheet.tsx`: a scrollable body, 44px close
   control and sticky footer above Android's navigation inset. Use `compact`
   for PIN changes. Keep save errors in the sheet so entries can be retried.
+- Daily and private entry sheets compare the open draft with the persisted
+  baseline. The sticky footer names only the groups that are still unsaved
+  (`Period`, `Flow`, `Ovulation`, `Symptoms`; `Activity`, `Protection`, `Note`)
+  and X, Android back and `onRequestClose` share one guard offering Save &
+  close / Keep editing / Discard changes. Reverting to baseline closes with no
+  prompt. Mood auto-save is separate: a persisted mood is never listed as
+  discarded, and a pending or failed write is never labelled saved. A close
+  request waits for an in-flight mood write to settle before closing or opening
+  the guard; queued writes are generation-scoped so a previous day cannot
+  overwrite a reopened entry. The guard is rendered inline inside the open
+  `Sheet` (`useDialog` `inline`, `Sheet` `dialog`) so iOS never stacks two
+  native modals; it traps web focus (Tab/Escape) and hides the sheet from
+  native assistive tech while active. Save refs are synchronous; mutation and
+  closing are disabled while a save or delete is in flight.
 - Semantic colored labels use `primaryText` / `successText` / `warningText` /
   `tealText` for contrast. Original semantic colors remain the chart/mark fills.
 - `useReducedMotion` responds to live OS preference changes; shared sheets,
@@ -418,8 +432,9 @@ is a gitignored drop box for a user export — the app's normal
   consume/repeat/blur lifecycle, fertility forecast + cycle phases, cycle phase
   tips, cycle trends + phase tracks, cycle narrative cards, today tips
   (including legacy mood/flow-only rows), symptom patterns, notification
-  settings/planner/screen, private-access PIN/lockout, intimacy summaries and
-  private backup sections. Extend rather than duplicate.
+  settings/planner/screen, private-access PIN/lockout, intimacy summaries,
+  private backup sections, entry unsaved-change comparisons and the private
+  day-sheet guard. Extend rather than duplicate.
 
 **Scopes of change**
 - Keep changes consistent with the surrounding style; no drive-by refactors.

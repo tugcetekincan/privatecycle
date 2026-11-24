@@ -419,8 +419,25 @@ The calendar is a signature surface; these are its rules.
   the status bar, quiet slide (none with reduced motion), and a small handle.
 - Header: date 18/800 + close button; 1px divider.
 - MoodPicker card, Period card, Ovulation card, Symptoms card.
-- Sticky footer with a primary Save button; the rest of the form uses the
-  shared card/pill/row language.
+- Sticky footer with a proactive unsaved status above the primary Save button:
+  `Unsaved changes · Period and Symptoms`, naming only the changed groups in
+  Period / Flow / Ovulation / Symptoms order. Mood has its own persistent
+  truthful caption (`Mood saved`, `Mood saving…`, `Mood not saved`) derived
+  from the persisted value; it does not disappear with the picker's transient
+  ✓ Saved badge, and it is never shown before a write succeeds.
+- Closing with the X, Android back or `onRequestClose` while anything is
+  unsaved opens one compact confirmation with **Save & close**, **Keep
+  editing** and **Discard changes**. If a mood auto-save is still in flight,
+  wait for it to settle first and review the settled result; never discard a
+  pending write or open a stale "still saving" dialog. Render the confirmation
+  inline over the sheet, not as a nested native modal, trap web Tab focus,
+  make Escape behave as Keep editing, restore focus to Close, and hide the
+  sheet from native assistive tech while it is active. Returning every field to
+  its persisted baseline closes without a prompt. A successful mood auto-save
+  alone is never a dirty field, and an existing saved mood is never discarded
+  with other edits.
+- While a save or private deletion is in flight, disable closing and form
+  mutation; keep errors beside Save with the draft preserved for retry.
 - Footer accounts for the Android system navigation inset. Close is 44×44;
   errors stay beside Save, with selections preserved for retry. Use this same
   sheet for private entries and PIN changes.
@@ -430,9 +447,16 @@ The calendar is a signature surface; these are its rules.
 
 ### Private gate / private calendar
 
-- Same typography, cards, pills and icon tiles, but neutral and discreet.
+- The same typography, cards, pills and icon tiles, but neutral and discreet.
 - No private data leaks into the main Calendar, Overview, Insights, seed data,
   analytics or notifications.
+- The private day sheet uses the same proactive unsaved status and
+  Save & close / Keep editing / Discard changes guard. Copy names only
+  Activity / Protection / Note; never echo the note text. Turning activity off
+  on an existing day is an unsaved removal, and notes compare after trimming.
+  Deletion shares the same synchronous busy exclusion as saving, so the sheet
+  cannot be edited, saved or closed while a delete is pending; a failed delete
+  keeps the draft and shows the error.
 - PIN gate: centered card, shield icon tile, 28/800 title, 13/19 explanation,
   PIN inputs, primary action; error text in `error`.
 - Keep the native screenshot protection and lock-on-background behavior.

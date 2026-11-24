@@ -16,34 +16,59 @@ interface SheetProps {
   children: React.ReactNode;
   footer: React.ReactNode;
   compact?: boolean;
+  /** Disables mutation and closing while a write is in flight. */
+  busy?: boolean;
+  /** Hides the sheet from assistive tech while an inline dialog is active. */
+  dialogOpen?: boolean;
+  /** Inline confirmation layered over this sheet without a nested Modal. */
+  dialog?: React.ReactNode;
 }
 
 /** Shared entry sheet: reachable actions above the system bar and keyboard. */
-export default function Sheet({ visible, title, subtitle, testID, closeTestID, onClose, children, footer, compact = false }: SheetProps) {
+export default function Sheet({ visible, title, subtitle, testID, closeTestID, onClose, children, footer, compact = false, busy = false, dialogOpen = false, dialog }: SheetProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   return (
     <Modal visible={visible} transparent animationType={reducedMotion ? 'none' : 'slide'} onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View testID={testID} accessibilityViewIsModal style={[styles.sheet, compact && { height: '66%' }, { backgroundColor: theme.colors.background, marginTop: insets.top + spacing.xxl }]}>
+        <View
+          testID={testID}
+          accessibilityViewIsModal
+          accessibilityElementsHidden={dialogOpen}
+          importantForAccessibility={dialogOpen ? 'no-hide-descendants' : 'auto'}
+          style={[styles.sheet, compact && { height: '66%' }, { backgroundColor: theme.colors.background, marginTop: insets.top + spacing.xxl }]}>
           <View style={[styles.handle, { backgroundColor: theme.colors.borderStrong }]} />
           <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
             <View style={styles.copy}>
               <Text accessibilityRole="header" style={[typography.cardTitle, { color: theme.colors.text }]}>{title}</Text>
               {subtitle && <Text style={[typography.caption, styles.subtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>}
             </View>
-            <TouchableOpacity testID={closeTestID} accessibilityRole="button" accessibilityLabel="Close sheet" onPress={onClose} activeOpacity={0.7} style={[styles.close, { backgroundColor: theme.colors.secondary }]}>
+            <TouchableOpacity
+              testID={closeTestID}
+              accessibilityRole="button"
+              accessibilityLabel="Close sheet"
+              accessibilityState={{ disabled: busy }}
+              disabled={busy}
+              onPress={onClose}
+              activeOpacity={0.7}
+              style={[styles.close, { backgroundColor: theme.colors.secondary }, busy && styles.closeDisabled]}>
               <X size={20} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            pointerEvents={busy ? 'none' : 'auto'}>
             {children}
           </ScrollView>
           <View style={[styles.footer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
             {footer}
           </View>
         </View>
+        {dialog}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -57,6 +82,7 @@ const styles = StyleSheet.create({
   copy: { flex: 1, minWidth: 0 },
   subtitle: { marginTop: spacing.xxs },
   close: { width: 44, height: 44, borderRadius: radii.button, alignItems: 'center', justifyContent: 'center' },
+  closeDisabled: { opacity: 0.5 },
   scroll: { flex: 1 },
   content: { paddingVertical: spacing.sm },
   footer: { paddingHorizontal: spacing.xxl, paddingTop: spacing.base, borderTopWidth: 1 },

@@ -849,6 +849,169 @@ try {
   await page.screenshot({ path: shot('08-calendar-day-cleared'), fullPage: true });
   log(`calendar clearing flow OK (mark ${markBefore} -> ${markMarked} -> ${markCleared})`);
 
+  // --- PRIVATECYC-7 option B: proactive unsaved status + close guard. ---
+  const dirtyKey = `${monthKey}-12`;
+  const moodKey = `${monthKey}-13`;
+  const failedMoodKey = `${monthKey}-14`;
+  const rowFor = (key) =>
+    page.evaluate(async (dateKey) => {
+      const all = await __privatecycle.DataService.getAllDailyData();
+      return all[dateKey] ?? null;
+    }, key);
+
+  await page.getByTestId(`calendar-day-${dirtyKey}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  if ((await page.getByTestId('day-modal-period-toggle').innerText()).includes('No Period')) {
+    await page.getByTestId('day-modal-period-toggle').click();
+  }
+  await page.getByTestId('day-modal-symptom-cramps').click();
+  const footerStatus = await page.getByTestId('day-modal-unsaved-status').innerText();
+  if (!footerStatus.includes('Period') || !footerStatus.includes('Symptoms')) {
+    failures.push(`unsaved footer did not name the changed groups: "${footerStatus}"`);
+  }
+  await page.screenshot({ path: shot('33-entry-unsaved-footer-light') });
+
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  if (!(await page.getByTestId('day-modal').isVisible())) {
+    failures.push('unsaved guard closed the sheet before asking');
+  }
+  for (const id of [
+    'dialog-button-save-close',
+    'dialog-button-keep-editing',
+    'dialog-button-discard-changes',
+  ]) {
+    if (!(await page.getByTestId(id).isVisible())) {
+      failures.push(`unsaved guard is missing ${id}`);
+    }
+  }
+  const guardMessage = (await page.getByTestId('dialog-message').innerText()).trim();
+  if (!guardMessage.includes("haven't been saved")) {
+    failures.push(`unsaved guard message is not truthful: "${guardMessage}"`);
+  }
+
+  const focusState = () =>
+    page.evaluate(() => {
+      const dialog = document.querySelector('[data-testid="dialog"]');
+      const active = document.activeElement;
+      return {
+        inside: Boolean(dialog && active && dialog.contains(active)),
+        testId: active?.getAttribute?.('data-testid') ?? null,
+      };
+    });
+  await page.waitForTimeout(150);
+  if (!(await focusState()).inside) {
+    failures.push('inline guard did not receive keyboard focus');
+  }
+  for (let index = 0; index < 4; index++) {
+    await page.keyboard.press('Tab');
+    if (!(await focusState()).inside) {
+      failures.push(`Tab ${index + 1} escaped the inline guard`);
+    }
+  }
+  await page.keyboard.press('Shift+Tab');
+  if (!(await focusState()).inside) {
+    failures.push('Shift+Tab escaped the inline guard');
+  }
+  await page.screenshot({ path: shot('34-entry-confirm-dialog-light') });
+
+  await page.keyboard.press('Escape');
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  if (!(await page.getByTestId('day-modal').isVisible())) {
+    failures.push('Escape closed the sheet instead of returning to it');
+  }
+  const focusAfterEscape = await focusState();
+  if (focusAfterEscape.testId !== 'day-modal-close') {
+    failures.push(`Escape did not return focus to close: ${JSON.stringify(focusAfterEscape)}`);
+  }
+
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('dialog-button-keep-editing').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  const focusAfterKeepEditing = await focusState();
+  if (focusAfterKeepEditing.testId !== 'day-modal-close') {
+    failures.push(
+      `Keep editing did not return focus to close: ${JSON.stringify(focusAfterKeepEditing)}`
+    );
+  }
+  if (!(await page.getByTestId('day-modal').isVisible())) {
+    failures.push('Keep editing did not return to the open sheet');
+  }
+  if (!(await page.getByTestId('day-modal-period-toggle').innerText()).includes('Period Day')) {
+    failures.push('Keep editing lost the period draft');
+  }
+
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('dialog-button-discard-changes').click();
+  await page.getByTestId('day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  if (await rowFor(dirtyKey)) {
+    failures.push('Discard changes still wrote the day row');
+  }
+
+  // Returning to the persisted baseline must not prompt at all.
+  await page.getByTestId(`calendar-day-${dirtyKey}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-period-toggle').click();
+  await page.getByTestId('day-modal-period-toggle').click();
+  if (await page.getByTestId('day-modal-unsaved-status').count()) {
+    failures.push('reverting to the baseline still shows an unsaved status');
+  }
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  if (await page.getByTestId('dialog').isVisible().catch(() => false)) {
+    failures.push('reverting to the baseline still opened the close guard');
+  }
+
+  // A confirmed mood auto-save alone closes without a prompt.
+  await page.getByTestId(`calendar-day-${moodKey}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-mood-valence-4').click();
+  await page.getByTestId('day-modal-mood-saved').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  if (await page.getByTestId('dialog').isVisible().catch(() => false)) {
+    failures.push('a saved mood alone still opened the close guard');
+  }
+  const savedMoodRow = await rowFor(moodKey);
+  if (savedMoodRow?.moodValence !== 4) {
+    failures.push(`saved mood alone was not persisted: ${JSON.stringify(savedMoodRow)}`);
+  }
+
+  // A failed mood auto-save keeps its draft, is never labelled saved, and can
+  // be retried through Save & close.
+  await page.getByTestId(`calendar-day-${failedMoodKey}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.evaluate(() => {
+    window.__originalMoodSave = __privatecycle.DataService.saveMoodData;
+    __privatecycle.DataService.saveMoodData = async () => {
+      throw new Error('Simulated mood write failure');
+    };
+  });
+  await page.getByTestId('day-modal-mood-valence-5').click();
+  await page.getByText('Mood could not be saved. Tap Save day to try again.').waitFor();
+  const failedMoodStatus = await page.getByTestId('day-modal-unsaved-status').innerText();
+  if (!failedMoodStatus.includes('Mood not saved')) {
+    failures.push(`failed mood status is not truthful: "${failedMoodStatus}"`);
+  }
+  await page.getByTestId('day-modal-close').click();
+  const failedMoodMessage = (await page.getByTestId('dialog-message').innerText()).trim();
+  if (!failedMoodMessage.includes("mood change hasn't been saved")) {
+    failures.push(`failed mood guard message is not truthful: "${failedMoodMessage}"`);
+  }
+  await page.evaluate(() => {
+    __privatecycle.DataService.saveMoodData = window.__originalMoodSave;
+  });
+  await page.getByTestId('dialog-button-save-close').click();
+  await page.getByTestId('day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('dialog-button-ok').click();
+  const retriedMoodRow = await rowFor(failedMoodKey);
+  if (retriedMoodRow?.moodValence !== 5) {
+    failures.push(`retried mood draft was not saved: ${JSON.stringify(retriedMoodRow)}`);
+  }
+  log('calendar: proactive unsaved status and three-action close guard OK');
+
   // --- Private calendar: PIN setup, save, lock, wrong PIN, reload guard. ---
   await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-private-calendar').waitFor({
@@ -988,6 +1151,76 @@ try {
   }
   log('private calendar flow OK');
 
+  // PRIVATECYC-7 option B on the private sheet: group status, three actions,
+  // no note contents, and activity-off as an unsaved removal.
+  await page.getByTestId(`private-day-${todayKey}`).click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-day-activity').click();
+  const privateStatus = await page.getByTestId('private-day-unsaved-status').innerText();
+  if (
+    !privateStatus.includes('Activity') ||
+    !privateStatus.includes('Protection') ||
+    !privateStatus.includes('Note')
+  ) {
+    failures.push(`private unsaved footer did not name the removal: "${privateStatus}"`);
+  }
+  await page.screenshot({ path: shot('35-private-unsaved-footer-light') });
+  await page.getByTestId('private-day-close').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  if (!(await page.getByTestId('private-day-modal').isVisible())) {
+    failures.push('private unsaved guard closed the sheet before asking');
+  }
+  const privateMessage = (await page.getByTestId('dialog-message').innerText()).trim();
+  if (!privateMessage.includes('activity, protection and note')) {
+    failures.push(`private guard message does not name the groups: "${privateMessage}"`);
+  }
+  if (privateMessage.includes('smoke test')) {
+    failures.push('private guard message leaked the note contents');
+  }
+  await page.screenshot({ path: shot('36-private-confirm-dialog-light') });
+  await page.getByTestId('dialog-button-keep-editing').click();
+  await page.getByTestId('dialog').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.getByText('Not logged').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-day-close').click();
+  await page.getByTestId('dialog-button-discard-changes').click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  const privateAfterDiscard = await page.evaluate(async (key) => {
+    const all = await __privatecycle.DataService.getIntimateData();
+    return all[key] ?? null;
+  }, todayKey);
+  if (!privateAfterDiscard || privateAfterDiscard.note !== 'smoke test') {
+    failures.push('private Discard changes removed the stored entry');
+  }
+
+  // Saving the removal from the guard actually deletes the day...
+  await page.getByTestId(`private-day-${todayKey}`).click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-day-activity').click();
+  await page.getByTestId('private-day-close').click();
+  await page.getByTestId('dialog-button-save-close').click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  const privateAfterRemoval = await page.evaluate(async (key) => {
+    const all = await __privatecycle.DataService.getIntimateData();
+    return all[key] ?? null;
+  }, todayKey);
+  if (privateAfterRemoval) {
+    failures.push(`saved private removal still has a row: ${JSON.stringify(privateAfterRemoval)}`);
+  }
+
+  // ...then restore the entry so later dark-mode captures still have content.
+  await page.getByTestId(`private-day-${todayKey}`).click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('private-day-activity').click();
+  await page.getByTestId('private-protection-protected').click();
+  await page.getByTestId('private-note-input').fill('smoke test');
+  await page.getByTestId('private-day-save').click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.getByTestId(`private-day-logged-${todayKey}`).waitFor({
+    state: 'visible',
+    timeout: 15_000,
+  });
+  log('private calendar: unsaved status and three-action close guard OK');
+
   // Polish regression: compact layout, dark surfaces, honest empty states,
   // and a failed save that can be retried without losing the open entry.
   await page.getByTestId('private-close').click();
@@ -1002,7 +1235,26 @@ try {
     await page.waitForTimeout(300);
     await page.screenshot({ path: shot(`14-dark-${tab}`), fullPage: true });
   }
+
+  // PRIVATECYC-7 option B at the narrow dark target.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByTestId('tab-calendar').click();
+  if (await page.getByTestId('calendar-return-today').isVisible()) {
+    await page.getByTestId('calendar-return-today').click();
+  }
+  await page.getByTestId(`calendar-day-${todayKey}`).click();
+  await page.getByTestId('day-modal').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByTestId('day-modal-period-toggle').click();
+  await page.getByTestId('day-modal-unsaved-status').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: shot('37-entry-unsaved-footer-dark-320') });
+  await page.getByTestId('day-modal-close').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: shot('38-entry-confirm-dialog-dark-320') });
+  await page.getByTestId('dialog-button-discard-changes').click();
+  await page.getByTestId('day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId('tab-settings').click();
   await page.getByTestId('settings-notifications').click();
   await page.getByTestId('notifications-web-notice').waitFor();
   await page.screenshot({ path: shot('15-dark-notifications') });
@@ -1015,7 +1267,22 @@ try {
   await page.getByTestId(`private-day-${todayKey}`).click();
   await page.getByTestId('private-day-modal').waitFor();
   await page.screenshot({ path: shot('17-dark-private-sheet') });
+
+  // Private unsaved guard at the narrow dark target; the draft is discarded.
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByTestId('private-protection-unprotected').click();
+  const darkPrivateStatus = await page.getByTestId('private-day-unsaved-status').innerText();
+  if (!darkPrivateStatus.includes('Protection')) {
+    failures.push(`dark private unsaved footer missed Protection: "${darkPrivateStatus}"`);
+  }
+  await page.screenshot({ path: shot('39-private-unsaved-footer-dark-320') });
   await page.getByTestId('private-day-close').click();
+  await page.getByTestId('dialog').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.screenshot({ path: shot('40-private-confirm-dialog-dark-320') });
+  await page.getByTestId('dialog-button-discard-changes').click();
+  await page.getByTestId('private-day-modal').waitFor({ state: 'hidden', timeout: 15_000 });
+  await page.setViewportSize({ width: 390, height: 844 });
+
   await page.getByTestId('private-close').click();
   await page.getByTestId('settings-darkmode-switch').click();
 

@@ -8,6 +8,8 @@ interface DialogState {
   type?: 'success' | 'error' | 'warning' | 'info' | 'confirm';
   buttons?: DialogButton[];
   children?: ReactNode;
+  /** Render inside the open Sheet's Modal instead of a second native Modal. */
+  inline?: boolean;
 }
 
 export const useDialog = () => {
@@ -146,18 +148,25 @@ export const useDialog = () => {
     });
   }, [showDialog]);
 
-  const DialogComponent = useCallback(() => (
-    <CustomDialog
-      visible={dialogState.visible}
-      title={dialogState.title}
-      message={dialogState.message}
-      type={dialogState.type}
-      buttons={dialogState.buttons}
-      onDismiss={hideDialog}
-    >
-      {dialogState.children}
-    </CustomDialog>
-  ), [dialogState, hideDialog]);
+  const DialogComponent = useCallback(({ inline = false }: { inline?: boolean } = {}) => {
+    if (!dialogState.visible) return null;
+    // Only the mount point matching the requested presentation renders it;
+    // the other instance stays empty so the sheets never stack a second Modal.
+    if (Boolean(dialogState.inline) !== inline) return null;
+    return (
+      <CustomDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        buttons={dialogState.buttons}
+        onDismiss={hideDialog}
+        inline={inline}
+      >
+        {dialogState.children}
+      </CustomDialog>
+    );
+  }, [dialogState, hideDialog]);
 
   return {
     showSuccess,
@@ -168,6 +177,7 @@ export const useDialog = () => {
     showChoice,
     showDialog,
     hideDialog,
+    dialogVisible: dialogState.visible,
     DialogComponent,
   };
 };

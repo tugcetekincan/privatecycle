@@ -54,18 +54,20 @@ jest.mock('@/hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('@/services/NotificationService', () => ({ NotificationService: { syncSchedule: jest.fn() } }));
 jest.mock('@/components/ui/Sheet', () => ({
   __esModule: true,
-  default: ({ visible, children, footer, closeTestID, onClose }: any) => {
+  default: ({ visible, children, footer, closeTestID, onClose, dialog, busy, testID }: any) => {
     if (!visible) return null;
     const React = require('react');
     const ReactNative = require('react-native');
     return React.createElement(
       ReactNative.View,
-      null,
+      { testID },
       children,
       footer,
+      dialog,
       React.createElement(ReactNative.TouchableOpacity, {
         testID: closeTestID,
         onPress: onClose,
+        disabled: busy,
       })
     );
   },
@@ -125,6 +127,291 @@ describe('Calendar interactions', () => {
     fireEvent.press(screen.getByTestId('day-modal-save'));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1][1].isPeriod).toBe(true);
+  });
+
+  it('guards unsaved period changes with three close actions', async () => {
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    expect(await screen.findByTestId('day-modal-unsaved-status')).toBeTruthy();
+    expect(screen.getByText('Unsaved changes · Period')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    expect(await screen.findByTestId('dialog')).toBeTruthy();
+    expect(screen.getByText('Save changes before closing?')).toBeTruthy();
+    expect(screen.getByText("Your period change hasn't been saved.")).toBeTruthy();
+    expect(screen.getByTestId('dialog-button-save-close')).toBeTruthy();
+    expect(screen.getByTestId('dialog-button-keep-editing')).toBeTruthy();
+    expect(screen.getByTestId('dialog-button-discard-changes')).toBeTruthy();
+
+    // onRequestClose/back while the inline guard is open behaves like Keep editing.
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    await waitFor(() => expect(screen.queryByTestId('dialog')).toBeNull());
+    expect(screen.getByTestId('day-modal-save')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    fireEvent.press(await screen.findByTestId('dialog-button-keep-editing'));
+    await waitFor(() => expect(screen.queryByTestId('dialog')).toBeNull());
+    expect(screen.getByTestId('day-modal-save')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-period-toggle').props.accessibilityState.checked).toBe(true);
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    fireEvent.press(await screen.findByTestId('dialog-button-discard-changes'));
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('does not prompt when the draft returns to its persisted baseline', async () => {
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    await waitFor(() => expect(screen.queryByTestId('day-modal-unsaved-status')).toBeNull());
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(screen.queryByTestId('dialog')).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('saves and closes from the guard exactly once', async () => {
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-symptom-cramps'));
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    fireEvent.press(await screen.findByTestId('dialog-button-save-close'));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][1].symptoms).toContain('cramps');
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+  });
+
+  it('does not prompt for a mood that was already auto-saved', async () => {
+    jest.spyOn(DataService, 'saveMoodData').mockResolvedValue(undefined);
+    const saveDay = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-4'));
+    expect(await screen.findByTestId('day-modal-mood-saved')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(screen.queryByTestId('dialog')).toBeNull();
+    expect(saveDay).not.toHaveBeenCalled();
+  });
+
+  it('waits for a pending mood save before closing and then closes without prompting', async () => {
+    let finish!: () => void;
+    jest.spyOn(DataService, 'saveMoodData').mockImplementation(
+      () => new Promise<void>(resolve => { finish = resolve; })
+    );
+    const saveDay = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-4'));
+    expect(await screen.findByText('Mood saving…')).toBeTruthy();
+    expect(screen.queryByTestId('day-modal-mood-saved')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    await act(async () => {});
+    expect(screen.queryByTestId('dialog')).toBeNull();
+    expect(screen.getByTestId('day-modal-save')).toBeTruthy();
+
+    await act(async () => finish());
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(screen.queryByTestId('dialog')).toBeNull();
+    expect(saveDay).not.toHaveBeenCalled();
+  });
+
+  it('opens the guard after a pending mood fails while closing', async () => {
+    let rejectMood!: (error: Error) => void;
+    jest.spyOn(DataService, 'saveMoodData').mockImplementation(
+      () => new Promise<void>((_resolve, reject) => { rejectMood = reject; })
+    );
+    const saveDay = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-4'));
+    expect(await screen.findByText('Mood saving…')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    await act(async () => {});
+    expect(screen.queryByTestId('dialog')).toBeNull();
+
+    await act(async () => rejectMood(new Error('Storage unavailable')));
+    expect(
+      await screen.findByText(
+        "Your mood change hasn't been saved. Discarding keeps your last saved mood."
+      )
+    ).toBeTruthy();
+    expect(screen.getByTestId('day-modal-save')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-mood-valence-4').props.accessibilityState.selected).toBe(true);
+    expect(saveDay).not.toHaveBeenCalled();
+  });
+
+  it('keeps the confirmed mood label after the transient Saved badge expires', async () => {
+    jest.spyOn(DataService, 'saveMoodData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-4'));
+    expect(await screen.findByTestId('day-modal-mood-saved')).toBeTruthy();
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 2100));
+    });
+    expect(screen.queryByTestId('day-modal-mood-saved')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    expect(await screen.findByText('Mood saved')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-mood-status').props.children).toBe('Mood saved');
+  });
+
+  it('shows Mood saved for an existing stored mood without a new write', async () => {
+    const todayKey = DataService.formatDateKey(new Date());
+    jest.spyOn(DataService, 'getAllDailyData').mockResolvedValue({
+      [todayKey]: {
+        date: todayKey,
+        isPeriod: false,
+        flowLevel: '',
+        symptoms: [],
+        mood: 'calm',
+        isOvulation: false,
+        moodValence: 4,
+        moodTags: [{ id: 'calm', level: 1 }],
+      },
+    });
+    mockRouteParams.current = { calendarIntent: 'today', calendarIntentAt: '1' };
+    const saveDay = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    await screen.findByTestId('day-modal-save');
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    expect(await screen.findByText('Mood saved')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-mood-status').props.children).toBe('Mood saved');
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    expect(await screen.findByText('Your mood is already saved.')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('dialog-button-discard-changes'));
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(saveDay).not.toHaveBeenCalled();
+  });
+
+  it('does not let a previous day’s queued mood overwrite the reopened day', async () => {
+    const now = new Date();
+    const todayKey = DataService.formatDateKey(now);
+    const otherDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const otherKey = DataService.formatDateKey(otherDate);
+    jest.spyOn(DataService, 'getAllDailyData').mockResolvedValue({
+      [otherKey]: {
+        date: otherKey,
+        isPeriod: false,
+        flowLevel: '',
+        symptoms: [],
+        mood: 'tired',
+        isOvulation: false,
+        moodValence: 3,
+        moodTags: [{ id: 'tired', level: 1 }],
+      },
+    });
+    let finish!: () => void;
+    const saveMood = jest.spyOn(DataService, 'saveMoodData').mockImplementation(
+      () => new Promise<void>(resolve => { finish = resolve; })
+    );
+    const screen = renderCalendar();
+    await screen.findByTestId('calendar-log-today');
+    if (otherDate.getMonth() !== now.getMonth()) {
+      fireEvent.press(screen.getByTestId('calendar-prev-month'));
+      await screen.findByTestId(`calendar-day-${otherKey}`);
+    }
+    fireEvent.press(screen.getByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-5'));
+    await waitFor(() => expect(saveMood).toHaveBeenCalledTimes(1));
+    // Simulates a rapid reopen of another day before the queued write settles.
+    fireEvent.press(screen.getByTestId(`calendar-day-${otherKey}`));
+    expect(screen.getByTestId('day-modal-mood-valence-3').props.accessibilityState.selected).toBe(true);
+
+    await act(async () => finish());
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    expect(await screen.findByText('Mood saved')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-mood-status').props.children).toBe('Mood saved');
+  });
+
+  it('retains a failed mood draft and saves it through the guard', async () => {
+    jest.spyOn(DataService, 'saveMoodData').mockRejectedValueOnce(new Error('Storage unavailable'));
+    const saveDay = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-mood-valence-4'));
+    expect(
+      await screen.findByText('Mood could not be saved. Tap Save day to try again.')
+    ).toBeTruthy();
+    expect(screen.getByText('Mood not saved')).toBeTruthy();
+    expect(screen.getByTestId('day-modal-mood-valence-4').props.accessibilityState.selected).toBe(true);
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    expect(
+      await screen.findByText(
+        "Your mood change hasn't been saved. Discarding keeps your last saved mood."
+      )
+    ).toBeTruthy();
+    fireEvent.press(screen.getByTestId('dialog-button-save-close'));
+
+    await waitFor(() => expect(saveDay).toHaveBeenCalledTimes(1));
+    expect(saveDay.mock.calls[0][1].moodValence).toBe(4);
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+  });
+
+  it('blocks duplicate saves and closing while the write is in flight', async () => {
+    let finish!: () => void;
+    const save = jest.spyOn(DataService, 'saveTodayData').mockImplementation(
+      () => new Promise<void>(resolve => { finish = resolve; })
+    );
+    const screen = renderCalendar();
+    fireEvent.press(await screen.findByTestId('calendar-log-today'));
+
+    fireEvent.press(screen.getByTestId('day-modal-period-toggle'));
+    fireEvent.press(screen.getByTestId('day-modal-save'));
+    fireEvent.press(screen.getByTestId('day-modal-save'));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(screen.getByTestId('day-modal-close').props.accessibilityState.disabled).toBe(true)
+    );
+    expect(screen.getByText('Saving…')).toBeTruthy();
+
+    await act(async () => finish());
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+  });
+
+  it('counts a guided last-period preset as an unsaved change', async () => {
+    jest.spyOn(OnboardingService, 'getPendingLastPeriod').mockResolvedValue(true);
+    const save = jest.spyOn(DataService, 'saveTodayData').mockResolvedValue(undefined);
+    const screen = renderCalendar();
+
+    await screen.findByTestId('calendar-first-run-banner');
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth(), Math.max(1, now.getDate() - 1));
+    const targetKey = DataService.formatDateKey(target);
+    fireEvent.press(screen.getByTestId(`calendar-day-${targetKey}`));
+    await screen.findByTestId('day-modal-first-run-hint');
+
+    fireEvent.press(screen.getByTestId('day-modal-close'));
+    expect(await screen.findByText("Your period change hasn't been saved.")).toBeTruthy();
+    fireEvent.press(screen.getByTestId('dialog-button-discard-changes'));
+
+    await waitFor(() => expect(screen.queryByTestId('day-modal-save')).toBeNull());
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('starts the guided last-period setup from the empty calendar', async () => {

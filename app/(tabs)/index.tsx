@@ -20,6 +20,16 @@ import { addDays, daysBetween, isAfterToday, parseDateKey } from '@/services/dat
 import { MoodValue, primaryMoodId } from '@/services/MoodTags';
 import { SYMPTOMS } from '@/services/Symptoms';
 import {
+  dailyEntryDirtyGroups,
+  dailyEntryValuesFromData,
+  moodEntryValuesFromData,
+  moodHasContent,
+  moodValuesEqual,
+  unsavedChangesMessage,
+  unsavedChangesSummary,
+} from '@/services/UnsavedChanges';
+import type { DailyEntryValues, MoodEntryValues } from '@/services/UnsavedChanges';
+import {
   calendarIntentKey,
   CalendarIntent,
   parseCalendarIntent,
@@ -62,7 +72,7 @@ export default function CalendarTab() {
   const { theme } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
-  const { showSuccess, showInfo, showConfirm, showError, DialogComponent } = useDialog();
+  const { showSuccess, showInfo, showConfirm, showError, showDialog, hideDialog, dialogVisible, DialogComponent } = useDialog();
   const routeParams = useLocalSearchParams<{
     calendarIntent?: string | string[];
     calendarIntentAt?: string | string[];
@@ -103,6 +113,26 @@ export default function CalendarTab() {
   const [moodSaved, setMoodSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [persistedMood, setPersistedMood] = useState<MoodEntryValues>({
+    mood: '',
+    valence: 0,
+    tags: [],
+  });
+  const [moodStatus, setMoodStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const baselineRef = useRef<DailyEntryValues>({
+    isPeriod: false,
+    flowLevel: '',
+    isOvulation: false,
+    symptoms: [],
+  });
+  const persistedMoodRef = useRef<MoodEntryValues>({
+    mood: '',
+    valence: 0,
+    tags: [],
+  });
+  const savingRef = useRef(false);
+  const entryGenerationRef = useRef(0);
+  const [closeRequested, setCloseRequested] = useState(false);
   const moodSaveQueue = useRef(Promise.resolve());
   const moodSaveRevision = useRef(0);
   const moodSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -221,12 +251,19 @@ export default function CalendarTab() {
     const dateKey = formatDateKey(date);
     const existingData = allDailyDataRef.current[dateKey] || null;
     const lastPeriodStart = options?.lastPeriodStart === true;
+    entryGenerationRef.current += 1;
     moodSaveRevision.current += 1;
+    setCloseRequested(false);
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     setSaveError('');
     setMoodSaved(false);
+    setMoodStatus('idle');
     setEntryMode(lastPeriodStart ? 'last-period' : 'normal');
-    
+    baselineRef.current = dailyEntryValuesFromData(existingData);
+    const storedMood = moodEntryValuesFromData(existingData);
+    persistedMoodRef.current = storedMood;
+    setPersistedMood(storedMood);
+
     setSelectedDateData({ date, data: existingData });
     const baseData: DailyData = existingData ?? {
       date: dateKey,
@@ -242,18 +279,146 @@ export default function CalendarTab() {
     setModalVisible(true);
   };
 
-  const closeModal = () => {
-    if (saving) return;
+  const dailyDraft = editingData ? dailyEntryValuesFromData(editingData) : null;
+  const dailyDirtyGroups = dailyDraft
+    ? dailyEntryDirtyGroups(dailyDraft, baselineRef.current)
+    : [];
+  const dailyDirtyKey = dailyDirtyGroups.join(',');
+  const moodDraft = editingData ? moodEntryValuesFromData(editingData) : null;
+  const moodDirty = moodDraft ? !moodValuesEqual(moodDraft, persistedMood) : false;
+  // Equality with the persisted mood is persistent; the picker's transient
+  // Saved badge is a separate, short-lived acknowledgement.
+  const moodConfirmed = Boolean(
+    moodDraft && moodHasContent(persistedMood) && moodValuesEqual(moodDraft, persistedMood)
+  );
+  const moodUnsaved = moodDirty || moodStatus === 'saving';
+  const hasUnsavedChanges = dailyDirtyGroups.length > 0 || moodUnsaved;
+  const moodStatusLabel =
+    moodStatus === 'saving'
+      ? 'Mood saving…'
+      : moodDirty
+        ? 'Mood not saved'
+        : moodConfirmed
+          ? 'Mood saved'
+          : null;
+
+  const dismissModal = () => {
+    entryGenerationRef.current += 1;
     moodSaveRevision.current += 1;
+    setCloseRequested(false);
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     setModalVisible(false);
     setSelectedDateData(null);
     setEditingData(null);
     setEntryMode('normal');
+    setMoodStatus('idle');
+    setSaveError('');
+  };
+
+  const discardAndClose = () => {
+    // A successfully auto-saved mood is already in storage and is never
+    // reverted here. Only the non-mood draft is abandoned.
+    dismissModal();
+  };
+
+  const openCloseGuard = () => {
+    const message =
+      dailyDirtyGroups.length > 0
+        ? unsavedChangesMessage(dailyDirtyGroups)
+        : moodStatus === 'saving'
+          ? 'Your mood is still saving.'
+          : moodDirty
+            ? "Your mood change hasn't been saved. Discarding keeps your last saved mood."
+            : "Your mood change hasn't been saved.";
+    const moodNote =
+      dailyDirtyGroups.length === 0
+        ? null
+        : moodStatus === 'saving'
+          ? 'Mood is still saving.'
+          : moodDirty
+            ? "Your mood hasn't been saved."
+            : moodConfirmed
+              ? 'Your mood is already saved.'
+              : null;
+    const moodNoteColor =
+      moodNote === 'Your mood is already saved.'
+        ? theme.colors.successText
+        : moodDirty
+          ? theme.colors.error
+          : theme.colors.warningText;
+
+    showDialog({
+      inline: true,
+      type: 'confirm',
+      title: 'Save changes before closing?',
+      message,
+      children: moodNote ? (
+        <Text
+          testID="day-modal-unsaved-mood-note"
+          style={[typography.caption, styles.unsavedDialogNote, { color: moodNoteColor }]}>
+          {moodNote}
+        </Text>
+      ) : null,
+      buttons: [
+        {
+          text: 'Save & close',
+          style: 'primary',
+          onPress: () => {
+            void saveModalData();
+          },
+        },
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard changes', style: 'destructive', onPress: discardAndClose },
+      ],
+    });
+  };
+
+  // A close request waits for an in-flight mood write to settle, then opens
+  // the guard from the settled values. This keeps the dialog copy truthful and
+  // never abandons a pending auto-save.
+  useEffect(() => {
+    if (!closeRequested) return;
+    if (moodStatus === 'saving') return;
+    setCloseRequested(false);
+    if (!hasUnsavedChanges) {
+      dismissModal();
+      return;
+    }
+    openCloseGuard();
+  }, [
+    closeRequested,
+    moodStatus,
+    hasUnsavedChanges,
+    dailyDirtyKey,
+    moodDirty,
+    moodConfirmed,
+  ]);
+
+  const requestCloseModal = () => {
+    if (savingRef.current) return;
+    // Android back with the inline guard open behaves like Keep editing.
+    if (dialogVisible) {
+      hideDialog();
+      return;
+    }
+    if (closeRequested) return;
+    if (moodStatus === 'saving') {
+      // The footer already shows "Mood saving…"; settle before deciding
+      // whether the sheet can close or needs the guard.
+      setCloseRequested(true);
+      return;
+    }
+    if (!hasUnsavedChanges) {
+      dismissModal();
+      return;
+    }
+    openCloseGuard();
   };
 
   const saveModalData = async () => {
-    if (!editingData || !selectedDateData || saving) return;
+    if (!editingData || !selectedDateData || savingRef.current) return;
+    setCloseRequested(false);
+    savingRef.current = true;
     setSaving(true);
     setSaveError('');
     try {
@@ -278,10 +443,7 @@ export default function CalendarTab() {
         setLastPeriodMode(false);
       }
       void NotificationService.syncSchedule();
-      setModalVisible(false);
-      setSelectedDateData(null);
-      setEditingData(null);
-      setEntryMode('normal');
+      dismissModal();
       if (wasLastPeriodEntry && !editingData.isPeriod) {
         // The sheet already saved the mood/symptom edits; keep the setup
         // banner visible and explain what is still missing.
@@ -308,6 +470,7 @@ export default function CalendarTab() {
     } catch (error) {
       setSaveError('Could not save this day. Please try again.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -434,8 +597,8 @@ export default function CalendarTab() {
   }, [pendingIntent]);
 
   const toggleModalSymptom = (symptomId: string) => {
-    if (!editingData) return;
-    
+    if (!editingData || savingRef.current || dialogVisible) return;
+
     setEditingData({
       ...editingData,
       symptoms: editingData.symptoms.includes(symptomId)
@@ -444,41 +607,96 @@ export default function CalendarTab() {
     });
   };
 
+  const toggleModalPeriod = () => {
+    if (!editingData || savingRef.current || dialogVisible) return;
+    setEditingData({
+      ...editingData,
+      isPeriod: !editingData.isPeriod,
+      flowLevel: !editingData.isPeriod ? editingData.flowLevel : '',
+    });
+  };
+
+  const toggleModalFlow = (levelId: string) => {
+    if (!editingData || savingRef.current || dialogVisible) return;
+    setEditingData({
+      ...editingData,
+      flowLevel: editingData.flowLevel === levelId ? '' : levelId,
+    });
+  };
+
+  const toggleModalOvulation = () => {
+    if (!editingData || savingRef.current || dialogVisible) return;
+    setEditingData({
+      ...editingData,
+      isOvulation: !editingData.isOvulation,
+    });
+  };
+
   // Mood auto-saves on every tap, while the rest of the modal still goes
   // through the explicit Save button.
   const handleModalMoodChange = async (next: MoodValue) => {
-    if (!editingData || saving) return;
+    if (!editingData || savingRef.current || dialogVisible) return;
     const dateKey = editingData.date;
+    const generation = entryGenerationRef.current;
     const revision = ++moodSaveRevision.current;
+    const nextValues: MoodEntryValues = {
+      mood: primaryMoodId(next.tags),
+      valence: next.valence,
+      tags: next.tags,
+    };
 
     setEditingData({
       ...editingData,
-      mood: primaryMoodId(next.tags),
-      moodValence: next.valence,
-      moodTags: next.tags,
+      mood: nextValues.mood,
+      moodValence: nextValues.valence,
+      moodTags: nextValues.tags,
     });
     setMoodSaved(false);
+    setMoodStatus('saving');
     if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
     const save = moodSaveQueue.current.then(async () => {
       await DataService.saveMoodData(dateKey, {
-        mood: primaryMoodId(next.tags),
-        moodValence: next.valence,
-        moodTags: next.tags,
+        mood: nextValues.mood,
+        moodValence: nextValues.valence,
+        moodTags: nextValues.tags,
       });
       // Clearing a mood can remove the day's row entirely; reload so the
       // calendar's day marks are up to date when the modal closes.
       await loadData();
       void NotificationService.syncSchedule();
+      // A quick reopen may already be showing another day by the time this
+      // write settles; never let it replace that entry's persisted mood.
+      if (generation !== entryGenerationRef.current) return;
+      // This selection is now the persisted meaning, even when a newer tap is
+      // already queued; a later failure keeps that newer draft dirty.
+      persistedMoodRef.current = nextValues;
       // Only acknowledge the latest selection in the still-open entry.
       if (revision !== moodSaveRevision.current) return;
+      setPersistedMood(nextValues);
+      setMoodStatus('saved');
       setMoodSaved(true);
       setSaveError('');
       if (moodSavedTimer.current) clearTimeout(moodSavedTimer.current);
-      moodSavedTimer.current = setTimeout(() => setMoodSaved(false), 2000);
+      moodSavedTimer.current = setTimeout(() => {
+        setMoodSaved(false);
+        setMoodStatus(current => current === 'saved' ? 'idle' : current);
+      }, 2000);
     });
     moodSaveQueue.current = save.catch(() => {
+      if (generation !== entryGenerationRef.current) return;
       if (revision !== moodSaveRevision.current) return;
+      // An earlier queued write may have succeeded; compare against the last
+      // value that actually reached storage, not the optimistic draft.
+      const persistedAfterFailure = persistedMoodRef.current;
+      setPersistedMood(persistedAfterFailure);
       setMoodSaved(false);
+      if (moodValuesEqual(nextValues, persistedAfterFailure)) {
+        // A prior write already stored this exact mood; nothing was lost.
+        setMoodStatus('idle');
+        setSaveError('');
+        return;
+      }
+      setMoodStatus('error');
       setSaveError('Mood could not be saved. Tap Save day to try again.');
     });
     await moodSaveQueue.current;
@@ -1049,14 +1267,52 @@ export default function CalendarTab() {
       {/* Day Details Modal */}
       <Sheet
         visible={modalVisible}
-        onClose={closeModal}
+        onClose={requestCloseModal}
         testID="day-modal"
         closeTestID="day-modal-close"
+        busy={saving}
+        dialogOpen={dialogVisible}
+        dialog={<DialogComponent inline />}
         title={selectedDateData?.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) ?? 'Daily entry'}
         subtitle={entryMode === 'last-period'
           ? 'Mark your last period start · Save below'
           : 'Mood saves as you go · Save your other changes below'}
         footer={<>
+          {hasUnsavedChanges ? (
+            <View testID="day-modal-unsaved-status" style={styles.unsavedRow}>
+              <View style={styles.unsavedCopy}>
+                <View style={[styles.unsavedDot, { backgroundColor: theme.colors.warning }]} />
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={[typography.caption, styles.unsavedText, { color: theme.colors.warningText }]}>
+                  {dailyDirtyGroups.length > 0
+                    ? `Unsaved changes · ${unsavedChangesSummary(dailyDirtyGroups)}`
+                    : moodStatus === 'saving'
+                      ? 'Mood saving…'
+                      : 'Mood not saved'}
+                </Text>
+              </View>
+              {dailyDirtyGroups.length > 0 && moodStatusLabel ? (
+                <Text
+                  testID="day-modal-mood-status"
+                  accessibilityLiveRegion="polite"
+                  style={[
+                    typography.caption,
+                    styles.unsavedMoodStatus,
+                    {
+                      color:
+                        moodStatusLabel === 'Mood saved'
+                          ? theme.colors.successText
+                          : moodStatusLabel === 'Mood not saved'
+                            ? theme.colors.error
+                            : theme.colors.warningText,
+                    },
+                  ]}>
+                  {moodStatusLabel}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           {saveError ? <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: spacing.sm }}>{saveError}</Text> : null}
           <PrimaryButton
             testID="day-modal-save"
@@ -1095,11 +1351,7 @@ export default function CalendarTab() {
                   accessibilityState={{ checked: Boolean(editingData?.isPeriod) }}
                   accessibilityLabel="Period day"
                   style={[styles.periodButton, editingData?.isPeriod && styles.periodButtonActive]}
-                  onPress={() => editingData && setEditingData({
-                    ...editingData,
-                    isPeriod: !editingData.isPeriod,
-                    flowLevel: !editingData.isPeriod ? editingData.flowLevel : '',
-                  })}>
+                  onPress={toggleModalPeriod}>
                   <Droplets size={20} color={editingData?.isPeriod ? theme.colors.white : '#e91e63'} />
                   <Text style={[styles.periodButtonText, editingData?.isPeriod && styles.periodButtonTextActive]}>
                     {editingData?.isPeriod ? 'Period Day' : 'No Period'}
@@ -1121,10 +1373,7 @@ export default function CalendarTab() {
                             styles.flowButton,
                             editingData.flowLevel === level.id && styles.flowButtonActive
                           ]}
-                          onPress={() => setEditingData({
-                            ...editingData,
-                            flowLevel: editingData.flowLevel === level.id ? '' : level.id,
-                          })}>
+                          onPress={() => toggleModalFlow(level.id)}>
                           <Text style={[
                             styles.flowButtonText,
                             editingData.flowLevel === level.id && styles.flowButtonTextActive
@@ -1147,10 +1396,7 @@ export default function CalendarTab() {
                   accessibilityLabel="Ovulation recorded"
                   accessibilityState={{ checked: Boolean(editingData?.isOvulation) }}
                   style={[styles.ovulationButton, editingData?.isOvulation && styles.ovulationButtonActive]}
-                  onPress={() => editingData && setEditingData({
-                    ...editingData,
-                    isOvulation: !editingData.isOvulation,
-                  })}>
+                  onPress={toggleModalOvulation}>
                   <Egg size={20} color={editingData?.isOvulation ? theme.colors.white : OVULATION_COLOR} />
                   <Text style={[styles.ovulationButtonText, editingData?.isOvulation && styles.ovulationButtonTextActive]}>
                     {editingData?.isOvulation ? 'Ovulation Day' : 'No Ovulation'}
@@ -1246,6 +1492,37 @@ const createStyles = (theme: any) => StyleSheet.create({
     borderRadius: radii.card,
     padding: spacing.base,
     marginBottom: spacing.base,
+  },
+  unsavedRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  unsavedCopy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  unsavedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  unsavedText: {
+    flexShrink: 1,
+    fontWeight: '700',
+  },
+  unsavedMoodStatus: {
+    fontWeight: '700',
+    flexShrink: 0,
+  },
+  unsavedDialogNote: {
+    marginTop: spacing.base,
+    textAlign: 'center',
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,

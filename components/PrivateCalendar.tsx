@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -35,6 +35,14 @@ import { formatDateKey, isAfterToday, parseDateKey } from '@/services/dateKey';
 import { PROTECTION_OPTIONS, summarizeIntimacy } from '@/services/IntimacyService';
 import { PrivateAccessService } from '@/services/PrivateAccessService';
 import {
+  privateEntryDirtyGroups,
+  privateEntryValuesFromDraft,
+  privateEntryValuesFromStored,
+  unsavedChangesMessage,
+  unsavedChangesSummary,
+} from '@/services/UnsavedChanges';
+import type { PrivateEntryValues } from '@/services/UnsavedChanges';
+import {
   isValidPin,
   PIN_MAX_LENGTH,
   PIN_MIN_LENGTH,
@@ -57,7 +65,7 @@ const formatShortDate = (dateKey: string): string => {
 
 export default function PrivateCalendar() {
   const { theme } = useTheme();
-  const { showError, showInfo, showSuccess, showConfirm, DialogComponent } = useDialog();
+  const { showError, showInfo, showSuccess, showConfirm, showDialog, hideDialog, dialogVisible, DialogComponent } = useDialog();
   const { lock } = usePrivateGate();
   const router = useRouter();
 
@@ -77,6 +85,12 @@ export default function PrivateCalendar() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const privateBaselineRef = useRef<PrivateEntryValues>({
+    activity: false,
+    protection: '',
+    note: '',
+  });
+  const savingRef = useRef(false);
 
   const [backupEnabled, setBackupEnabled] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -174,6 +188,7 @@ export default function PrivateCalendar() {
 
     const dayKey = formatDateKey(date);
     const existing = data[dayKey];
+    privateBaselineRef.current = privateEntryValuesFromStored(existing);
     setSelectedDate(date);
     setActivity(Boolean(existing));
     setProtection(existing?.protection ?? '');
@@ -182,17 +197,48 @@ export default function PrivateCalendar() {
     setModalVisible(true);
   }
 
-  function closeDay() {
-    if (saving) return;
+  const privateDraft = privateEntryValuesFromDraft({ activity, protection, note });
+  const privateDirtyGroups = privateEntryDirtyGroups(
+    privateDraft,
+    privateBaselineRef.current
+  );
+
+  function dismissDay() {
     setModalVisible(false);
     setSelectedDate(null);
-    setSaving(false);
+    setSaveError('');
+  }
+
+  function requestCloseDay() {
+    if (savingRef.current) return;
+    // Android back with the inline guard open behaves like Keep editing.
+    if (dialogVisible) {
+      hideDialog();
+      return;
+    }
+    if (privateDirtyGroups.length === 0) {
+      dismissDay();
+      return;
+    }
+
+    showDialog({
+      inline: true,
+      type: 'confirm',
+      title: 'Save changes before closing?',
+      message: unsavedChangesMessage(privateDirtyGroups),
+      buttons: [
+        { text: 'Save & close', style: 'primary', onPress: () => { void saveDay(); } },
+        { text: 'Keep editing', style: 'cancel' },
+        { text: 'Discard changes', style: 'destructive', onPress: dismissDay },
+      ],
+    });
   }
 
   async function saveDay() {
-    if (!selectedDate || saving) return;
+    if (!selectedDate || savingRef.current) return;
 
     const dateKey = formatDateKey(selectedDate);
+    savingRef.current = true;
     setSaving(true);
     setSaveError('');
     try {
@@ -206,37 +252,49 @@ export default function PrivateCalendar() {
         await DataService.deleteIntimateDay(dateKey);
       }
       await loadData();
-      setModalVisible(false);
-      setSelectedDate(null);
+      dismissDay();
     } catch (error) {
       setSaveError('Could not save this entry. Please try again.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   function deleteDay() {
-    if (!selectedDate) return;
+    if (!selectedDate || savingRef.current) return;
 
     const dateKey = formatDateKey(selectedDate);
-    showConfirm(
-      'Delete entry',
-      'Remove this day from the private calendar?',
-      async () => {
-        try {
-          await DataService.deleteIntimateDay(dateKey);
-          await loadData();
-          closeDay();
-        } catch (error) {
-          console.error('Error deleting private calendar entry:', error);
-          showError('Error', 'Could not delete this entry. Please try again.');
-        }
-      },
-      undefined,
-      'Delete',
-      'Cancel',
-      true
-    );
+    showDialog({
+      inline: true,
+      type: 'confirm',
+      title: 'Delete entry',
+      message: 'Remove this day from the private calendar?',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (savingRef.current) return;
+            savingRef.current = true;
+            setSaving(true);
+            setSaveError('');
+            try {
+              await DataService.deleteIntimateDay(dateKey);
+              await loadData();
+              dismissDay();
+            } catch (error) {
+              console.error('Error deleting private calendar entry:', error);
+              setSaveError('Could not delete this entry. Please try again.');
+            } finally {
+              savingRef.current = false;
+              setSaving(false);
+            }
+          },
+        },
+      ],
+    });
   }
 
   async function handleBackupToggle(value: boolean) {
@@ -485,14 +543,27 @@ export default function PrivateCalendar() {
 
       <Sheet
         visible={modalVisible}
-        onClose={closeDay}
+        onClose={requestCloseDay}
         testID="private-day-modal"
         closeTestID="private-day-close"
+        busy={saving}
+        dialogOpen={dialogVisible}
+        dialog={<DialogComponent inline />}
         title={selectedDateLabel ?? 'Private entry'}
         subtitle="Only visible in your private calendar"
         footer={<>
+          {privateDirtyGroups.length > 0 ? (
+            <View testID="private-day-unsaved-status" style={styles.unsavedRow}>
+              <View style={[styles.unsavedDot, { backgroundColor: theme.colors.warning }]} />
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[typography.caption, styles.unsavedText, { color: theme.colors.warningText }]}>
+                {`Unsaved changes · ${unsavedChangesSummary(privateDirtyGroups)}`}
+              </Text>
+            </View>
+          ) : null}
           {saveError ? <Text accessibilityRole="alert" style={styles.errorText}>{saveError}</Text> : null}
-          {existingEntry && <TouchableOpacity testID="private-day-delete" style={styles.deleteButton} onPress={deleteDay} accessibilityRole="button"><Trash2 size={18} color={theme.colors.error} /><Text style={styles.deleteButtonText}>Delete entry</Text></TouchableOpacity>}
+          {existingEntry && <TouchableOpacity testID="private-day-delete" style={styles.deleteButton} onPress={deleteDay} disabled={saving || dialogVisible} accessibilityRole="button" accessibilityState={{ disabled: saving || dialogVisible }}><Trash2 size={18} color={theme.colors.error} /><Text style={styles.deleteButtonText}>Delete entry</Text></TouchableOpacity>}
           <PrimaryButton testID="private-day-save" title={saving ? 'Saving…' : 'Save entry'} loading={saving} onPress={saveDay} icon={<Check size={18} color={theme.colors.white} />} />
         </>}>
               <View style={styles.modalCard}>
@@ -507,7 +578,11 @@ export default function PrivateCalendar() {
                     testID="private-day-activity"
                     accessibilityLabel="Activity logged"
                     value={activity}
-                    onValueChange={setActivity}
+                    disabled={saving}
+                    onValueChange={(value) => {
+                      if (savingRef.current || dialogVisible) return;
+                      setActivity(value);
+                    }}
                     trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                     thumbColor={theme.colors.white}
                   />
@@ -526,8 +601,12 @@ export default function PrivateCalendar() {
                             key={option.id}
                             testID={`private-protection-${option.id}`}
                             style={[styles.chip, selected && styles.chipSelected]}
-                            onPress={() => setProtection(selected ? '' : option.id)}
-                            accessibilityState={{ selected }}
+                            onPress={() => {
+                              if (savingRef.current || dialogVisible) return;
+                              setProtection(selected ? '' : option.id);
+                            }}
+                            disabled={saving || dialogVisible}
+                            accessibilityState={{ selected, disabled: saving || dialogVisible }}
                             accessibilityRole="button">
                             <Text
                               style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -547,6 +626,7 @@ export default function PrivateCalendar() {
                       style={styles.noteInput}
                       value={note}
                       onChangeText={setNote}
+                      editable={!saving && !dialogVisible}
                       placeholder="Optional note"
                       placeholderTextColor={theme.colors.textSecondary}
                       multiline
@@ -968,5 +1048,20 @@ const createStyles = (theme: any) =>
       color: theme.colors.error,
       marginHorizontal: 20,
       marginTop: 10,
+    },
+    unsavedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    unsavedDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    unsavedText: {
+      flexShrink: 1,
+      fontWeight: '700',
     },
   });

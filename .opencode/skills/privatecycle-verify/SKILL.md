@@ -129,7 +129,8 @@ Naming convention: `area-element`, kebab-case.
   `day-modal-ovulation-toggle`, `day-modal-ovulation-hint`,
   `day-modal-symptom-{id}`, `day-modal-mood-valence-{1..5}`,
   `day-modal-mood-tag-{id}`, `day-modal-mood-tag-{id}-clear`,
-  `day-modal-mood-saved`, `day-modal-save`,
+  `day-modal-mood-saved`, `day-modal-unsaved-status`,
+  `day-modal-mood-status`, `day-modal-unsaved-mood-note`, `day-modal-save`,
   `day-modal-first-run-hint` (guided last-period entry)
 - First run (`components/onboarding/FirstRun.tsx`):
   `first-run-screen`, `first-run-scroll`, `first-run-step-{1,2,3}`,
@@ -213,12 +214,16 @@ Naming convention: `area-element`, kebab-case.
   `private-backup-switch`, `private-change-pin`, `private-clear-data`,
   `private-day-modal`, `private-day-close`, `private-day-activity`,
   `private-protection-{protected|unprotected|na}`, `private-note-input`,
-  `private-day-save`, `private-day-delete`, `private-change-pin-modal`,
+  `private-day-unsaved-status`, `private-day-save`, `private-day-delete`,
+  `private-change-pin-modal`,
   `private-change-pin-current`, `private-change-pin-new`,
   `private-change-pin-confirm`, `private-change-pin-save`,
   `private-change-pin-close`, `private-change-pin-error`
 - Dialog: `dialog`, `dialog-title`, `dialog-message`,
-  `dialog-button-{text-slug}` (e.g. `dialog-button-ok`)
+  `dialog-button-{text-slug}` (e.g. `dialog-button-ok`,
+  `dialog-button-save-close`, `dialog-button-keep-editing`,
+  `dialog-button-discard-changes`). Unsaved-entry guards render inline inside
+  the open Sheet; other dialogs remain native Modals.
 
 Add testIDs to any new interactive element. Prefer stable IDs over text
 selectors so flows don't break when copy changes.
@@ -266,18 +271,30 @@ a deliberate repeat tap must work.
    the DB,
 8. saves a symptom on a clean next-month day, then clears it and asserts the
    row and the grey day mark both disappear,
-9. opens the private calendar from Settings → Privacy (resets the PIN via
+9. exercises PRIVATECYC-7 option B on a clean Calendar day: the footer names
+   Period + Symptoms, X opens the inline three-action guard while the sheet
+   stays open, Tab/Shift+Tab stay inside the dialog, Escape returns to the
+   sheet with focus back on Close, Keep editing retains the draft, Discard
+   leaves no row, a reverted draft closes without a prompt, a confirmed mood
+   saves without a prompt, and a simulated failed mood stays dirty and is
+   retried through Save & close. Screenshots `33`/`34` light and `37`/`38` at
+   320px dark,
+10. opens the private calendar from Settings → Privacy (resets the PIN via
    `__privatecycle.PrivateAccessService.reset()` first), creates PIN `1234`,
    logs today with protection + a note, screenshots the setup/day modal/
    calendar/change-PIN/lock screens, locks, checks a wrong PIN, unlocks,
-   reloads `/private` and asserts the gate reappears and the entry survives,
-10. runs an isolated sparse journal (3 days, no period starts): neutral symptom
+   reloads `/private` and asserts the gate reappears and the entry survives.
+   It then turns activity off to prove the removal is dirty, checks the guard
+   names Activity/Protection/Note without the note text, discards safely,
+   saves the removal, restores the entry, and captures `35`/`36` light plus
+   `39`/`40` at 320px dark,
+11. runs an isolated sparse journal (3 days, no period starts): neutral symptom
     counts, 3-of-5 mood progress, today's headache tip, Today-sheet save and
     repeat, last-period choose-date handoff from Overview, then import cancel
     and a successful synthetic import; captures light and dark/320 screenshots,
-11. captures tags-only and five-rating no-period moods, including partial
+12. captures tags-only and five-rating no-period moods, including partial
     Log today and the truthful Trend / phase-context copy,
-12. fails on page errors / console errors, then kills the whole process tree.
+13. fails on page errors / console errors, then kills the whole process tree.
 
 The first-run context is disposable; it never affects the seeded screenshots.
 Because `?reset=1` also clears onboarding, empty-state checks must click
@@ -292,7 +309,9 @@ average. Empty Overview/Insights use `fullScreenShot` so the start card,
 requirements and context panel are not clipped. Sparse state screenshots are
 `29-sparse-overview`, `30-sparse-insights`, and `29b/30b` at 320px dark;
 tags-only and five-rating states are `31-tags-only-overview` and
-`32-five-ratings-overview`.
+`32-five-ratings-overview`. The unsaved-entry status/guard captures are
+`33`/`34` (Calendar, light), `35`/`36` (private, light), `37`/`38`
+(Calendar, 320px dark) and `39`/`40` (private, 320px dark).
 
 After the polish regression flow, smoke freezes the browser date at 1 Nov 2026
 and loads synthetic overdue/predicted-boundary histories (PRIVATECYC-1). It
@@ -345,8 +364,15 @@ intimacy summaries. First-run coverage walks the three
 Tidemark steps (next/back/skip on every step), the import/start exits, the
 decorative calendar labelling and the pure marker-on-arc geometry.
 Calendar interaction regressions cover month-end navigation, queued mood saves
-with truthful feedback, and failed-write retry; reduced-motion coverage checks
-live preference changes and stale initial reads.
+with truthful feedback, and failed-write retry. PRIVATECYC-7 coverage adds
+`__tests__/unsavedChanges.test.ts` (canonical groups, reordered symptoms,
+trimmed private notes, activity-off removal, mood equality) and
+`__tests__/privateCalendar.test.tsx` (guard actions, discard, save & close,
+failed retry, duplicate saves, delete busy/failure), plus Calendar guard cases
+in `calendarInteractions.test.tsx` (deferred close while a mood settles,
+resolve/reject, rapid day reopen isolation, persistent saved-mood label after
+the transient badge expires). Reduced-motion coverage checks live preference
+changes and stale initial reads.
 Native/Expo modules are mocked in `jest.setup.js`; add mocks there rather than
 in individual test files. Tests live in `__tests__/`. Prefer extraction of pure
 logic (like `DevSeedService`) so it can be tested without the DB.
